@@ -2238,11 +2238,18 @@ def missing_shipped_rules() -> list[str]:
     install that predates a rule addition never receives it.  Without this
     check, enabling a new rule in ``config.toml`` silently does nothing.
     """
+    from .rule_id_history import RETIRED_RULE_IDS
+
     path = CONFIG_DIR / "rules.toml"
     if not path.exists():
         return []
     existing = {r.get("id") for r in load_rules()}
-    return [rid for rid in _rule_blocks(DEFAULT_RULES) if rid not in existing]
+    # Addendum 3 Phase 5: a retired id is never resurrected by a sync.  Its
+    # detection now fires under the survivor, so re-adding the old block
+    # would double-report; the alias in `survivor_id` is what keeps the id
+    # readable.
+    return [rid for rid in _rule_blocks(DEFAULT_RULES)
+            if rid not in existing and rid not in RETIRED_RULE_IDS]
 
 
 def _replace_rule_block(text: str, rule_id: str, new_block: str) -> str:

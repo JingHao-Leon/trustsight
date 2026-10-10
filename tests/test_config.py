@@ -316,6 +316,17 @@ def test_missing_shipped_rules_detects_stale_config(tmp_path, monkeypatch):
     assert "R001" not in missing
 
 
+def test_sync_rules_never_resurrects_a_retired_id(tmp_path, monkeypatch):
+    """Addendum 3 Phase 5: a retired id is an alias, not a re-addable rule."""
+    cfg = _install_partial_rules(tmp_path, monkeypatch)
+    from trustsight import rule_id_history
+
+    monkeypatch.setitem(rule_id_history.RETIRED_RULE_IDS, "R041", "R001")
+    assert "R041" not in cfg.missing_shipped_rules()
+    added, _ = cfg.sync_rules()
+    assert "R041" not in added
+
+
 def test_sync_rules_appends_missing_rules(tmp_path, monkeypatch):
     cfg = _install_partial_rules(tmp_path, monkeypatch)
     added, _ = cfg.sync_rules()
