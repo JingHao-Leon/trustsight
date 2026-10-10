@@ -1,5 +1,7 @@
 """Phase 2: the temporal engine's instance table and shared read layer."""
 
+from pathlib import Path
+
 import pytest
 
 from trustsight.db import init_db
@@ -9,16 +11,21 @@ from trustsight.full_aur.temporal_engine import (
     PER_PACKAGE_INSTANCES,
     PREDICATES,
     HistorySnapshot,
+    clear_history_cache,
     read_cycle_history,
     run_cycle_instances,
 )
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture
 def db(tmp_path, monkeypatch):
     monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
     init_db()
+    clear_history_cache()
     yield
+    clear_history_cache()
     (tmp_path / "trustsight.db").unlink(missing_ok=True)
 
 
@@ -33,6 +40,14 @@ def test_every_instance_names_a_known_predicate():
     for instance in (*CYCLE_INSTANCES, *GRAPH_INSTANCES, *PER_PACKAGE_INSTANCES):
         assert instance.predicate in PREDICATES, instance
         assert instance.scope in ("cycle", "package"), instance
+
+
+def test_every_instance_carries_a_doc_fragment_and_fixture_pair():
+    for instance in (*CYCLE_INSTANCES, *GRAPH_INSTANCES, *PER_PACKAGE_INSTANCES):
+        assert (ROOT / instance.doc).exists(), (instance.rule_id, instance.doc)
+        assert instance.fixtures, instance
+        for fixture in instance.fixtures:
+            assert (ROOT / fixture).exists(), (instance.rule_id, fixture)
 
 
 def test_the_engine_covers_the_phase_2_ids():
@@ -59,3 +74,7 @@ def test_snapshot_captures_changes_and_transitions():
 def test_read_cycle_history_returns_the_two_feeds(db):
     history = read_cycle_history()
     assert set(history) == {"prior_history", "maintainer_history"}
+
+
+def test_read_cycle_history_is_cached(db):
+    assert read_cycle_history() is read_cycle_history()
