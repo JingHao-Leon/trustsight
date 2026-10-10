@@ -464,7 +464,8 @@ _MATCHING_MODULES = (
 
 #: Splitting output this project produced itself is not the same problem.
 _NOT_ATTACKER_TEXT = {"discovery.py", "seed_build.py", "srcinfo.py",
-                      "ioc_baseline.py", "corpus.py", "pivot.py", "export.py",
+                      "ioc_baseline.py", "corpus.py", "temporal_engine.py",
+                      "pivot.py", "export.py",
                       # pacman's own stdout, not a package's text.
                       "db.py"}
 

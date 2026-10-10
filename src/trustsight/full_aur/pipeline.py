@@ -33,9 +33,7 @@ from ..db import (
     get_metadata,
     record_alerts,
     get_pkgbuild_snapshot,
-    introduction_rate_history,
     latest_cycle_time,
-    maintainer_activity_history,
     record_cycle_events,
     is_reserved_name,
     save_package_profile,
@@ -251,12 +249,17 @@ def _run_corpus_sweep(
         if repos:
             source_repos[name] = repos
 
+    # The shared, once-per-cycle history read (Phase 2): the temporal engine's
+    # rate/baseline instances all consume this one snapshot.
+    from .temporal_engine import read_cycle_history
+
+    history = read_cycle_history(processed)
     findings = run_corpus_sweep(
         new_meta,
         old_meta,
         source_repos=source_repos,
-        prior_history=introduction_rate_history(),
-        maintainer_history=maintainer_activity_history(),
+        prior_history=history["prior_history"],
+        maintainer_history=history["maintainer_history"],
         now=int(time.time()),
     )
 

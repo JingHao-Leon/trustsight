@@ -35,7 +35,7 @@ def thresholds(monkeypatch):
     """Pin corpus thresholds to small values so tests need small clusters."""
     def set_values(values: dict):
         monkeypatch.setattr(
-            "trustsight.full_aur.corpus.load_thresholds", lambda: values
+            "trustsight.full_aur.temporal_engine.load_thresholds", lambda: values
         )
         monkeypatch.setattr(
             "trustsight.config.load_thresholds", lambda: values
