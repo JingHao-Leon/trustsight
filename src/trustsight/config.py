@@ -752,11 +752,11 @@ watch_min_interval = 60
 enabled = false
 
 [layers]
-# Override a rule's assurance layer (Addendum 5 §2).  The layer says where on
-# the attacker's trajectory the rule's evidence sits, L1 (structural
-# coherence) to L8 (campaign correlation).  The shipped per-series default and
-# per-rule overrides apply unless a rule id is named here.  A value outside
-# L1-L8 is ignored, never applied.  Example:
+# Override a rule's assurance layer (Addendum 5 §2).  The layer names the
+# kind of evidence the rule represents, L1 (structural coherence) to L8
+# (campaign correlation).  The shipped per-series default and per-rule
+# overrides apply unless a rule id is named here.  A value outside L1-L8 is
+# ignored, never applied.  Example:
 #   H099 = "L1"
 
 [notify]
