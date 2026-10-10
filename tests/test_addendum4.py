@@ -114,6 +114,27 @@ def test_g6_undeclared_install_script_fires():
     assert "C024" in _ids(text)
 
 
+def _install_pair(declaration: str) -> str:
+    return (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        f"+{declaration}\n"
+        "--- a/demo.install\n+++ b/demo.install\n@@ -1,3 +1,3 @@\n"
+        " post_install() {\n"
+        "-  echo old\n"
+        "+  echo new\n"
+        " }\n"
+    )
+
+
+def test_g6_install_declaring_a_different_file_is_a_dead_hook():
+    assert "C024" in _ids(_install_pair("install=other.install"))
+
+
+def test_g6_a_matching_install_declaration_does_not_fire():
+    assert "C024" not in _ids(_install_pair("install=demo.install"))
+
+
 def test_g7_hardening_option_gained_fires():
     text = (
         "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
@@ -135,6 +156,20 @@ def test_g2_tls_disable_is_caught_for_other_clients():
     ):
         triggered = apply_rules([line], [line], None)
         assert any(rule["rule_id"] == "R057" for rule in triggered), line
+
+
+def test_g2_cargo_insecure_transport_is_covered_via_git():
+    # G2 accepted exemption (security model: never claim a flag that does
+    # not exist): cargo ships no TLS flag; its transport is git, and the
+    # git switch is already caught.  A bare cargo command must not fire.
+    from trustsight.rules import apply_rules
+
+    cargo = apply_rules(["cargo build"], ["cargo build"], None)
+    assert not any(rule["rule_id"] == "R057" for rule in cargo)
+
+    git_transport = apply_rules(
+        ["git -c http.sslVerify=false fetch"], ["git -c http.sslVerify=false fetch"], None)
+    assert any(rule["rule_id"] == "R057" for rule in git_transport)
 
 
 def _addendum4_ids(diff_text, tree_manifest):
