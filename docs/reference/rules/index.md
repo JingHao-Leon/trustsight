@@ -4,7 +4,7 @@
 
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
-rules X001-X032, integrity-change rules C001-C028, dependency rules
+rules X001-X032, integrity-change rules C001-C030, dependency rules
 D001-D004, declared-practice rules P001-P008 (P004 skipped), and unverifiable rules
 W001-W007.
 
@@ -38,11 +38,11 @@ generated from it by `scripts/build_rules_index.py`.
 | [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 39 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
 | [Obfuscation](obfuscation.md) | `obfuscation` | 8 | The recipe hides what it does from a reader by encoding, indirection, or runtime assembly. |
 | [Deception and Anti-Analysis](deception.md) | `deception` | 6 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
-| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 19 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
+| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 20 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 10 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
 | [Integrity and Verification](integrity.md) | `integrity` | 46 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 10 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
-| [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 13 | Who owns the package, or a long-stable declared property, changed. |
+| [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 14 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 6 | How recently the package or this revision appeared, independent of any diff content. |
 | [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
@@ -115,7 +115,7 @@ is deliberately non-contiguous; see
 | [C018](integrity.md#c018) | Executable File Committed | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
 | [C019](integrity.md#c019) | File Renamed | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C020](integrity.md#c020) | Credentials In A Source URL | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
-| [C021](composition.md#c021) | Dependency Removal During A Build Change | Integrity-change | MEDIUM | [Composition](composition.md) |
+| [C021](composition.md#c021) | Dependency Removal During A Build Change | Integrity-change | HIGH | [Composition](composition.md) |
 | [C022](integrity.md#c022) | Checksum Strength Downgraded | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
 | [C023](integrity.md#c023) | IP-Literal Source Host | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
 | [C024](composition.md#c024) | Install Script Not Declared | Integrity-change | MEDIUM | [Composition](composition.md) |
@@ -123,6 +123,8 @@ is deliberately non-contiguous; see
 | [C026](integrity.md#c026) | Empty File Added | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C027](integrity.md#c027) | Declared Install Script Is Absent | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C028](staging-and-recon.md#c028) | Build Cache Outside The Build Trees | Integrity-change | INFO | [Staging and Reconnaissance](staging-and-recon.md) |
+| [C029](install-and-persist.md#c029) | Backup Array Gains Entries | Integrity-change | INFO | [Install and Persistence](install-and-persist.md) |
+| [C030](maintainer-and-metadata.md#c030) | Epoch Removed With Version Unchanged | Integrity-change | INFO | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [D001](naming-and-dependency.md#d001) | Novel Dependency Added | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |

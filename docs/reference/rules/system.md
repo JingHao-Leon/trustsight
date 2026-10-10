@@ -98,7 +98,7 @@ be a script the recipe executes.
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X032, C001-C028, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X032, C001-C030, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -1266,6 +1266,14 @@ See [C027: Declared Install Script Is Absent](integrity.md#c027).
 
 See [C028: Build Cache Outside The Build Trees](staging-and-recon.md#c028).
 
+### C029 {#c029}
+
+See [C029: Backup Array Gains Entries](install-and-persist.md#c029).
+
+### C030 {#c030}
+
+See [C030: Epoch Removed With Version Unchanged](maintainer-and-metadata.md#c030).
+
 ### W005 {#w005}
 
 See [W005: Build Runs A Target Whose Recipe Was Not Read](unverifiable.md#w005).
@@ -1570,6 +1578,6 @@ Measured against the TrustSight test corpus.
 | CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
 | R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 68.2 % | Percentage of benign diffs scoring 0. |
+| Benign zero-rate | 68.0 % | Percentage of benign diffs scoring 0. |
 | Benign p95 | 35 | 95th percentile score on benign corpus. |
 | CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |

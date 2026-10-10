@@ -1433,8 +1433,11 @@ name = "TLS Verification Disabled"
 # The client list is deliberate and closed: every entry is a documented
 # flag that turns verification off for that client.  `--no-verify` is
 # deliberately absent - for bun and cargo it skips lifecycle scripts, not
-# TLS, and claiming it would describe the wrong thing.
-pattern = '(?:curl\\s+[^;&|]*?(?:--insecure|-k)\\b|wget\\s+[^;&|]*?--no-check-certificate\\b|git\\s+-c\\s+http\\.sslVerify=false\\b|GIT_SSL_NO_VERIFY\\s*=|pip\\s+[^;&|]*?--trusted-host\\b|npm\\s+[^;&|]*?--strict-ssl=false\\b|deno\\s+[^;&|]*?--unsafely-ignore-certificate-errors\\b)'
+# TLS, and claiming it would describe the wrong thing.  bun/node ship no
+# TLS flag of their own; the ecosystem switch is the Node compatibility
+# env var below, and cargo's transport is git (`http.sslVerify`) already
+# covered.
+pattern = '(?:curl\\s+[^;&|]*?(?:--insecure|-k)\\b|wget\\s+[^;&|]*?--no-check-certificate\\b|git\\s+-c\\s+http\\.sslVerify=false\\b|GIT_SSL_NO_VERIFY\\s*=|pip\\s+[^;&|]*?--trusted-host\\b|npm\\s+[^;&|]*?--strict-ssl=false\\b|deno\\s+[^;&|]*?--unsafely-ignore-certificate-errors\\b|NODE_TLS_REJECT_UNAUTHORIZED\\s*=\\s*[\"\\x27]?0\\b)'
 severity = "HIGH"
 category = "network"
 match_target = "resolved"

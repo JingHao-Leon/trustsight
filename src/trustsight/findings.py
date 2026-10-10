@@ -154,6 +154,8 @@ TEMPLATES: dict[str, str] = {
     "T003": "signing key rotated: {match}",
     "X032": "command name assembled by splicing: {shape}",
     "C028": "build cache written outside the build trees: {match}",
+    "C029": "{match}",
+    "C030": "{match}",
     # --- Class E indicator ---
     "H056": "{surface} matches known indicator {ioc_value} ({confidence}, {provenance})",
     # --- Build environment overrides ---

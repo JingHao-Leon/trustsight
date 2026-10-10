@@ -28,7 +28,7 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [C021](#c021) | Dependency Removal During A Build Change | MEDIUM |
+| [C021](#c021) | Dependency Removal During A Build Change | HIGH |
 | [C024](#c024) | Install Script Not Declared | MEDIUM |
 | [H027](#h027) | Capability Density Anomaly | INFO |
 | [H043](#h043) | Attack-Chain Composition | INFO |
@@ -141,15 +141,18 @@ composition H098 uses.
 
 ### C021: Dependency Removal During A Build Change {#c021}
 
-- **Severity:** MEDIUM (weight 15)
+- **Severity:** HIGH (weight 25) when `checkdepends` loses an entry;
+  MEDIUM (weight 15) when `optdepends` does.
 - **Category:** `composition`
 - **Condition:** `checkdepends` or `optdepends` loses an entry while
   `build()`, `prepare()` or `check()` changed in the same diff.
 
 Dropping `checkdepends` eliminates the test-suite execution that would
 catch a payload; the conjunction with a build change is what makes the
-removal suspicious rather than hygienic. Measured on the locked benign
-corpus: 27/3,739 (0.72%), the published calibration floor.
+removal suspicious rather than hygienic. `optdepends` removal is far more
+often ordinary cleanup, so it stays MEDIUM. Measured on the locked benign
+corpus: 27/3,739 (0.72%) combined, the published calibration floor; the
+fire-rate gate clears `checkdepends` for HIGH.
 
 ### C024: Install Script Not Declared {#c024}
 

@@ -15,7 +15,20 @@ import pathlib
 import typer
 
 from ..bounded_io import read_file_capped
+from ..config import load_config
 from ..tokenizer import split_lines
+
+
+def _all_added_diff(text: str, filename: str) -> str:
+    """A unified diff in which every line of ``text`` is an addition.
+
+    The diff-free rules read a diff's *added* lines; handing them the whole
+    file as additions reuses that logic without a second code path.
+    """
+    lines = split_lines(text)
+    header = (f"--- a/{filename}\n+++ b/{filename}\n"
+              f"@@ -1,{len(lines)} +1,{len(lines)} @@\n")
+    return header + "".join(f"+{line}\n" for line in lines)
 
 
 def lint_report(text: str, filename: str) -> dict:
@@ -38,6 +51,9 @@ def lint_report(text: str, filename: str) -> dict:
     ]
     unresolved = unresolved_assignment_rows(
         text, file=filename, extra_lines=computed_sources)
+    from ..analysis.structural import _is_checksum_array
+
+    n_source = len(recipe.arrays.get("source", ()))
     arrays = {}
     for name, entries in recipe.arrays.items():
         counts: dict[str, int] = {}
@@ -50,6 +66,13 @@ def lint_report(text: str, filename: str) -> dict:
                          f"{'y' if len(duplicates) == 1 else 'ies'}")
         if any(entry.strip().upper() in ("SKIP", "NONE") for entry in entries):
             notes.append("contains SKIP/NONE")
+        # §8: an ordering note.  A checksum array whose entry count differs
+        # from source=() cannot be in positional parity, so a hash sits in a
+        # slot a reviewer would not check.
+        if _is_checksum_array(name) and n_source and len(entries) != n_source:
+            notes.append(
+                f"{len(entries)} entries, source=() has {n_source} "
+                "(out of parity)")
         arrays[name] = {
             "entries": len(entries),
             "duplicates": duplicates,
@@ -91,6 +114,32 @@ def lint_report(text: str, filename: str) -> dict:
                         "message": f"{name}() writes to {hit.strip()}",
                     })
                     break
+
+    # §7/§9 diff-free rules: H076 (build write outside the staging root) and
+    # H091 (checksum array shorter than source=()).  Neither needs a diff, so
+    # a first-seen recipe gets the same hygiene view as a change.
+    from ..analysis.persistence import _outside_staging_findings
+    from ..analysis.structural import recipe_checksum_parity_finding
+
+    hits: list[dict] = []
+
+    def _collect(rule_id, name, severity, category, match, **extra):
+        hits.append({
+            "rule_id": rule_id, "severity": severity, "message": match,
+            "file": extra.get("file", filename), "line": extra.get("line"),
+        })
+
+    _outside_staging_findings(
+        _all_added_diff(text, filename), load_config(), _collect,
+        current_text=text)
+    findings.extend(hits)
+
+    parity = recipe_checksum_parity_finding(text)
+    if parity is not None:
+        findings.append({
+            "rule_id": parity["rule_id"], "severity": parity["severity"],
+            "message": parity["match"],
+        })
 
     return {
         "file": filename,

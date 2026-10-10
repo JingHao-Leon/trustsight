@@ -570,6 +570,40 @@ def _structural_findings(
             span=span, array=name,
             gained=", ".join(delta.gained), lost=", ".join(delta.lost))
 
+    # Spec §6, mildest shape: an isolated checksum insertion whose index does
+    # not match the index at which the corresponding source entry appeared, so
+    # the hash/source positional pairing shifted without a reorder.  Scored
+    # below the reorder shape (LOW).
+    if scope_pre is not None and scope_post is not None:
+        ck_names = {n for n in scope_post.arrays if _is_checksum_array(n)}
+        for name in sorted(ck_names):
+            pair = isolated_checksum_insertion(scope_pre, scope_post, name)
+            if pair is None:
+                continue
+            ck_idx, src_idx = pair
+            spans = scope_post.array_spans.get(name) or ()
+            add("C014", "Array Order Manipulation", "LOW", "integrity",
+                f"{name} entry inserted at index {ck_idx} while source "
+                f"inserted at index {src_idx}",
+                span=spans[0] if spans else None, array=name,
+                checksum_index=ck_idx, source_index=src_idx)
+
+    # Addendum 4, low priority: backup=() gains an entry (annotation-tier).
+    # backup-listed files get config-file treatment on upgrade, so a new entry
+    # changes what pacman preserves; the value is real but niche, so INFO.
+    if scope_pre is not None and scope_post is not None:
+        from ..recipedoc import array_diff
+
+        delta = array_diff(
+            scope_pre.arrays.get("backup", ()),
+            scope_post.arrays.get("backup", ()),
+        )
+        if delta.gained:
+            add("C029", "Backup Array Gains Entries", "INFO", "persistence",
+                "backup=() gained "
+                + ", ".join(delta.gained),
+                array="backup", gained=", ".join(delta.gained))
+
     # C015 (spec §7, re-filed from H100 per Addendum 3): a fetch in
     # package().  Sources belong in prepare/build, where the checksum
     # arrays apply; fetching at artifact-assembly time bypasses that
@@ -937,6 +971,51 @@ def array_order_changes(diff_text: str, config: dict | None = None,
     return changes
 
 
+def _is_subsequence(small, big) -> bool:
+    """True when ``small`` appears in ``big`` in order (insertions allowed)."""
+    it = iter(big)
+    return all(item in it for item in small)
+
+
+def _first_insertion_index(old, new):
+    """Index of the first entry that only exists in ``new``, or None.
+
+    ``old`` must be a subsequence of ``new`` (pure insertion).  Returns the
+    first position at which ``new`` diverges from ``old``.
+    """
+    if len(new) <= len(old):
+        return None
+    for i in range(len(old)):
+        if new[i] != old[i]:
+            return i
+    return len(old)
+
+
+def isolated_checksum_insertion(pre, post, name: str):
+    """Spec §6, the mildest shape: a checksum entry inserted out of parity.
+
+    A checksum array gains an entry (relative order of the rest preserved)
+    whose index differs from the index at which the corresponding ``source``
+    entry was inserted, so the hash/source positional pairing is perturbed
+    without a reorder.  Returns ``(checksum_index, source_index)`` or None.
+    """
+    if pre is None or post is None:
+        return None
+    old_ck = pre.arrays.get(name, ())
+    new_ck = post.arrays.get(name, ())
+    old_src = pre.arrays.get("source", ())
+    new_src = post.arrays.get("source", ())
+    if not (old_ck and new_ck and old_src and new_src):
+        return None
+    if not (_is_subsequence(old_ck, new_ck) and _is_subsequence(old_src, new_src)):
+        return None
+    ck_idx = _first_insertion_index(old_ck, new_ck)
+    src_idx = _first_insertion_index(old_src, new_src)
+    if ck_idx is None or src_idx is None or ck_idx == src_idx:
+        return None
+    return ck_idx, src_idx
+
+
 #: Addendum 4: checksum strength order, strongest first.
 _CHECKSUM_STRENGTH = ("b2sums", "sha512sums", "sha256sums", "sha1sums",
                       "md5sums")
@@ -1047,7 +1126,10 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
         return
 
     # G3 (C021): a test/dependency array removed while a build function
-    # changed - dropping the checks that would catch a payload.
+    # changed - dropping the checks that would catch a payload.  Dropping
+    # `checkdepends` eliminates the test-suite execution outright, so it is
+    # the HIGH candidate the spec gates on fire rates; `optdepends` removal
+    # is far more often cleanup, so it stays MEDIUM.
     for name in ("checkdepends", "optdepends"):
         lost = array_diff(_family_values(pre.arrays, name),
                           _family_values(post.arrays, name)).lost
@@ -1058,7 +1140,8 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
             for fn in ("build", "prepare", "check")
         )
         if touched:
-            add("C021", "Dependency Removal During A Build Change", "MEDIUM",
+            severity = "HIGH" if name == "checkdepends" else "MEDIUM"
+            add("C021", "Dependency Removal During A Build Change", severity,
                 "composition",
                 f"{name} lost {', '.join(sorted(set(lost))[:3])} while a "
                 "build function changed",

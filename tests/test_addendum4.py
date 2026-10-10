@@ -73,7 +73,24 @@ def test_g3_dependency_removal_during_a_build_change_fires():
         "+  make\n"
         " }\n"
     )
-    assert "C021" in _ids(text)
+    findings = _findings(text)
+    assert "C021" in findings
+    assert findings["C021"].severity == "HIGH"
+
+
+def test_g3_optdepends_removal_is_medium():
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,6 +1,5 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        "-optdepends=('foo: extra')\n"
+        "+optdepends=()\n"
+        " build() {\n"
+        "-  make check\n"
+        "+  make\n"
+        " }\n"
+    )
+    findings = _findings(text)
+    assert findings["C021"].severity == "MEDIUM"
 
 
 def test_g3_removal_without_a_build_change_stands_down():
@@ -114,6 +131,7 @@ def test_g2_tls_disable_is_caught_for_other_clients():
         "git -c http.sslVerify=false clone https://evil.invalid/x",
         "pip install --trusted-host pypi.invalid pkg",
         "npm install --strict-ssl=false pkg",
+        "NODE_TLS_REJECT_UNAUTHORIZED=0 bun install pkg",
     ):
         triggered = apply_rules([line], [line], None)
         assert any(rule["rule_id"] == "R057" for rule in triggered), line
@@ -170,6 +188,7 @@ def test_g2_benign_tls_enabled_clients_do_not_fire():
         "git clone https://example.invalid/x",
         "pip install somepkg",
         "npm install somepkg",
+        "NODE_TLS_REJECT_UNAUTHORIZED=1 bun install pkg",
     ):
         triggered = apply_rules([line], [line], None)
         assert not any(r["rule_id"] == "R057" for r in triggered), line

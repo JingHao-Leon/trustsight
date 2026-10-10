@@ -53,6 +53,37 @@ def test_h063_ignores_comment_mention():
     assert "H063" not in ids("+# reset epoch here\n")
 
 
+def test_c030_fires_when_epoch_removed_and_version_unchanged():
+    finding = next(
+        f for f in structural("-epoch=1\n") if f["rule_id"] == "C030"
+    )
+    assert finding["severity"] == "INFO"
+    assert finding["params"]["epoch"] == "1"
+
+
+def test_c030_stands_down_when_the_version_also_moved():
+    assert "C030" not in ids("-epoch=1\n-pkgver=1.0\n+pkgver=2.0\n")
+
+
+def test_c030_stands_down_when_epoch_is_replaced():
+    assert "C030" not in ids("-epoch=1\n+epoch=2\n")
+
+
+def test_c029_fires_when_backup_gains_an_entry():
+    finding = next(
+        f for f in structural(
+            "-backup=('etc/a.conf')\n+backup=('etc/a.conf' 'etc/b.conf')\n")
+        if f["rule_id"] == "C029"
+    )
+    assert finding["severity"] == "INFO"
+    assert "etc/b.conf" in finding["params"]["gained"]
+
+
+def test_c029_silent_without_a_gain():
+    assert "C029" not in ids(
+        "-backup=('etc/a.conf')\n+backup=('etc/a.conf')\n")
+
+
 def test_h063_whole_recipe_says_present_not_newly_introduced():
     """A whole-recipe run has no ``-`` side, so every field is "new" by
     construction and "newly introduced" claims more than the run knows."""

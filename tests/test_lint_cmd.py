@@ -44,6 +44,34 @@ def test_lint_an_install_file_runs_the_hook_rules():
     assert "C016" in {f["rule_id"] for f in report["rules"]}
 
 
+_WRITE_OUTSIDE = """\
+pkgname=demo
+pkgver=1.0
+build() {
+  echo x > /etc/pwned
+}
+"""
+
+_SHORT_SUMS = """\
+pkgname=demo
+pkgver=1.0
+source=('a.tar.gz' 'b.tar.gz')
+sha256sums=('aaaa')
+"""
+
+
+def test_lint_runs_the_diff_free_write_rule():
+    report = lint_report(_WRITE_OUTSIDE, "PKGBUILD")
+    assert "H076" in {f["rule_id"] for f in report["rules"]}
+
+
+def test_lint_notes_out_of_parity_arrays_and_runs_h091():
+    report = lint_report(_SHORT_SUMS, "PKGBUILD")
+    assert any("out of parity" in note
+               for note in report["arrays"]["sha256sums"]["notes"])
+    assert "H091" in {f["rule_id"] for f in report["rules"]}
+
+
 def test_lint_cli_is_pipe_safe_and_scores_nothing(tmp_path):
     target = tmp_path / "PKGBUILD"
     target.write_text(_PKGBUILD, encoding="utf-8")

@@ -25,6 +25,7 @@ severity weights and the reserved identifier ranges.
 | Rule | Name | Severity |
 |---|---|---|
 | [C006](#c006) | Maintainer Change With New Source Domain | HIGH |
+| [C030](#c030) | Epoch Removed With Version Unchanged | INFO |
 | [H026](#h026) | Untrusted Maintainer Takeover | HIGH |
 | [H026](#h026-corpus) | Untrusted Maintainer Takeover (corpus path) | HIGH |
 | [H037](#h037) | Long-Stable Property Changed | MEDIUM |
@@ -88,6 +89,17 @@ surfaces in a hunk, so bumping one is quiet. `epoch=0` is INFO: it initialises
 the field without changing the ordering.
 
 Fire rate: 14 of 3739 (0.37 %).
+
+### C030: Epoch Removed With Version Unchanged {#c030}
+
+- **Severity:** INFO (weight 0)
+- **Category:** `version`
+- **Condition:** A diff drops `epoch=` while `pkgver` and `pkgrel` are
+  unchanged by resolved value.
+
+Removing an epoch is usually legitimate, so this is annotation-tier: it
+carries no score and only records that the version-ordering override
+silently disappeared. `H063` owns the introduction; `C030` the removal.
 
 ### H037: Long-Stable Property Changed {#h037}
 

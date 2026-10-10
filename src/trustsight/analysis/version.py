@@ -378,6 +378,50 @@ def _epoch_introduced(diff_text: str) -> tuple[bool, str | None]:
     return False, None
 
 
+def _epoch_removed_unchanged(diff_text: str) -> tuple[bool, str | None]:
+    """Return ``(removed, value)``: was ``epoch=`` dropped with pkgver/pkgrel
+    unchanged by resolved value?
+
+    Addendum 4, low priority: epoch removal is usually legitimate (a rebase
+    onto a version that no longer needs the prefix), so this is
+    annotation-tier.  It matters only because the ordering override silently
+    disappears.
+    """
+    doc = parse_diff_lines(split_lines(diff_text or ""))
+    lines = [line.raw for line in doc.lines]
+    removed = [line for line in lines if re.match(r"\s*-\s*epoch\s*=", line)]
+    if not removed:
+        return False, None
+    added_epoch = any(
+        _EPOCH_ASSIGN_RE.search(line[1:])
+        for line in resolve_added_lines(diff_text)
+        if line.startswith("+") and not line.startswith("+++")
+    )
+    if added_epoch:
+        return False, None
+
+    old_table = _variable_table(lines, frozenset({"-", " "}))
+    new_table = _variable_table(lines, frozenset({"+", " "}))
+
+    def resolved(scalar: str, table: dict[str, str],
+                 prefixes: frozenset[str]) -> str | None:
+        for line in doc.lines:
+            match = _SCALAR_LINE_RE.match(line.raw)
+            if match and match.group(1) in prefixes \
+                    and match.group(2).lower() == scalar:
+                return _resolve_value(_strip_value(match.group(3)), table)
+        return None
+
+    for scalar in ("pkgver", "pkgrel"):
+        old_val = resolved(scalar, old_table, frozenset({"-", " "}))
+        new_val = resolved(scalar, new_table, frozenset({"+", " "}))
+        if old_val is not None and new_val is not None and old_val != new_val:
+            return False, None
+
+    match = _EPOCH_ASSIGN_RE.search(re.sub(r"^\s*-\s*", "", removed[0]))
+    return True, match.group(1) if match else None
+
+
 def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False) -> None:
     """A diff introduces ``epoch=`` where none existed (H063, MEDIUM).
 
@@ -391,6 +435,25 @@ def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False) -> 
     support: the epoch is merely present.  The finding is kept (the reader
     still wants to know the field is there), but it says what it knows.
     """
+    # Addendum 4, low priority: epoch dropped while pkgver/pkgrel stood still.
+    # Checked before H063's early return: a removal is never an introduction.
+    removed, removed_value = _epoch_removed_unchanged(diff_text)
+    if removed:
+        suffix = f"{removed_value}" if removed_value else "?"
+        add("C030", "Epoch Removed With Version Unchanged", "INFO", "version",
+            f"epoch={suffix} removed while pkgver/pkgrel are unchanged",
+            line=next(
+                (
+                    i
+                    for i, line in enumerate(
+                        parse_diff_lines(split_lines(diff_text)).lines, 1)
+                    if line.raw.startswith("-")
+                    and _EPOCH_ASSIGN_RE.search(line.raw[1:])
+                ),
+                None,
+            ),
+            epoch=removed_value or "0")
+
     introduced, value = _epoch_introduced(diff_text)
     if not introduced:
         return

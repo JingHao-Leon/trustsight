@@ -23,6 +23,7 @@ severity weights and the reserved identifier ranges.
 | Rule | Name | Severity |
 |---|---|---|
 | [C017](#c017) | Install Hook Writes To A User-Writable Location | HIGH |
+| [C029](#c029) | Backup Array Gains Entries | INFO |
 | [H017](#h017) | Install Hook Fetches Or Executes | HIGH |
 | [H023](#h023) | Install Hook Present | INFO |
 | [H032](#h032) | Write To User Home Or RC | HIGH |
@@ -350,3 +351,15 @@ as MEDIUM.
 System destinations (`/etc/skel`, `/usr/...`) are not this rule's
 business; the S-series and H032/H038 own hook writes to system paths.
 Measured on the locked benign corpus: 0/3,739.
+
+### C029: Backup Array Gains Entries {#c029}
+
+- **Severity:** INFO (weight 0)
+- **Category:** `persistence`
+- **Condition:** `backup=()` gains at least one entry. backup-listed
+  files receive config-file treatment on upgrade, so a new entry changes
+  what pacman preserves across a package update.
+
+Annotation-tier by default: adding a backup entry is a deliberate,
+usually legitimate declaration, so it carries no score and is recorded
+for the reader rather than treated as suspicion.

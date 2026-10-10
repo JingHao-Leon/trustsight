@@ -34,13 +34,13 @@ The scoring system is organized into four evidence tiers:
 
 A package with checksums, a trusted forge source, and no rule firings scores 0. A package with `curl | bash` on an unknown domain with no checksum scores 60+. FATAL rule findings (prompt injection or Unicode deception) hard-stop at 100. Confirmed IOC matches are reported separately with their curator attribution; they do not change the score or risk band.
 
-**Key numbers:** 68.2% benign zero-rate, benign p95 = 35 against malicious p5 = 60 on the 3,739-diff locked corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
+**Key numbers:** 68.0% benign zero-rate, benign p95 = 35 against malicious p5 = 60 on the 3,739-diff locked corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
 
 See [How TrustSight Works](explanation/index.md) for the full pipeline explanation and [Rules Reference](reference/rules/index.md) for the complete rule catalog.
 
 !!! tip "Rules Reference"
 
-    TrustSight ships 224 documented scoring rules across ten families: 37 R-series detection rules, 103 H-series heuristics, 28 C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, 32 X-series crossfire rules, three M-series meta rules, three E-series entropy rules, two T-series temporal rules, and three G-series correlation rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W007 are weight zero and never move a number. The optional L9 build lane adds five artifact rules A001-A005, reported outside the score when enabled. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
+    TrustSight ships 226 documented scoring rules across ten families: 37 R-series detection rules, 103 H-series heuristics, 30 C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, 32 X-series crossfire rules, three M-series meta rules, three E-series entropy rules, two T-series temporal rules, and three G-series correlation rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W007 are weight zero and never move a number. The optional L9 build lane adds five artifact rules A001-A005, reported outside the score when enabled. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
 
     [Browse the full rule catalog &rarr;](reference/rules/index.md)
 

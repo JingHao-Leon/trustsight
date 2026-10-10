@@ -12,6 +12,8 @@ build/
 # Malicious fixture .diff bodies are committed source (fixture reproducibility);
 # only the generic pattern above is overridden for these directories.
 !tests/fixtures/malicious/**/*.diff
+# X028's two-commit split across consecutive commits is committed source.
+!tests/fixtures/x028-split-fetch/**/*.diff
 site/
 
 # Uncompressed seed; only the .gz is shipped

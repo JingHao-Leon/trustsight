@@ -103,3 +103,39 @@ def test_a_moved_skip_fires():
 
 def test_arch_suffixed_arrays_are_handled():
     assert "C014" in _rule_ids(_ARCH_REORDER, _config())
+
+
+_ISOLATED_INSERTION = """\
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,6 +1,6 @@
+ pkgname=demo
+ pkgver=1.0
+-source=('a.tar.gz' 'b.tar.gz')
+-sha256sums=('aaaa' 'bbbb')
++source=('a.tar.gz' 'c.tar.gz' 'b.tar.gz')
++sha256sums=('aaaa' 'bbbb' 'cccc')
+"""
+
+_ALIGNED_INSERTION = """\
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,6 +1,6 @@
+ pkgname=demo
+ pkgver=1.0
+-source=('a.tar.gz' 'b.tar.gz')
+-sha256sums=('aaaa' 'bbbb')
++source=('a.tar.gz' 'c.tar.gz' 'b.tar.gz')
++sha256sums=('aaaa' 'cccc' 'bbbb')
+"""
+
+
+def test_isolated_insertion_fires_low():
+    fact = scan_diff(_ISOLATED_INSERTION, config=_config(), package_name="demo")
+    hits = [e for e in fact.score_breakdown if e.rule_id == "C014"]
+    assert hits, "an out-of-parity checksum insertion should fire C014"
+    assert all(e.severity == "LOW" for e in hits)
+
+
+def test_aligned_insertion_stands_down():
+    assert "C014" not in _rule_ids(_ALIGNED_INSERTION, _config())

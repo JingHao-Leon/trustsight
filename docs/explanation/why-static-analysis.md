@@ -146,7 +146,7 @@ match_target = "resolved"
 
 R-series rules are regex-based and match against resolved strings or raw diff lines. H-series heuristics (103 rules) are emitted from code because they need diff context a single-line regex cannot see (for example, "did the build function change between two commits?", or "did the build function gain a network client?"). Their thresholds are tuned in `thresholds.toml`, and their weights come from `[severity_weights]` in `config.toml`.
 
-C-series rules (C001-C028) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
+C-series rules (C001-C030) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
 
 S-series sabotage rules (S001-S008) use command-position matching to distinguish build-sandbox cleanup from system damage: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not.
 
@@ -172,7 +172,7 @@ LOW = 5
 INFO = 0
 ```
 
-**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 9.5 % of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
+**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 9.6 % of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
 
 ```toml
 [review]

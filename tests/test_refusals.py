@@ -81,6 +81,17 @@ def test_a_resolved_benign_hex_literal_stands_down():
     assert "X030" not in ids
 
 
+def test_an_octal_encoded_benign_path_stands_down():
+    # `\057` is `/`; the stand-down must use the tokenizer's octal decoder,
+    # not a local one that only knew `\x`.
+    ids = _ids(_diff(
+        "build() {\n"
+        "  install -Dm644 $'\\057usr\\057bin\\057foo' out\n"
+        "}\n"
+    ))
+    assert "X030" not in ids
+
+
 def test_dormant_encoded_material_fires_x029():
     blob = "QUJD" * 70  # 280 base64-ish chars, no decoder in the diff
     ids = _ids(_diff(
@@ -222,6 +233,29 @@ def test_x029_honors_the_configured_min_length():
     emitted.clear()
     refusal_findings(diff, {"thresholds": {"x029": {"min_length": 512}}}, add)
     assert "X029" not in emitted
+
+
+def test_x028_real_two_commit_split_fetch_fixture():
+    """A real (un-monkeypatched) two-commit fixture: the URL is split by a
+    line continuation across commits, so neither half alone is a fetch-exec
+    pipeline but the join is."""
+    from trustsight.analysis.crossfire import crossfire_techniques
+    from trustsight.analysis.refusals import pattern_across_commits
+
+    fixtures = pathlib.Path(__file__).resolve().parent / "fixtures" / "x028-split-fetch"
+    prev = (fixtures / "prev.diff").read_text(encoding="utf-8")
+    curr = (fixtures / "curr.diff").read_text(encoding="utf-8")
+
+    assert "X006" not in crossfire_techniques(prev)
+    assert "X006" not in crossfire_techniques(curr)
+
+    emitted: list[str] = []
+
+    def add(rule_id, name, severity, category, match, **extra):
+        emitted.append(rule_id)
+
+    pattern_across_commits(prev, curr, add)
+    assert "X028" in emitted
 
 
 def test_x028_cites_both_commits_when_supplied(monkeypatch):

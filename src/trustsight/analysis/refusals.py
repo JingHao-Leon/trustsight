@@ -90,36 +90,6 @@ _BENIGN_DECODED_RE = re.compile(
 )
 
 
-def _decode_ansi_c(body: str) -> str:
-    """Best-effort decode of ANSI-C escapes, for the benign check only."""
-    out: list[str] = []
-    i = 0
-    while i < len(body):
-        if body[i] == "\\" and i + 1 < len(body):
-            nxt = body[i + 1]
-            if nxt == "x" and i + 3 < len(body) + 1:
-                try:
-                    out.append(chr(int(body[i + 2:i + 4], 16)))
-                    i += 4
-                    continue
-                except ValueError:
-                    pass
-            if nxt == "n":
-                out.append("\n")
-                i += 2
-                continue
-            if nxt == "t":
-                out.append("\t")
-                i += 2
-                continue
-            out.append(nxt)
-            i += 2
-            continue
-        out.append(body[i])
-        i += 1
-    return "".join(out)
-
-
 def _thresholds(config) -> dict:
     return (config or {}).get("thresholds", {})
 
@@ -251,6 +221,8 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             escapes = len(hexes) + len(octals)
             if escapes < 2 and not controls:
                 continue
+            from .._tokenizer_engine import _decode_ansi_c
+
             decoded = _decode_ansi_c(literal)
             if all(0x20 <= ord(ch) <= 0x7E for ch in decoded) and \
                     _BENIGN_DECODED_RE.match(decoded):
