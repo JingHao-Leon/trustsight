@@ -62,3 +62,26 @@ def test_an_override_on_a_retired_id_still_suppresses_the_survivor(monkeypatch):
         [{"rule_id": "H001", "severity": "HIGH"}])
     assert kept == []
     assert suppressed[0]["rule_id"] == "H001"
+
+
+def test_cofire_row_measures_the_shared_firings():
+    """Phase 5 Step 1: the co-fire ratio is over the rarer rule's firings."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import h_reduction_audit as audit
+
+    benign = {"H016": {1, 2, 3}, "H042": {2, 3}}
+    mal_sets: dict = {}
+    mal_counts: dict = {}
+    row = audit.cofire_row("H016", "H042", benign, mal_sets, mal_counts, 0.95)
+    # 2 shared of the rarer rule's 2 firings -> merge candidate.
+    assert row["both"] == 2
+    assert row["ratio_of_rarer"] == 1.0
+    assert row["meets_epsilon"]
+
+    distinct = audit.cofire_row("H016", "H999", benign, mal_sets, mal_counts, 0.95)
+    assert distinct["both"] == 0
+    assert not distinct["measured"]
+    assert not distinct["meets_epsilon"]

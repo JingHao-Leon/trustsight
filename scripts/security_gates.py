@@ -3256,6 +3256,29 @@ def gate_h_series_reduction_residue() -> Gate:
                 {"live": live, "target": [low, high]}, detail)
 
 
+def gate_retired_ids_resolve_to_live_survivors() -> Gate:
+    """Addendum 3 Phase 5: every retired id aliases a live, non-retired rule.
+
+    A retired id whose survivor is itself retired, or is absent from the
+    catalog, would break the "config keeps the old ID readable" contract.
+    The alias map is empty until the overlap audit is measured; this keeps it
+    well-formed when it is not.
+    """
+    from trustsight.categories import RULE_CATEGORIES
+    from trustsight.rule_id_history import RETIRED_RULE_IDS, survivor_id
+
+    problems: list[str] = []
+    for old, survivor in RETIRED_RULE_IDS.items():
+        if survivor in RETIRED_RULE_IDS:
+            problems.append(f"{old} -> {survivor} is itself retired")
+        if survivor_id(old) not in RULE_CATEGORIES:
+            problems.append(f"{old} resolves to {survivor_id(old)}, not live")
+        if old in RULE_CATEGORIES:
+            problems.append(f"{old} is retired but still in the live catalog")
+    return Gate("retired ids resolve to live survivors", not problems,
+                {"retired": len(RETIRED_RULE_IDS)}, problems)
+
+
 def gate_an_audit_does_not_write_history() -> Gate:
     """A15: an audit is read-only unless ``--record`` is given.
 
@@ -3782,6 +3805,7 @@ def run_gates() -> list[Gate]:
     gates.append(gate_an_audit_does_not_write_history())
     gates.append(gate_h_series_intake_is_frozen())
     gates.append(gate_h_series_reduction_residue())
+    gates.append(gate_retired_ids_resolve_to_live_survivors())
     gates.append(gate_the_history_walk_is_bounded())
     gates.append(gate_run_diff_assembly_is_bounded())
     gates.append(gate_a_truncated_history_walk_is_a_declared_gap())
