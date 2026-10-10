@@ -18,12 +18,25 @@ silently renumber rules that existing artifacts already refer to.
 from __future__ import annotations
 
 __all__ = [
+    "ANCHOR_RULE_IDS",
     "FROZEN_H_IDS",
     "RENAMED_RULE_IDS",
     "RETIRED_RULE_IDS",
     "current_id",
     "survivor_id",
 ]
+
+#: Ids the catalog still carries so their reference anchors and citations
+#: resolve, but which no code path emits (Addendum 3 Phase 5, Step 2).  Their
+#: reference entry already says "retained as a documentation anchor for a
+#: retired rule" (or "a reserved runtime id"); they are counted as *live* by
+#: ``RULE_CATEGORIES`` only because removing them would break the anchors.
+#: The reduction ledger subtracts them: `H-series reduction residue` reports
+#: the emitting count, and the overlap audit excludes them from zero-fire.
+ANCHOR_RULE_IDS: frozenset[str] = frozenset({
+    "H005", "H006", "H007", "H008", "H009", "H010", "H011", "H012", "H013",
+    "H014", "H028",
+})
 
 #: Addendum 3's intake freeze: the H ids that exist as of the reduction plan.
 #: A PR that adds a new ``H`` id while the live count is above the target

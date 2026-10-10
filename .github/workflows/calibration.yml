@@ -79,6 +79,12 @@ jobs:
       - name: Check ChangeDelta parity over the whole corpus
         run: uv run python tests/harness/change_parity.py
 
+      # Addendum 3: the history-exercising corpus (the observation-history
+      # rules the stateless corpus never fires).  A drift in H026/H044,
+      # H045/H073, H052/H053/H055/H059/H073/H074 fails here.
+      - name: Replay the history-exercising corpus
+        run: uv run python tests/harness/history_replay.py --json history-replay.json
+
       # The published suite size is measured with the corpus present (one
       # module parametrizes over its diffs), so it is checked here rather
       # than in the matrix job, which has no corpus to build.
@@ -98,3 +104,4 @@ jobs:
           path: |
             gates.json
             h-reduction-audit.json
+            history-replay.json
