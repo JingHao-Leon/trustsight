@@ -25,6 +25,7 @@ python scripts/security_gates.py
 | `artifact reads are bounded before verification` | A4 | `db.py`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
 | `H-series intake is frozen` | Addendum 3 Phase 0 | `categories.RULE_CATEGORIES` |
+| `H-series reduction residue` | Addendum 3 Phase 6 | `categories.RULE_CATEGORIES`, target 55-65 |
 | `docs layer mapping matches the registry` | Addendum 5 §11 (docs) | `scripts/build_layers_doc.py`, `trustsight.layers` |
 | `layer detection and coverage are independent` | Addendum 5 §3 (reporting) | `trustsight.layers._layer_coverage` |
 | `every rule names its shared dependencies` | Addendum 5 §5 (diversity) | `trustsight.detectors`, `SERIES_DEPENDENCIES` |

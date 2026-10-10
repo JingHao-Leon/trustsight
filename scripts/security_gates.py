@@ -3227,6 +3227,35 @@ def gate_h_series_intake_is_frozen() -> Gate:
         )
     return Gate("H-series intake is frozen", not problems, problems)
 
+#: Addendum 3 Phase 6: the H-series live-count target band.
+H_SERIES_REDUCTION_TARGET = (55, 65)
+
+
+def gate_h_series_reduction_residue() -> Gate:
+    """Addendum 3 Phase 6: report the live H count against the target band.
+
+    The intake freeze (above) stops *new* H ids; this reports how far the
+    live count is from the 55-65 target so the residue is visible rather than
+    forgotten.  Reporting only: it never fails, because the reduction is a
+    multi-release effort (the mergers are a data change once the co-fire audit
+    is measured on the locked corpus).
+    """
+    from trustsight.categories import RULE_CATEGORIES
+
+    h_ids = sorted(rid for rid in RULE_CATEGORIES if rid.startswith("H"))
+    live = len(h_ids)
+    low, high = H_SERIES_REDUCTION_TARGET
+    if live > high:
+        detail = (f"{live} live H rules; {live - high} above the target band "
+                  f"{low}-{high}")
+    elif live < low:
+        detail = f"{live} live H rules, below the target band {low}-{high}"
+    else:
+        detail = f"{live} live H rules, within the target band {low}-{high}"
+    return Gate("H-series reduction residue", True,
+                {"live": live, "target": [low, high]}, detail)
+
+
 def gate_an_audit_does_not_write_history() -> Gate:
     """A15: an audit is read-only unless ``--record`` is given.
 
@@ -3752,6 +3781,7 @@ def run_gates() -> list[Gate]:
     gates.append(gate_critical_paths_are_synchronised())
     gates.append(gate_an_audit_does_not_write_history())
     gates.append(gate_h_series_intake_is_frozen())
+    gates.append(gate_h_series_reduction_residue())
     gates.append(gate_the_history_walk_is_bounded())
     gates.append(gate_run_diff_assembly_is_bounded())
     gates.append(gate_a_truncated_history_walk_is_a_declared_gap())
