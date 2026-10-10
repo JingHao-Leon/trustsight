@@ -2091,6 +2091,22 @@ def domain_first_seen(domain: str) -> Optional[str]:
     return row[0] if row else None
 
 
+def domain_seen_within(domain: str, days: int) -> bool:
+    """True when *domain* was first observed within the last *days* days.
+
+    Addendum 5 §6.1: T002's window, not merely "never observed".  A domain
+    first seen this week is as novel an adoption signal as one never seen at
+    all; only the observation window distinguishes them.
+    """
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT first_seen >= datetime('now', ?) "
+            "FROM observed_maintainer_domains WHERE domain = ?",
+            (f"-{int(days)} days", (domain or "").strip().lower()[:253]),
+        ).fetchone()
+    return bool(row and row[0])
+
+
 def observed_domain_count() -> int:
     with get_connection() as conn:
         return int(conn.execute(

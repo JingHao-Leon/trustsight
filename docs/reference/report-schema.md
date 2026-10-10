@@ -240,7 +240,7 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M003`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`/`T002`), the G-series correlation rules (`G001`-`G003`), and the A-series artifact rules (`A001`-`A005`, L9 only), plus `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W007` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M003`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`/`T002`), the G-series correlation rules (`G001`-`G003`), and the A-series artifact rules (`A001`-`A005`, L9 only), plus `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W008` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` and `W` finding. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. The full string is carried in both JSON and CLI display. |

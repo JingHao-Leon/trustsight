@@ -70,10 +70,12 @@ def t_key_rotation(change: dict) -> list[dict]:
 def t_domain_findings(maintainer: str, config) -> list[dict]:
     """T002 - maintainer domain novelty (Addendum 5 §6.1).
 
-    A maintainer email whose domain has never been observed in the
-    ecosystem index.  Cold index declines (see T001).
+    A maintainer email whose domain first appeared in the ecosystem within
+    the observation window: a domain never seen before first appears now, and
+    one first seen this week is as novel as brand new.  Cold index declines
+    (see T001).
     """
-    from ..db import domain_first_seen, observed_domain_count
+    from ..db import domain_first_seen, domain_seen_within, observed_domain_count
 
     if not maintainer or "@" not in maintainer:
         return []
@@ -83,14 +85,17 @@ def t_domain_findings(maintainer: str, config) -> list[dict]:
     if observed_domain_count() < _t_thresholds(
             config, "t_dom", "min_observations", 1):
         return []
-    if domain_first_seen(domain) is None:
+    window = int(_t_thresholds(config, "t_dom", "window_days", 30))
+    first_seen = domain_first_seen(domain)
+    if first_seen is None or domain_seen_within(domain, window):
+        reason = ("has never been observed in the ecosystem" if first_seen is None
+                  else f"first appeared within the last {window} days")
         return [stamp({
             "rule_id": "T002",
             "name": "Maintainer Domain Novelty",
             "severity": "MEDIUM", "category": "temporal",
-            "match": (f"maintainer domain '{domain}' has never been observed "
-                      "in the ecosystem"),
-            "params": {"domain": domain},
+            "match": f"maintainer domain '{domain}' {reason}",
+            "params": {"domain": domain, "window_days": window},
         })]
     return []
 

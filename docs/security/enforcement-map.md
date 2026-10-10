@@ -31,6 +31,7 @@ python scripts/security_gates.py
 | `layer overrides stay within the closed set` | Addendum 5 §2 | `trustsight.layers.parse_overrides`, `LAYER_VALUES` |
 | `boundaries are the coverage view` | Addendum 2 W1, B2 | `trustsight.boundaries`, `coverage.GAPS` |
 | `every report body key is documented` | B11, report schema | `reporting.REPORT_KEYS`, `docs/reference/report-schema.md` |
+| `transcendence table names real series` | Addendum 5 §5 | `docs/assurance-layers/diversity.md`, `layers.SERIES_LAYER` |
 | `every rule carries exactly one layer` | Addendum 5 §2 | `trustsight.layers.layer_of`, `categories.RULE_CATEGORIES` |
 | `boundaries forbid clean exactly when coverage gaps exist` | Addendum 2 W1, B2 | `trustsight.boundaries`, `coverage_gaps` |
 | `the indicator tier mirrors ioc_matches` | Addendum 5 §6.4, B1 | `reporting.report_body`, `PackageFact.ioc_matches` |

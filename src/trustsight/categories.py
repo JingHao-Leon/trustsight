@@ -308,6 +308,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "W005": _C.UNVERIFIABLE,
     "W006": _C.UNVERIFIABLE,
     "W007": _C.UNVERIFIABLE,
+    "W008": _C.UNVERIFIABLE,
     "M001": _C.META,
     "M002": _C.META,
     "M003": _C.META,

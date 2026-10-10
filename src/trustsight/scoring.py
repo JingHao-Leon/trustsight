@@ -246,6 +246,28 @@ def _floor_for_critical(level: str, breakdown) -> str:
     return CRITICAL_BAND_FLOOR
 
 
+#: Addendum 5 §6.5: the meta rules that escalate.  M002 (weak signal across
+#: layers) and M003 (a composition no cluster rule owns) are weight-0 - they
+#: never add points - but a weak spread across layers or capability families
+#: is exactly the case the single-signal threshold cannot see, so the band
+#: moves up one.  Like `_floor_for_critical`, this is band-only: the score is
+#: untouched, so the calibrated separation between the populations holds.
+_META_ESCALATORS = ("M002", "M003")
+
+
+def _escalate_for_meta(level: str, breakdown) -> str:
+    """Raise *level* one band when an M escalation rule fired."""
+    if level not in _BAND_ORDER:
+        return level
+    fired = {
+        getattr(e, "rule_id", "") for e in breakdown or ()
+    }
+    if not fired.intersection(_META_ESCALATORS):
+        return level
+    idx = _BAND_ORDER.index(level)
+    return _BAND_ORDER[min(idx + 1, len(_BAND_ORDER) - 1)]
+
+
 def calculate_score(
     triggered_rules: list[dict],
     source_buckets: dict[str, str],
@@ -457,6 +479,7 @@ def calculate_score(
         )
         if not has_strong_signal:
             level = "Inconclusive"
+    level = _escalate_for_meta(level, breakdown)
     level = fail_closed(level, coverage_gaps or [], breakdown)
     return final, breakdown, level
 

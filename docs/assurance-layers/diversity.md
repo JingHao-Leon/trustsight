@@ -42,6 +42,27 @@ from a different family name. [Part 4](enforcement.md) describes the
 adversarial harness that measures how often bypassing one mechanism also
 bypasses another.
 
+## Where one category tends to catch what another misses
+
+No evidence category is universal. The table is a set of **hypotheses about
+coverage complementarity**, not guarantees: each row names a variation that
+tends to evade one mechanism and surface in another. Every row is a claim to
+test, not a result the tool has proven - the adversarial harness
+([Part 4](enforcement.md)) is what would turn a row into a measurement. A row
+whose "Status" is a fixture name is exercised; `hypothesis` is not yet.
+
+| Tends to evade… | …and surface in | Why (hypothesis) | Status |
+|---|---|---|---|
+| R (regex) | X (refusals) | evading a pattern needs constructs the tokenizer will not fold | hypothesis |
+| X (refusals) | E (entropy) | resolving cleanly but weirdly is statistically visible | hypothesis |
+| E (statistics) | C (invariants) | normalised statistics cannot repair a violated invariant | hypothesis |
+| C (invariants) | T/G (ecosystem) | a coherent diff can still be anomalous against history and neighbours | hypothesis |
+| T/G (ecosystem) | M (claims contradiction) | fitting the ecosystem while contradicting your own declarations is detectable | hypothesis |
+
+A proposed rule that claims to cover a row must say whether it is *adding*
+that coverage or *re-testing* it; the intake checklist below is where that
+argument belongs.
+
 ## What a new rule must ship with
 
 - A **positive fixture** it must fire on.

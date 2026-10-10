@@ -18,7 +18,7 @@
     "benign_above_threshold_pct": 9.6,
     "threshold_percentile": 90.4,
     "separation_margin": 25,
-    "ruleset_trigger_rate_pct": 35.6
+    "ruleset_trigger_rate_pct": 35.5
   },
   "doc_claims": {
     "README.md": [
@@ -42,7 +42,7 @@
       "- **Benign** p95 = 35",
       "- Gap = +25 points",
       "| Benign zero-rate | 68.0% |",
-      "| Ruleset trigger rate | 35.6% |",
+      "| Ruleset trigger rate | 35.5% |",
       "| Benign flag rate | 9.6% |",
       "| Benign p95 | 35 |",
       "The 68.0% zero-rate means 68.0% of benign diffs score 0, while **9.6% exceed the 20-point threshold**",

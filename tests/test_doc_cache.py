@@ -77,6 +77,29 @@ def test_recipe_round_trip_projects_identically():
     assert rebuilt.to_dict() == recipe.to_dict()
 
 
+def _findings(fact):
+    return [
+        (e.rule_id, e.severity, e.weight, e.params or {})
+        for e in fact.score_breakdown
+    ]
+
+
+def test_findings_are_identical_cold_and_from_cache():
+    """Spec §4 replay equality: findings from a cached document are
+    byte-identical to findings from a fresh parse.  The parse cache is the
+    in-process memo (`_parse_diff_lines_cached`); the cross-process document
+    cache is exercised by `tests/harness/diffdoc_parity.py`."""
+    from trustsight.analysis.pipeline import scan_diff
+    from trustsight.diffdoc import _parse_diff_lines_cached
+
+    for path in _sample_corpus(20):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        _parse_diff_lines_cached.cache_clear()
+        cold = scan_diff(text, package_name=path.stem)
+        warm = scan_diff(text, package_name=path.stem)
+        assert _findings(cold) == _findings(warm), path.name
+
+
 def test_a_version_mismatch_is_a_miss_not_a_partial_read():
     doc = parse_diff("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n-x\n+y\n")
     payload = doc.to_dict()

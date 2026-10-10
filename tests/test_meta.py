@@ -114,3 +114,23 @@ def test_m004_cofire_absence_is_a_health_note_not_a_finding():
     assert notes == ["H091 fired without expected co-fire H024"]
     assert cofire_absence(
         [{"rule_id": "H091"}, {"rule_id": "H024"}], [("H091", "H024")]) == []
+
+
+def test_m002_and_m003_escalate_the_band_one_step():
+    from trustsight.schema import ScoreEntry
+    from trustsight.scoring import _escalate_for_meta
+
+    for rule_id in ("M002", "M003"):
+        breakdown = [ScoreEntry(
+            rule_id=rule_id, severity="MEDIUM", weight=0, reason="span")]
+        assert _escalate_for_meta("Low", breakdown) == "Medium"
+        assert _escalate_for_meta("Medium", breakdown) == "High"
+        assert _escalate_for_meta("High", breakdown) == "Critical"
+        assert _escalate_for_meta("Critical", breakdown) == "Critical"
+
+
+def test_no_escalation_without_an_meta_rule():
+    from trustsight.scoring import _escalate_for_meta
+
+    assert _escalate_for_meta("Low", []) == "Low"
+    assert _escalate_for_meta("Inconclusive", []) == "Inconclusive"

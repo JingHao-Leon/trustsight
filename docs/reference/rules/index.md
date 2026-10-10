@@ -6,7 +6,7 @@ TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
 rules X001-X032, integrity-change rules C001-C030, dependency rules
 D001-D004, declared-practice rules P001-P008 (P004 skipped), and unverifiable rules
-W001-W007.
+W001-W008.
 
 Each rule contributes according to its severity weight, match target and
 scope, except the P and W series, which are weight 0 and report rather than
@@ -49,7 +49,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 7 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
 | [Crossfire](crossfire.md) | `crossfire` | 32 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
-| [Unverifiable](unverifiable.md) | `unverifiable` | 7 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
+| [Unverifiable](unverifiable.md) | `unverifiable` | 8 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 3 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 | [Correlation](correlation.md) | `correlation` | 3 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
@@ -297,6 +297,7 @@ is deliberately non-contiguous; see
 | [W005](unverifiable.md#w005) | Build Runs A Target Whose Recipe Was Not Read | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W006](unverifiable.md#w006) | Generated File Names A Build-Only Path | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W007](unverifiable.md#w007) | Dependency Novelty Declined For Insufficient Observations | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
+| [W008](unverifiable.md#w008) | Unresolved Construct In A Recipe | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
 | [X002](crossfire.md#x002) | Non-Literal Executable Name | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
 | [X003](crossfire.md#x003) | Obfuscated Command Argument | Crossfire | HIGH | [Crossfire](crossfire.md) |

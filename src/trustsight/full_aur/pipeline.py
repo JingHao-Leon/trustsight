@@ -212,13 +212,25 @@ def _correlation_records(
             hosts_gained |= new - old
         current = (new_meta.get(name) or {}).get("Maintainer") or ""
         previous = (old_meta or {}).get(name, {}).get("Maintainer") or ""
+        # Addendum 5 §6.2: G003 joins on the *temporal* adoption predicates,
+        # not a bare maintainer-change boolean.  H044 is an ownership
+        # transition between two recorded maintainers; H086 is the
+        # orphan-to-maintained shape (the prior snapshot held no maintainer).
+        # H074 (mass adoption) is the cross-package aggregation G003 itself
+        # performs.
+        adoption_predicates: list[str] = []
+        if current and previous and current != previous:
+            adoption_predicates.append("H044")
+        elif current and not previous:
+            adoption_predicates.append("H086")
         records.append({
             "package": name,
             "hosts_gained": sorted(hosts_gained),
             # Addendum 5 §9: the literal feed G002 joins across packages.
             "added_literals": [lit for lit, _length in package_added_literals(name)],
             "maintainer": current,
-            "adoption": bool(current and previous and current != previous),
+            "adoption": bool(adoption_predicates),
+            "adoption_predicates": adoption_predicates,
         })
     return records
 

@@ -78,22 +78,32 @@ def shared_added_literal(records, min_packages: int = 2,
 
 
 def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
-    """G003: one maintainer key adopting *min_members* packages."""
+    """G003: one maintainer key adopting *min_members* packages.
+
+    Joins on the temporal adoption predicates (H044 ownership transition,
+    H086 orphan-to-maintained) recorded per package, so the group is an
+    adoption event the temporal engine would also fire - not a bare
+    maintainer-change.
+    """
     by_maintainer: dict[str, set[str]] = defaultdict(set)
+    predicates: dict[str, set[str]] = defaultdict(set)
     for record in records:
         maintainer = str(record.get("maintainer", "") or "").strip().lower()
         if maintainer and record.get("adoption"):
             by_maintainer[maintainer].add(str(record.get("package", "")))
+            predicates[maintainer] |= set(
+                record.get("adoption_predicates") or ())
     out = []
     for maintainer, members in sorted(by_maintainer.items()):
         if len(members) >= min_members:
+            which = sorted(predicates[maintainer])
             out.append({
                 "rule_id": "G003",
                 "name": "Coordinated Adoption",
                 "severity": "MEDIUM", "category": "correlation",
                 "match": (f"maintainer adopted {len(members)} packages in the "
                           "window"),
-                "params": {"members": sorted(members)},
+                "params": {"members": sorted(members), "predicates": which},
             })
     return out
 

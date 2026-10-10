@@ -81,6 +81,9 @@ _W_RULE_KIND: dict[str, str] = {
     # absent-history fact ("the dependency corpus holds no observations"),
     # so it groups with NO_HISTORY, not W002's run-time registry.
     "W007": BoundaryKind.NO_HISTORY,
+    # Addendum 1: an unresolved construct is an analysis boundary; X026/X027
+    # report the suspicion, W008 reports the boundary (weight-0).
+    "W008": BoundaryKind.UNRESOLVED,
 }
 
 

@@ -49,10 +49,15 @@ def test_analyze_diff_matches_the_corpus_path(ts):
     name, text = _corpus_diff()
     direct = scan_diff(text, package_name=name)
     report = ts.analyze_diff(text, package=name)
+    from trustsight.reporting import ALWAYS_SHOWN_ANNOTATIONS
+
     expected = [
         (e.rule_id, e.severity, e.file, e.line)
         for e in direct.score_breakdown
-        if e.weight > 0 or e.severity in ("FATAL", "CRITICAL")
+        if (e.weight > 0
+            or e.severity in ("FATAL", "CRITICAL")
+            or e.rule_id in ALWAYS_SHOWN_ANNOTATIONS
+            or e.rule_id.startswith("W"))
     ]
     assert _finding_rows(report) == expected
     assert report.adapter == "diff"

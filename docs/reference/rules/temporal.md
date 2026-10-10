@@ -89,8 +89,10 @@ on every key a new install sees.
 - **Target:** programmatic (ecosystem maintainer-domain ledger)
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `temporal`
-- **Condition:** The maintainer email's domain has never been observed in
-  the ecosystem index.
+- **Condition:** The maintainer email's domain first appeared in the
+  ecosystem within the observation window (`[thresholds] t_dom.window_days`,
+  default 30) - a domain never seen before first appears now, and one first
+  seen this week is as novel as brand new.
 
 A first-seen domain is a weak but real signal about a maintainer with no
 prior footprint. Cold index declines, like T001.

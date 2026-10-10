@@ -59,6 +59,7 @@ rules, because a W is weight-0 by construction:
 | [W005](#w005) | Build Runs A Target Whose Recipe Was Not Read | INFO |
 | [W006](#w006) | Generated File Names A Build-Only Path | INFO |
 | [W007](#w007) | Dependency Novelty Declined For Insufficient Observations | INFO |
+| [W008](#w008) | Unresolved Construct In A Recipe | INFO |
 <!-- /generated: page-index -->
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}
@@ -202,3 +203,17 @@ rather than left as silence (Addendum 2, D2).
 Names the abstaining rules and the observation count. It never changes the
 score; it is the same honesty contract as a coverage gap, moved to the
 rules that declined.
+
+### W008: Unresolved Construct In A Recipe {#w008}
+
+**INFO** (weight 0) · category `unverifiable`
+
+Fires when the tokenizer could not resolve one or more assignments in the
+recipe (a computed `source=()`, a build-time value). An unresolved construct
+is an analysis boundary: the reader is told what the analysis could not
+resolve. It is the W-series face of the same fact the refusal rules X026
+(X026 fires on an unresolved construct referenced from an executable
+function, scored) report as a suspicion - [X026 and X027 may fire on the
+same diff](crossfire.md#x026), weight-0 vs scored.
+
+Names the unresolved assignments (capped). It never changes the score.

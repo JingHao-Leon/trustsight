@@ -509,6 +509,33 @@ def gate_benign_fire_rates(benign: list[dict]) -> Gate:
     )
 
 
+def gate_meta_escalation_below_cap(benign: list[dict]) -> Gate:
+    """Addendum 5 §6.5: the M escalation rules pass the cluster-rate gate.
+
+    M002/M003 move the *band* one step, so they are not covered by the
+    weight-based fire-rate gate (they are weight 0).  The constitutional rule
+    - a composition rule passes the cluster-rate gate before its threshold
+    ships - is enforced here instead: each escalation rule's benign-corpus
+    rate stays under ``MAX_BENIGN_FIRE_RATE``, the same cap every scoring
+    rule obeys.  A breach means the escalation over-fires on benign diffs and
+    must be re-tuned or reported-only again.
+    """
+    n = len(benign)
+    rates = {}
+    for rule_id in _META_ESCALATORS:
+        hits = sum(
+            1 for row in benign
+            if any(e["rule_id"] == rule_id for e in row["entries"])
+        )
+        rates[rule_id] = round(hits / n, 4) if n else 0.0
+    over = {rid: r for rid, r in rates.items() if r >= MAX_BENIGN_FIRE_RATE}
+    return Gate(
+        "M escalation stays below the benign cap", not over, rates,
+        MAX_BENIGN_FIRE_RATE,
+        "" if not over else f"over threshold: {over}",
+    )
+
+
 def _is_attack_fixture(result: dict) -> bool:
     """True for a fixture that stands for a whole attack.
 
@@ -808,6 +835,11 @@ def gate_known_gaps_unchanged(malicious: list[dict]) -> Gate:
 #: The sabotage family, one payload/lookalike pair per rule.
 _S_RULES = ("S001", "S002", "S003", "S004", "S005", "S006", "S007", "S008")
 
+#: Addendum 5 §6.5: the meta rules that escalate the band (weight 0).  They
+#: are exempt from the weight-based fire-rate gate, so their own cap gate
+#: covers them.
+_META_ESCALATORS = ("M002", "M003")
+
 #: The composition family, whose benign rates are recorded whole (including
 #: the silent zeros) so a shrink is visible.
 X_RULES = tuple(f"X{i:03d}" for i in range(1, 32))
@@ -858,6 +890,44 @@ def gate_s_series_fixture_pairs(benign: list[dict], malicious: list[dict]) -> Ga
         problems if problems else f"{len(_S_RULES)} pairs",
         0,
         "" if not problems else f"S-series pair problems: {problems}",
+    )
+
+
+def gate_s_series_last_fired_coverage(
+        benign: list[dict], malicious: list[dict]) -> Gate:
+    """Addendum 2 S1: where each S rule last fired, and what never has.
+
+    S rules have near-zero corpus rates, so "no S finding" is weak evidence.
+    The ledger names, per rule, its corpus count and the fixtures it fired
+    in; a rule that has never fired outside its own paired fixture is
+    labelled, so the report carries honest confidence levels rather than
+    silence.  Reporting only - it never fails.
+    """
+    ledger: dict[str, dict] = {}
+    never: list[str] = []
+    for rule_id in sorted(_S_RULES):
+        corpus = sum(
+            1 for row in benign
+            if any(e["rule_id"] == rule_id for e in row["entries"])
+        )
+        own = sorted({
+            r["name"] for r in malicious
+            if r["name"].startswith(rule_id) and rule_id in r["fired"]
+        })
+        outside = sorted({
+            f"{r['group']}/{r['name']}" for r in malicious
+            if rule_id in r["fired"] and not r["name"].startswith(rule_id)
+        })
+        fired_outside = corpus > 0 or bool(outside)
+        if not fired_outside:
+            never.append(rule_id)
+        ledger[rule_id] = {
+            "corpus": corpus, "own_fixture": own, "outside_fixture": outside,
+        }
+    return Gate(
+        "S-series last-fired coverage", True, ledger, 0,
+        ("never fired outside its own fixture: " + ", ".join(never))
+        if never else "every S rule has fired outside its own fixture",
     )
 
 
@@ -1037,12 +1107,14 @@ def _evaluate(benign: list[dict], malicious: list[dict]) -> list[Gate]:
         gate_stateful_rules_stay_out(benign),
         gate_ioc_exact_match(benign),
         gate_homograph_single_script(),
+        gate_meta_escalation_below_cap(benign),
     ]
     if malicious:
         gates.append(gate_separation(benign, malicious))
         gates.append(gate_malicious_recall(malicious))
         gates.append(gate_known_gaps_unchanged(malicious))
         gates.append(gate_s_series_fixture_pairs(benign, malicious))
+        gates.append(gate_s_series_last_fired_coverage(benign, malicious))
     gates.append(gate_cluster_rate_below_members(benign))
     return gates
 

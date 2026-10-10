@@ -41,6 +41,19 @@ def test_coordinated_adoption_fires_at_threshold():
     assert coordinated_adoption(_records(), min_members=4) == []
 
 
+def test_coordinated_adoption_cites_the_temporal_predicates():
+    records = [
+        {"package": "a", "maintainer": "m@x", "adoption": True,
+         "adoption_predicates": ["H044"]},
+        {"package": "b", "maintainer": "m@x", "adoption": True,
+         "adoption_predicates": ["H086"]},
+        {"package": "c", "maintainer": "m@x", "adoption": True,
+         "adoption_predicates": ["H044"]},
+    ]
+    found = coordinated_adoption(records, min_members=3)
+    assert found[0]["params"]["predicates"] == ["H044", "H086"]
+
+
 def test_correlate_honors_configured_thresholds():
     config = {"thresholds": {
         "g_host": {"min_packages": 3},

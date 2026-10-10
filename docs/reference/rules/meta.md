@@ -19,9 +19,9 @@ This is a reference page. For how weight and scope work, see
 
 - It reads the profile, not the diff: the evidence names the findings that
   composed, and the recipe text they came from.
-- M001 scores (HIGH); M002 and M003 are weight-0 annotations in v1, because
-  the escalation they describe is gated on a corpus measurement before it
-  ships.
+- M001 scores (HIGH); M002 and M003 are weight-0 but **escalate the band one
+  step** (never add points), gated on the benign-corpus cap
+  `M escalation stays below the benign cap`.
 - It fires at the layer of its inputs, so it has no static layer.
 
 <!-- generated: page-index -->
@@ -65,17 +65,21 @@ Fires when three or more distinct assurance layers fired, none above the
 alert bar. An attacker who spreads weak signals across layers stays under
 any single threshold; the span is only visible from the whole profile.
 
-Tunable: `[thresholds] m002.min_layers` (default 3). The one-band
-escalation the design describes ships only after the cluster-rate gate is
-measured on the corpus, so v1 reports the span at weight 0.
+Tunable: `[thresholds] m002.min_layers` (default 3). It adds no points but
+raises the reported band one step: a spread across layers is exactly the case
+a single-signal threshold cannot see. Measured on the locked benign corpus:
+112/3,739 (3.0%).
 
 ### M003: Composition Not Owned Elsewhere {#m003}
 
-**MEDIUM, weight 0** (annotation) · category `meta`
+**MEDIUM, weight 0** · category `meta`
 
 Fires when two or more distinct capability families co-occur while none of
 the cluster owners (H027, H098, X007) recorded the composition - typically
-because the owner is disabled. The composition is never lost.
+because the owner is disabled. The composition is never lost. It adds no
+points but raises the reported band one step. Measured on the locked benign
+corpus: 316/3,739 (8.5%).
 
-Standing gate: any future scored cluster must have a benign-corpus fire
-rate at or below its lowest member rule's rate.
+Standing gate: the escalation passes the benign-corpus cap (`M escalation
+stays below the benign cap`, `MAX_BENIGN_FIRE_RATE`) before it ships, the
+cluster-rate gate the M constitution requires.

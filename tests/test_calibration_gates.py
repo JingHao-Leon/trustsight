@@ -103,6 +103,16 @@ def test_s_series_has_a_payload_and_a_lookalike_per_rule(results):
     _assert(gates.gate_s_series_fixture_pairs(benign, malicious))
 
 
+def test_s_series_last_fired_ledger_is_reported(results):
+    """The report labels every S rule that never fired outside its fixture."""
+    benign, malicious = results
+    if not malicious:
+        pytest.skip("malicious fixtures absent")
+    gate = gates.gate_s_series_last_fired_coverage(benign, malicious)
+    assert gate.passed, "the coverage ledger is reporting-only"
+    assert set(gate.measured) == set(gates._S_RULES)
+
+
 @pytest.mark.skipif(
     SAMPLE != 1, reason="X-rate stability is only meaningful on the whole corpus"
 )
@@ -120,5 +130,5 @@ def test_the_runner_reports_a_gate_per_plan_line(results):
     """The script's own contract: every gate is named and exits nonzero."""
     benign, malicious = results
     all_gates = gates._evaluate(benign, malicious)
-    assert len(all_gates) == 12
+    assert len(all_gates) == 14
     assert all(g.name for g in all_gates)

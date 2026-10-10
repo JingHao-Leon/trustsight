@@ -3515,6 +3515,49 @@ def gate_every_report_key_is_documented() -> Gate:
     return Gate("every report body key is documented", not missing, missing)
 
 
+def gate_transcendence_table_is_wellformed() -> Gate:
+    """Addendum 5 §5: the coverage-complementarity table names real series.
+
+    The table is a set of hypotheses, but each row still refers to real
+    evidence families.  A row naming a series that does not exist, or a
+    status that is neither ``hypothesis`` nor a shipped fixture, would be an
+    unbacked claim in the doc that reads as a result.
+    """
+    import re
+
+    from trustsight.layers import SERIES_LAYER
+
+    # M (fires at its inputs' layer) and A (the reserved L9 lane) have no
+    # static layer but are shipped series.
+    allowed = set(SERIES_LAYER) | {"M", "A"}
+    fixtures = ROOT / "tests" / "fixtures"
+    text = (ROOT / "docs" / "assurance-layers" / "diversity.md").read_text(
+        encoding="utf-8")
+    rows = []
+    for line in text.splitlines():
+        match = re.match(
+            r"^\|\s*([A-Z](?:/[A-Z])?)\s*\([^)]*\)\s*\|"
+            r"\s*([A-Z](?:/[A-Z])?)\s*\([^)]*\)\s*\|"
+            r"\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$", line)
+        if match:
+            rows.append((match.group(1), match.group(2), match.group(3),
+                         match.group(4)))
+    problems: list[str] = []
+    if len(rows) < 5:
+        problems.append(f"expected at least 5 rows, found {len(rows)}")
+    for evades, caught, why, status in rows:
+        for token in (evades, caught):
+            for letter in token.split("/"):
+                if letter not in allowed:
+                    problems.append(f"{letter} is not a shipped series")
+        if not why:
+            problems.append(f"{evades}->{caught}: no mechanism named")
+        if status != "hypothesis" and not list(fixtures.rglob(status)):
+            problems.append(f"{evades}->{caught}: unknown status {status!r}")
+    return Gate("transcendence table names real series",
+                not problems, {"rows": len(rows)}, detail="\n".join(problems))
+
+
 def gate_every_rule_carries_exactly_one_layer() -> Gate:
     """Addendum 5 §2: every rule has exactly one layer.
 
@@ -3719,6 +3762,7 @@ def run_gates() -> list[Gate]:
     gates.append(gate_layer_overrides_stay_within_the_closed_set())
     gates.append(gate_boundaries_are_the_coverage_view())
     gates.append(gate_every_report_key_is_documented())
+    gates.append(gate_transcendence_table_is_wellformed())
     gates.append(gate_every_rule_carries_exactly_one_layer())
     gates.append(gate_boundaries_forbid_clean_exactly_when_gaps())
     gates.append(gate_indicator_tier_mirrors_ioc_matches())

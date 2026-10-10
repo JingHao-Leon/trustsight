@@ -203,8 +203,11 @@ def fallback_verdict(fact: PackageFact) -> str:
         # Spec §2: a run with an open coverage gap cannot claim "no
         # structural changes" - it does not know what it did not see.  The
         # qualified phrasing is still a claim, but one bounded by what was
-        # actually read.
-        if fact.coverage_gaps:
+        # actually read.  W1: read the boundary view, not the raw gap list,
+        # so `boundaries` is the one representation of the coverage gaps.
+        from .boundaries import boundaries_from_fact, forbids_clean
+
+        if forbids_clean(boundaries_from_fact(fact)):
             reasons.append("no structural changes in the examined portion")
         else:
             reasons.append("no structural changes")

@@ -52,8 +52,15 @@ def test_t002_fires_for_a_new_domain(db):
     assert [f["rule_id"] for f in got] == ["T002"]
 
 
-def test_t002_silent_for_a_known_domain(db):
-    record_observed_domain("known.example")
+def test_t002_fires_for_a_domain_first_seen_inside_the_window(db):
+    """Addendum 5 §6.1: the window, not just "never observed"."""
+    record_observed_domain("fresh.example")  # first_seen defaults to now
+    got = t_domain_findings("me@fresh.example", None)
+    assert [f["rule_id"] for f in got] == ["T002"]
+
+
+def test_t002_silent_for_a_long_observed_domain(db):
+    record_observed_domain("known.example", observed_at="2020-01-01 00:00:00")
     assert t_domain_findings("me@known.example", None) == []
 
 

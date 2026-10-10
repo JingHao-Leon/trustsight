@@ -70,6 +70,48 @@ def test_an_external_read_is_named_with_its_cached_value():
     assert explanation["external_value"]["observation_count"] == 7
 
 
+def test_explanatory_fidelity_on_a_corpus_sample():
+    """Spec §10: for a sample of corpus findings, the line `explain` shows is
+    exactly the line the original run attributed (same line map both times)."""
+    import pathlib
+
+    import pytest
+
+    from trustsight.analysis.pipeline import scan_diff
+    from trustsight.config import load_rules
+
+    corpus = pathlib.Path(__file__).resolve().parent / "fixtures" / "benign-corpus"
+    if not corpus.exists():
+        pytest.skip("benign corpus absent")
+    paths = sorted(corpus.glob("*.diff"))
+    step = max(1, len(paths) // 100)
+    rules = {rule["id"]: rule for rule in load_rules()}
+
+    checked = 0
+    for path in paths[::step][:100]:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        fact = scan_diff(text, package_name=path.stem)
+        for entry in fact.score_breakdown:
+            if entry.line is None:
+                continue
+            finding = {
+                "rule_id": entry.rule_id, "file": entry.file, "line": entry.line,
+                "description": entry.reason, "template": entry.template,
+                "evidence": entry.evidence,
+            }
+            explanation = build_explanation(
+                fact, finding, rules.get(entry.rule_id), text)
+            assert any(
+                (line["new_lineno"] == entry.line
+                 or line["old_lineno"] == entry.line)
+                and (not entry.file or line["file"] == entry.file)
+                for line in explanation["lines"]
+            ), (f"{path.name} {entry.rule_id}: explain lost the cited line "
+                f"{entry.file}:{entry.line}")
+            checked += 1
+    assert checked > 0, "no cited findings were checked"
+
+
 def test_explain_cli_errors_when_the_rule_did_not_fire(monkeypatch):
     fact = PackageFact(package_name="demo")
     monkeypatch.setattr(

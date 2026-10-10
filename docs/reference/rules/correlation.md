@@ -56,4 +56,8 @@ never printed - only its length and the members.
 **MEDIUM** (weight 15) · category `correlation`
 
 Fires when one maintainer key adopts at least `[thresholds]
-g_adopt.min_members` (default 3) packages in the window.
+g_adopt.min_members` (default 3) packages in the window. Adoption is the
+temporal engine's own predicate - H044 (ownership transition) or H086
+(orphan-to-maintained) - recorded per package, not a bare maintainer-change.
+The finding's `predicates` names which T instance the group joined on; H074
+(mass adoption) is the cross-package aggregation this rule performs.

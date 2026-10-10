@@ -208,6 +208,17 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             f"executable positions: {listed}",
             line=None, count=len(referenced), names=listed)
 
+    # --- W008: the analysis boundary behind X026/X027 --------------------
+    # An unresolved construct is not only a suspicion (X) but a boundary
+    # (W): the reader is told what the analysis could not resolve.  This is
+    # the W-series cross-reference the spec requires; weight-0, so it never
+    # moves a score.
+    if names:
+        add("W008", "Unresolved Construct In A Recipe", "INFO", "unverifiable",
+            f"{len(names)} unresolved assignment(s) this analysis could not "
+            "resolve: " + ", ".join(names[:5]),
+            line=None, count=len(names), names=", ".join(names[:5]))
+
     # --- X030: ANSI-C quoted content in commands -------------------------
     for fn in _EXECUTABLE_FUNCTIONS:
         body = post.functions.get(fn, "")
