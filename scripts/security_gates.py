@@ -3380,6 +3380,52 @@ def gate_release_artifacts_share_commit() -> Gate:
                 problems or "checkout SHA, committed rebuild, verified tag target")
 
 
+def gate_layer_detection_and_coverage_are_independent() -> Gate:
+    """A finding must not hide that the same layer was also unread.
+
+    ``detection`` and ``coverage`` are separate dimensions per layer; a
+    firing rule at a blinded layer reports both.
+    """
+    from trustsight.layers import layer_profile
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    problems: list[str] = []
+    fact = PackageFact(
+        package_name="demo", coverage_gaps=["diff_truncated"],
+        score_breakdown=[ScoreEntry(rule_id="R001", severity="CRITICAL", weight=40)],
+    )
+    profile = layer_profile(fact, [{"rule_id": "R001"}])
+    if profile["L3"]["detection"] != "fired":
+        problems.append("L3 detection did not fire")
+    if profile["L3"]["coverage"] != "incomplete":
+        problems.append("L3 coverage did not read incomplete")
+    plain = layer_profile(PackageFact(package_name="demo"), [])
+    if plain["L8"]["coverage"] != "not_applicable":
+        problems.append("L8 coverage was not not_applicable on a single-package run")
+    if plain["L1"]["coverage"] != "complete":
+        problems.append("a clean L1 coverage was not complete")
+    return Gate("layer detection and coverage are independent", not problems, problems)
+
+
+def gate_every_rule_names_shared_dependencies() -> Gate:
+    """Every rule names its mechanism, subject, evidence and shared
+    dependencies (Addendum 5, review remediation).
+
+    Different algorithms do not imply independent failure modes; a rule whose
+    series has no shared-dependency entry would hide the common-mode risk.
+    """
+    from trustsight.categories import RULE_CATEGORIES
+    from trustsight.detectors import detector_metadata
+
+    missing: list[str] = []
+    for rule_id in RULE_CATEGORIES:
+        meta = detector_metadata(rule_id)
+        if (meta is None or not meta["mechanism"] or not meta["subject"]
+                or not meta["shared_dependencies"]):
+            missing.append(rule_id)
+    return Gate("every rule names its shared dependencies", not missing, missing)
+
+
 def gate_layer_overrides_stay_within_the_closed_set() -> Gate:
     """Addendum 5 §2: a ``[layers]`` override cannot leave the closed L1-L8 set.
 
@@ -3640,6 +3686,8 @@ def run_gates() -> list[Gate]:
     gates.append(gate_run_diff_assembly_is_bounded())
     gates.append(gate_a_truncated_history_walk_is_a_declared_gap())
     gates.append(gate_every_history_diff_is_scored_independently())
+    gates.append(gate_layer_detection_and_coverage_are_independent())
+    gates.append(gate_every_rule_names_shared_dependencies())
     gates.append(gate_layer_overrides_stay_within_the_closed_set())
     gates.append(gate_boundaries_are_the_coverage_view())
     gates.append(gate_every_report_key_is_documented())

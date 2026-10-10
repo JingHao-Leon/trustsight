@@ -336,6 +336,14 @@ def layer_profile(fact, findings, *, correlation_ran: bool = False,
     return {
         layer.value: {
             "name": layer.name_text,
+            # Two independent dimensions: what was detected, and how far the
+            # evidence could be assessed.  A finding must not hide that the
+            # same layer was also unread (the review's report fix).
+            "detection": "fired" if by_layer[layer] else "none",
+            "coverage": _layer_coverage(layer, blinded, correlation_ran),
+            # Derived, kept for one release for back-compat consumers: the
+            # coarser of the two (fired wins; then not-exercised; then
+            # incomplete; else passed).
             "status": _layer_status(layer, by_layer[layer], blinded,
                                     correlation_ran),
             "findings": by_layer[layer],
@@ -344,12 +352,27 @@ def layer_profile(fact, findings, *, correlation_ran: bool = False,
     }
 
 
-def _layer_status(layer, findings, blinded, correlation_ran: bool) -> str:
-    """One layer's status.  A finding carries the layer where it caught.
+def _layer_coverage(layer, blinded, correlation_ran: bool) -> str:
+    """How far the layer's evidence could be assessed.
 
-    L8 is the cross-package correlation layer: it cannot be exercised by a
-    single-package run, so it reports ``not_exercised`` rather than a
-    misleading ``passed`` outside ``full-aur`` (Addendum 5 §6.2).
+    ``not_applicable`` for L8 outside a correlation run (the input does not
+    exist there); ``incomplete`` when a coverage gap blinds the layer;
+    ``complete`` otherwise.
+    """
+    if layer is Layer.L8 and not correlation_ran:
+        return "not_applicable"
+    if layer in blinded:
+        return "incomplete"
+    return "complete"
+
+
+def _layer_status(layer, findings, blinded, correlation_ran: bool) -> str:
+    """One layer's derived status, kept for one release.
+
+    A finding carries the layer where it caught.  This collapses the
+    ``detection`` and ``coverage`` dimensions into the earlier single field:
+    ``fired`` if detected, else ``not_exercised`` (L8 outside a correlation
+    run), ``unreadable`` if incomplete, else ``passed``.
     """
     if findings:
         return "fired"

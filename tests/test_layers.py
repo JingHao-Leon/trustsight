@@ -224,3 +224,31 @@ def test_shipped_l1_overrides_for_structural_rules():
 
     for rule_id in ("H099", "H101", "H103"):
         assert layer_of(rule_id) is Layer.L1
+
+
+def test_layer_detection_and_coverage_are_independent():
+    from trustsight.layers import layer_profile
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    profile = layer_profile(
+        PackageFact(
+            package_name="demo", coverage_gaps=["diff_truncated"],
+            score_breakdown=[
+                ScoreEntry(rule_id="R001", severity="CRITICAL", weight=40)]),
+        [{"rule_id": "R001"}])
+    assert profile["L3"]["detection"] == "fired"
+    assert profile["L3"]["coverage"] == "incomplete"
+
+
+def test_a_layers_override_agrees_in_the_verdict_sentence(monkeypatch):
+    monkeypatch.setattr(
+        "trustsight.config.load_config", lambda: {"layers": {"R001": "L1"}})
+    from trustsight.schema import PackageFact, ScoreEntry
+    from trustsight.verdict import layer_sentence
+
+    sentence = layer_sentence(PackageFact(
+        package_name="demo",
+        score_breakdown=[
+            ScoreEntry(rule_id="R001", severity="CRITICAL", weight=40)]))
+    assert "L1 (Structural coherence)" in sentence
+    assert "L3" not in sentence
