@@ -306,8 +306,8 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 
 ### `[layers]`
 
-Override a rule's assurance layer (Addendum 5 §2). The layer says where on
-the attacker's trajectory the rule's evidence sits, `L1` (structural
+Override a rule's evidence category (its "layer"), Addendum 5 §2. The category
+names the kind of evidence the rule's findings represent, `L1` (structural
 coherence) to `L8` (campaign correlation). The shipped per-series default and
 per-rule overrides apply unless a rule id is named here.
 

@@ -144,10 +144,10 @@ Reference = [
 [[project.nav]]
 "Assurance Layers" = [
   {Overview = "assurance-layers.md"},
-  {"Part 1: The Trajectory" = "assurance-layers/trajectory.md"},
-  {"Part 2: Diversity and Intake" = "assurance-layers/diversity.md"},
+  {"Part 1: Evidence Categories" = "assurance-layers/trajectory.md"},
+  {"Part 2: Adding A Detector" = "assurance-layers/diversity.md"},
   {"Part 3: Reporting" = "assurance-layers/reporting.md"},
-  {"Part 4: Enforcement" = "assurance-layers/enforcement.md"},
+  {"Part 4: Tests and Evaluation" = "assurance-layers/enforcement.md"},
 ]
 
 [[project.nav]]

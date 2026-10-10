@@ -1,67 +1,67 @@
-<!-- description: Why the layers' mechanisms must stay independent, how one series can span layers, and the three-axis intake rule that keeps a new rule from being redundancy. -->
+<!-- description: How to add a useful new detector: the intake checklist, shared dependencies, and why complementary coverage is not the same as independent coverage. -->
 
-# Part 2: Diversity and intake
+# Part 2: How to add a useful new detector
 
-The layer model is only worth anything if the layers are *independently*
-beaten. That is the integrity rule, and it constrains both the existing rules
-and every new one.
+This page answers: what does a new rule have to demonstrate before it ships?
 
-## The independence rule
+## The intake checklist
 
-**Each layer's mechanism must be independent of its neighbors'.** An attacker
-who evades the regex family (R, L3) defeats a pattern match; the refusal
-family (X, L4) catches the construct they had to use to do it. Those are
-different mechanisms, so defeating one does not defeat the other, and the
-holes fail to align. If two layers shared a mechanism, one evasion would open
-both, and the "layered" picture would be a drawing rather than a defence.
+A proposed rule names four things:
 
-Two consequences follow, and both look like contradictions until the axis is
-clear:
+1. **Mechanism (family).** How it reaches its conclusion - a regex, a
+   structural invariant, a heuristic, a statistic, and so on.
+2. **Subject (category).** What behaviour or property it is concerned with;
+   this is the closed category that owns its reference page.
+3. **Evidence category (layer).** Which evidence label groups its findings.
+4. **Shared dependencies.** The infrastructure it relies on - the tokenizer,
+   parser, history database, corpus, or indicator baseline.
 
-- **One series can span two layers.** X sits at L4, but X026/X027 - the
-  refusal family - fire at L2, the readability boundary, because a construct
-  the tokenizer cannot read is a boundary before it is a technique.
-- **Two series can share a layer.** X and E both sit at L4: refusal-based
-  versus statistical evasion detection. The difference *is* the point.
-  Resolving cleanly but weirdly defeats X and is exactly what E measures.
+It must also answer one question: **what attack variation does this rule catch
+that the existing rules miss?** If a rule on another category already covers
+the same attack, file the change as an instance of that rule instead, or argue
+why the new mechanism adds *complementary* coverage.
 
-The series axis is the diversity guarantee; the layer axis is the coverage
-guarantee. Neither may imply the other.
+## Complementary is not the same as independent
 
-## M owns no layer
+Different algorithms are **not** automatically independent. Two rules that use
+different logic can share a failure mode:
 
-The **M** series reasons about other findings, so it has no layer of its own:
-it fires *at* the layer of its inputs and records which findings composed the
-conclusion. A claims contradiction (M001) or a weak-signal span (M002) is a
-claim about the profile, not about a step the attacker took, and forcing it
-into a fixed layer would be a category error.
+```
+R001  (regex)   matches "curl ... | bash"
+H082  (heuristic) reasons about a fetch that is then executed
+```
 
-**P** (claims) and **W** (boundaries) are the same kind of thing: render
-surfaces, not trajectory layers. P maps to L1 as *input* - the claims ledger
-M reads - and W maps to L2 as *boundary reporting*. None of them is a step
-the attacker passes.
+Both depend on the **tokenizer**. If the tokenizer folds a construct
+incorrectly, both can go blind together. Their family labels differ; their
+failure is correlated. The dependency is recorded in
+[`trustsight.detectors`](enforcement.md) and named at intake, so common-mode
+failure is visible rather than assumed away.
 
-## The intake rule
+Independence is therefore a **hypothesis to test**, not a property inherited
+from a different family name. [Part 4](enforcement.md) describes the
+adversarial harness that measures how often bypassing one mechanism also
+bypasses another.
 
-A proposed rule names three things, and the intake review checks all three:
+## What a new rule must ship with
 
-1. **Mechanism (series).** What kind of thing detects it - regex, heuristic,
-   invariant, refusal, statistics, history, correlation, indicator, meta.
-2. **Subject (category).** The single closed category it belongs to, which
-   owns its reference page.
-3. **Trajectory hole (layer).** Which layer the attack it targets would
-   otherwise pass.
+- A **positive fixture** it must fire on.
+- A **benign lookalike** it must stay silent on (the S-series fixture-pair
+  gate enforces this for sabotage rules; it is good practice for all).
+- A **calibration gate entry**: its benign-corpus fire rate is measured and
+  published before its threshold ships.
+- A **shared-dependencies entry** so the gate `every rule names its shared
+  dependencies` passes.
 
-If a mechanism on a **different** layer already covers the same attack, the
-proposal must argue why the new one adds *diversity* rather than *redundancy*
-- or file it as an instance of the existing mechanism instead. This is the
-independence rule applied at the boundary of the rule set: a new rule that is
-redundant with an existing layer is not a second line of defence, it is the
-same line drawn twice. The rule is recorded in
-[writing a rule](../contributing/writing-a-rule.md) and enforced by the
-[enforcement map](enforcement.md).
+## The H intake freeze
+
+New heuristic (H) rule ids are frozen while the H series is above its
+reduction target (Addendum 3). New detections must be an instance of an
+existing family (a C-series invariant, an X-series refusal, an E-series
+statistic, ...) rather than another H id. See
+[Rule Nature](../reference/rules/nature.md).
 
 ## See Also
 
-- [Part 1: The trajectory](trajectory.md)
+- [Part 1: Evidence categories and rule mapping](trajectory.md)
 - [Part 3: Reporting](reporting.md)
+- [Writing a rule](../contributing/writing-a-rule.md)

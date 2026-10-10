@@ -3380,6 +3380,33 @@ def gate_release_artifacts_share_commit() -> Gate:
                 problems or "checkout SHA, committed rebuild, verified tag target")
 
 
+def gate_docs_layer_mapping_matches_registry() -> Gate:
+    """The Part 1 series-to-category table is generated from ``layers.py``."""
+    import re as _re
+
+    from trustsight.layers import RULE_LAYER_OVERRIDES, SERIES_LAYER
+
+    doc = ROOT / "docs" / "assurance-layers" / "trajectory.md"
+    if not doc.exists():
+        return Gate("docs layer mapping matches the registry", False, "missing")
+    lines = ["| Series | Default category |", "|---|---|"]
+    for series in sorted(SERIES_LAYER):
+        lines.append(f"| `{series}` | {SERIES_LAYER[series].value} |")
+    lines += ["", "| Rule | Category override |", "|---|---|"]
+    for rule_id in sorted(RULE_LAYER_OVERRIDES):
+        lines.append(f"| `{rule_id}` | {RULE_LAYER_OVERRIDES[rule_id].value} |")
+    expected = "\n".join(lines)
+    match = _re.search(
+        r"<!-- generated: series-layer -->\n(.*?)\n<!-- /generated: series-layer -->",
+        doc.read_text(encoding="utf-8"), _re.S)
+    problems = []
+    if not match:
+        problems.append("generated block missing")
+    elif match.group(1) != expected:
+        problems.append("table drifted from layers.py; run scripts/build_layers_doc.py")
+    return Gate("docs layer mapping matches the registry", not problems, problems)
+
+
 def gate_layer_detection_and_coverage_are_independent() -> Gate:
     """A finding must not hide that the same layer was also unread.
 
@@ -3686,6 +3713,7 @@ def run_gates() -> list[Gate]:
     gates.append(gate_run_diff_assembly_is_bounded())
     gates.append(gate_a_truncated_history_walk_is_a_declared_gap())
     gates.append(gate_every_history_diff_is_scored_independently())
+    gates.append(gate_docs_layer_mapping_matches_registry())
     gates.append(gate_layer_detection_and_coverage_are_independent())
     gates.append(gate_every_rule_names_shared_dependencies())
     gates.append(gate_layer_overrides_stay_within_the_closed_set())

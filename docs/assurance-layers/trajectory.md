@@ -1,71 +1,112 @@
-<!-- description: The L1-L8 layers an update passes, the series that guards each, and what "a finding carries the layer where it caught" means for the profile. -->
+<!-- description: The eight evidence categories, the rule families that feed each, and how a rule is mapped to a category. -->
 
-# Part 1: The trajectory
+# Part 1: Evidence categories and rule mapping
 
-A change reaches the user's machine by passing every layer in order. Each
-layer answers one question, and a rule that answers it is filed there. The
-layer is not what the rule protects; it is where the evidence sits.
+This page answers three questions: what the eight categories are, which rule
+families feed each, and how a rule ends up in one.
 
-| Layer | Name | Question | Default series |
-|---|---|---|---|
-| L1 | Structural coherence | Does the change hang together as an honest edit? | C, M |
-| L2 | Readability | Was anything hidden from the reader? | W (and X026/X027) |
-| L3 | Payload signature | Does it do a known-bad thing? | R, S |
-| L4 | Evasion shape | Was it *written* to defeat reading? | X, E |
-| L5 | Behavioral suspicion | Does the package's story make sense? | H |
-| L6 | Ecosystem memory | Has the ecosystem seen this before? | D, T |
-| L7 | Known indicators | Is it on the list? | I (the IOC tier) |
-| L8 | Campaign correlation | Do other packages tell the same story? | G |
+It does **not** claim the categories are ordered stages an attacker passes. A
+category is a label for the *kind of evidence* a finding represents.
 
-## The layer where it caught
+## Why grouping helps
 
-The single rule that makes the profile worth reading: **a finding carries the
-layer where it caught, not the layer it guards.** A rule that detects an
-evasion (L4) is protecting the payload space (L3), but it reports L4. The
-profile then shows "L4 fired, L3 passed" - which is the truth - rather than
-folding the two into one reassuring line.
+A flat list of findings does not tell you whether the tool found one kind of
+problem or several. Grouping by evidence category turns "R001 and H091 fired"
+into "a payload-signature check and a structural-consistency check each
+fired" - which is a more useful reading, and it stays honest about the fact
+that the two categories can share infrastructure.
 
-This is what distinguishes the layer profile from a severity grade. A
-severity answers "how bad"; a layer answers "how far in did the attacker
-get, and where was it stopped".
+## The eight categories
 
-## Series-to-layer defaults and overrides
+| Category | The question its evidence answers | Rule families that feed it |
+|---|---|---|
+| L1 Structural coherence | Does the change hang together as an honest edit? | C, M |
+| L2 Readability | Was anything hidden from the reader? | W, and the refusal rules X026/X027 |
+| L3 Payload signature | Does it do a known-bad thing? | R, S |
+| L4 Evasion shape | Was it *written* to defeat reading? | X, E |
+| L5 Behavioural suspicion | Does the package's story make sense? | H |
+| L6 Ecosystem memory | Has the ecosystem seen this before? | D, T |
+| L7 Known indicators | Is it on the list? | I |
+| L8 Campaign correlation | Do other packages tell the same story? | G |
 
-`trustsight.layers` holds the mapping as data: a per-series default, and a
-short table of per-rule overrides for the rules whose mechanism diverges from
-their series.
+Each row states the *kind of evidence*. "L6 Ecosystem memory" is not "a later
+stage" - it is "evidence drawn from stored history", and a history-based
+finding can be the first thing that fires. "L7 Known indicators" is
+membership in a signed list, not a deeper layer of the onion.
 
-- **C** defaults to L1, **R** and **S** to L3, **X** to L4, **H** to L5,
-  **D** to L6, **T** to L6, **E** to L4, **G** to L8, **P** to L1, **W** to
-  L2.
-- **Overrides**: the refusal family X026/X027 fires at the readability
-  boundary (L2) rather than as an evasion shape; the observation-database H
-  rules (H020, H021, H022, H026, H028, H037, H044, H045, H046, H058, H060,
-  H073, H074, H086, H088) read stored history and belong to L6; H056 is an
-  indicator match and belongs to L7.
-- **No static layer**: the **M** series fires *at* the layer of its inputs
-  (it records which findings composed), and the **A** series is the reserved
-  L9 build lane, not an L1-L8 layer at all. Both return no single layer, and
-  that is by design, not an omission.
+## A finding records where it was detected
 
-## Where the profile comes from
+A finding is labelled by **the check that produced it**. If an evasion rule at
+L4 catches something the payload rules at L3 did not, the finding reads `L4`,
+and the report shows `L4 fired, L3 none` - the honest picture, not a claim
+that the attacker passed L3.
 
-The report's `layers` object is a projection of the finding set, keyed
-`L1`..`L8`, each `{name, status, findings}`. A finding is filed under
-`layer_of(rule_id)`, so no consumer re-derives the mapping and no two
-surfaces can disagree about a rule's layer. The statuses and what makes a
-layer `unreadable` are [Part 3](reporting.md)'s subject.
+## Which families default to which category
+
+Every rule gets a category from its family, unless a rule's mechanism differs
+from its family's. The mapping is data in `trustsight.layers`:
+
+- **Defaults:** R and S to L3, C and P to L1, D and T to L6, X to L4, E to L4,
+  H to L5, G to L8, I to L7, W to L2.
+- **Overrides:** the refusal rules X026/X027 fire at L2 (a value the tokenizer
+  cannot read is a readability boundary before it is a technique); the
+  observation-database H rules (H020, H021, H022, H026, H028, H037, H044,
+  H045, H046, H058, H060, H073, H074, H086, H088) read stored history and
+  belong to L6; H056 is an indicator match and belongs to L7; the structural
+  rules H099, H101 and H103 are pinned to L1.
+- **No category:** **M** reasons about other findings and fires *at* the
+  category of its inputs, so it owns none; **A** inspects a built artifact in
+  the optional L9 lane and is not an L1-L8 category at all.
+
+<!-- generated: series-layer -->
+| Series | Default category |
+|---|---|
+| `C` | L1 |
+| `D` | L6 |
+| `E` | L4 |
+| `G` | L8 |
+| `H` | L5 |
+| `I` | L7 |
+| `P` | L1 |
+| `R` | L3 |
+| `S` | L3 |
+| `T` | L6 |
+| `W` | L2 |
+| `X` | L4 |
+
+| Rule | Category override |
+|---|---|
+| `H020` | L6 |
+| `H021` | L6 |
+| `H022` | L6 |
+| `H026` | L6 |
+| `H028` | L6 |
+| `H037` | L6 |
+| `H044` | L6 |
+| `H045` | L6 |
+| `H046` | L6 |
+| `H056` | L7 |
+| `H058` | L6 |
+| `H060` | L6 |
+| `H073` | L6 |
+| `H074` | L6 |
+| `H086` | L6 |
+| `H088` | L6 |
+| `H099` | L1 |
+| `H101` | L1 |
+| `H103` | L1 |
+| `X026` | L2 |
+| `X027` | L2 |
+<!-- /generated: series-layer -->
 
 ## What this part does not claim
 
-- It does not claim every attack is caught at a layer. A layer with no
-  finding is `passed` only when the run was fully read; otherwise it is
-  `unreadable`, and that distinction is the point.
-- It does not claim the layers are equally strong. `L4` is where the
-  statistical and refusal mechanisms overlap most; the diversity argument in
-  [Part 2](diversity.md) is what keeps that overlap from being redundancy.
+- It does not claim the categories are equally strong or independent - see
+  [Part 2](diversity.md).
+- It does not claim every attack is caught in some category. A category with
+  no finding is not a clean bill of health.
 
 ## See Also
 
-- [Part 2: Diversity and intake](diversity.md)
-- [Rule Nature](../reference/rules/nature.md) - the series in full
+- [Part 2: How to add a useful new detector](diversity.md)
+- [Rule Nature](../reference/rules/nature.md) - the rule families in full

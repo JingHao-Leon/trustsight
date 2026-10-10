@@ -173,11 +173,12 @@ A proposed rule names three things, and the intake review checks all three:
    evasion, L5 behaviour, L6 ecosystem, L7 indicators, L8 campaign. The
    series-to-layer defaults live in `trustsight.layers`.
 
-If a mechanism on a **different** layer already covers the same attack, the
-PR must argue why this one adds *diversity* rather than *redundancy* - or
-file it as an instance of that existing mechanism instead (Addendum 5 §5,
-"the onion's integrity": each layer's mechanism must be independent of its
-neighbours', so holes fail to align).
+If a mechanism in a **different** evidence category already covers the same
+attack, the PR must argue why this one adds *complementary* coverage rather
+than *redundant* coverage - or file it as an instance of that existing
+mechanism instead. The intake review also records the rule's shared
+dependencies, because different mechanisms that rely on the same tokenizer or
+history database can fail together even though their logic differs.
 
 ## Fixtures
 
