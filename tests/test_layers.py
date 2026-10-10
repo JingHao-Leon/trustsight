@@ -181,6 +181,25 @@ def test_single_layer_failure_counts_singleton_attempts():
     assert bypass_count(paths) == 1
 
 
+def test_resilience_distribution_and_fully_bypassed():
+    from trustsight.layers import (
+        exact_minimum_cut,
+        layers_fully_bypassed,
+        minimum_layer_cut,
+        resilience_distribution,
+    )
+
+    paths = [
+        {"fired": ["L4"], "fully_bypassed": False},
+        {"fired": ["L3", "L4"], "fully_bypassed": False},
+        {"fired": ["L3", "L4"], "fully_bypassed": False},
+        {"fired": [], "fully_bypassed": True},
+    ]
+    assert resilience_distribution(paths) == {1: 1, 2: 2}
+    assert layers_fully_bypassed(paths) == 1
+    assert exact_minimum_cut(paths) == minimum_layer_cut(paths)
+
+
 def test_verbose_layer_line_reports_active_layers_and_boundaries():
     from trustsight.cli.inspect import _layers_and_boundaries_line
     from trustsight.schema import PackageFact, ScoreEntry
@@ -207,6 +226,17 @@ def test_config_layer_override_applies_in_the_profile():
         overrides=overrides)
     assert profile["L1"]["status"] == "fired"
     assert profile["L3"]["status"] == "passed"
+
+
+def test_config_layer_override_applies_in_observed_layers():
+    from trustsight.layers import observed_layers, parse_overrides
+
+    overrides = parse_overrides({"layers": {"R001": "L1"}})
+    observed = observed_layers([{"rule_id": "R001"}], overrides)
+    assert observed["fired"] == ["L1"]
+
+    default = observed_layers([{"rule_id": "R001"}])
+    assert default["fired"] == ["L3"]
 
 
 def test_parse_overrides_drops_out_of_range_and_unknown_rules():
@@ -238,6 +268,43 @@ def test_layer_detection_and_coverage_are_independent():
         [{"rule_id": "R001"}])
     assert profile["L3"]["detection"] == "fired"
     assert profile["L3"]["coverage"] == "incomplete"
+
+
+def test_l8_is_exercised_when_correlation_ran():
+    from trustsight.layers import layer_profile
+    from trustsight.schema import PackageFact
+
+    profile = layer_profile(
+        PackageFact(package_name="demo", correlation_ran=True), [])
+    assert profile["L8"]["coverage"] == "complete"
+    assert profile["L8"]["status"] == "passed"
+
+
+def test_l8_is_not_applicable_without_correlation():
+    from trustsight.layers import layer_profile
+    from trustsight.schema import PackageFact
+
+    profile = layer_profile(PackageFact(package_name="demo"), [])
+    assert profile["L8"]["coverage"] == "not_applicable"
+    assert profile["L8"]["status"] == "not_exercised"
+
+
+def test_an_l8_finding_proves_correlation_ran():
+    from trustsight.layers import layer_profile
+    from trustsight.schema import PackageFact
+
+    profile = layer_profile(
+        PackageFact(package_name="demo"), [{"rule_id": "G001"}])
+    assert profile["L8"]["detection"] == "fired"
+    assert profile["L8"]["coverage"] == "complete"
+
+
+def test_review_row_carries_correlation_ran():
+    from trustsight.reporting import _layer_profile_row
+
+    profile = _layer_profile_row({"package": "demo", "correlation_ran": True},
+                                 [])
+    assert profile["L8"]["coverage"] == "complete"
 
 
 def test_a_layers_override_agrees_in_the_verdict_sentence(monkeypatch):

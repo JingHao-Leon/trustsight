@@ -526,7 +526,7 @@ def report_to_sarif(reports, diffs: dict | None = None) -> dict:
             }
             if layer is not None:
                 # Addendum 5 §2: the layer is on the rule so a code-scanning
-                # consumer can group by the trajectory step it caught at.
+                # consumer can group findings by the kind of evidence.
                 rule["properties"] = {"layer": layer.value}
             rules.setdefault(rule_id, rule)
             location = _sarif_location(finding, doc)
@@ -628,6 +628,7 @@ def _layer_profile_row(row: dict, findings: list[dict]) -> dict[str, dict]:
         coverage_gaps = row.get("coverage_gaps", ())
         diff_truncated = row.get("diff_truncated", False)
         scan_truncated = row.get("scan_truncated", False)
+        correlation_ran = row.get("correlation_ran", False)
 
     return layer_profile(
         _Boundary(), findings, overrides=parse_overrides(load_config()))

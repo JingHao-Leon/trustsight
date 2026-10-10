@@ -1,4 +1,4 @@
-"""The assurance layers: which point of an attacker's trajectory a rule guards.
+"""The assurance layers: which kind of evidence a rule represents.
 
 Addendum 5 introduces a second axis over the rule taxonomy.  ``category``
 (:mod:`trustsight.categories`) answers *what kind of claim* a rule makes;
@@ -34,11 +34,14 @@ __all__ = [
     "Layer",
     "blinded_layers",
     "bypass_count",
+    "exact_minimum_cut",
     "layer_of",
     "layer_profile",
+    "layers_fully_bypassed",
     "minimum_layer_cut",
     "observed_layers",
     "parse_overrides",
+    "resilience_distribution",
     "rules_in_layer",
     "single_layer_failure",
 ]
@@ -79,8 +82,8 @@ _NAMES: dict[Layer, str] = {
     Layer.L8: "Campaign correlation",
 }
 
-#: The trajectory order, outermost-first: L1 is "does the change hang
-#: together", L8 is "do other packages tell the same story".
+#: The layer order, broadest-first: L1 is "does the change hang together",
+#: L8 is "do other packages tell the same story".
 LAYER_ORDER: tuple[Layer, ...] = (
     Layer.L1, Layer.L2, Layer.L3, Layer.L4, Layer.L5, Layer.L6, Layer.L7, Layer.L8,
 )
@@ -233,7 +236,7 @@ GAP_BLINDED_LAYERS: dict[str, frozenset[Layer]] = {
 }
 
 
-def observed_layers(triggered) -> dict:
+def observed_layers(triggered, overrides: dict[str, Layer] | None = None) -> dict:
     """Which evidence categories fired on one harness attempt (Addendum 5 §4).
 
     Returns ``{"fired": [...], "fully_bypassed": bool}``: the layer ids whose
@@ -241,10 +244,15 @@ def observed_layers(triggered) -> dict:
     of the fired rule layers, **not** an observed traversal - the earlier
     ``traversed``/``stopped`` shape inferred a prefix, which made every path
     contain L1 and the minimum cut structurally one.
+
+    *overrides* are the ``[layers]`` config overrides, so harness telemetry
+    agrees with the report/verdict/CLI surfaces when an operator moves a
+    rule.
     """
     fired = sorted(
         {layer for layer in (
-            layer_of(str(entry.get("rule_id", ""))) for entry in triggered or ()
+            layer_of(str(entry.get("rule_id", "")), overrides)
+            for entry in triggered or ()
         ) if layer is not None},
         key=LAYER_ORDER.index,
     )
@@ -299,6 +307,38 @@ def bypass_count(paths) -> int:
     return sum(1 for p in (paths or ()) if p and p.get("fully_bypassed"))
 
 
+#: Remediation T2: the honest replacement for `aligned_hole_depth` - the
+#: number of attempts no evidence category caught.  Same value as
+#: :func:`bypass_count`; the second name is the one the plan and the report
+#: use.
+layers_fully_bypassed = bypass_count
+
+
+def resilience_distribution(paths) -> dict[int, int]:
+    """How many evidence categories caught each caught attempt.
+
+    Remediation T2: the measured distribution that replaces the "minimum cut
+    >= 2" target.  A histogram over caught attempts of the number of distinct
+    categories that fired; an attempt caught by a single category is one
+    regression from a bypass, and a campaign whose mass sits at ``1`` is
+    fragile regardless of its minimum cut.  Bypassed attempts are not counted
+    here (see :func:`layers_fully_bypassed`).
+    """
+    out: dict[int, int] = {}
+    for path in paths or ():
+        if not path or path.get("fully_bypassed"):
+            continue
+        fired = len({lit for lit in (path.get("fired") or ()) if lit})
+        if fired:
+            out[fired] = out.get(fired, 0) + 1
+    return dict(sorted(out.items()))
+
+
+#: The exact cut, under the name the remediation plan uses.  See
+#: :func:`minimum_layer_cut`.
+exact_minimum_cut = minimum_layer_cut
+
+
 def blinded_layers(gaps) -> frozenset[Layer]:
     """The layers a run's coverage gaps leave unexercised."""
     blinded: set[Layer] = set()
@@ -333,6 +373,16 @@ def layer_profile(fact, findings, *, correlation_ran: bool = False,
     if getattr(fact, "scan_truncated", False):
         gaps.append("scan_truncated")
     blinded = blinded_layers(gaps)
+    # L8 (campaign correlation) is exercised when the collective pass ran.
+    # The flag is threaded from the corpus cycle, but an L8 finding in the
+    # set proves correlation ran regardless, so a report rendered from a
+    # stored row still shows L8 honestly rather than permanently
+    # "not applicable".
+    correlation_ran = (
+        bool(correlation_ran)
+        or bool(getattr(fact, "correlation_ran", False))
+        or bool(by_layer[Layer.L8])
+    )
     return {
         layer.value: {
             "name": layer.name_text,
