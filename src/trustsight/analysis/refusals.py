@@ -230,7 +230,15 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             octals = _OCTAL_ESCAPE_RE.findall(literal)
             controls = _CONTROL_ESCAPE_RE.findall(literal)
             escapes = len(hexes) + len(octals)
-            if escapes < 2 and not controls:
+            # Spec X030: fire on >=2 hex/octal escapes, OR a control escape,
+            # OR any single hex/octal escape spelling a byte outside
+            # printable ASCII (a lone \x01 is as suspicious as two).
+            nonprintable = any(
+                not (0x20 <= int(h, 16) <= 0x7E) for h in hexes
+            ) or any(
+                not (0x20 <= int(o, 8) <= 0x7E) for o in octals
+            )
+            if escapes < 2 and not controls and not nonprintable:
                 continue
             from .._tokenizer_engine import _decode_ansi_c
 

