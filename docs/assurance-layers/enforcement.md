@@ -62,14 +62,18 @@ of the categories that fired, and the cut is exact.
 The harness's own gates are unchanged: it never executes package code (a
 `bash -n` syntax check at most), and its records are telemetry only.
 
-## What is not yet published
+## What is published, and what is not
 
-The review that prompted this rewrite asked, fairly, for the harness results
-themselves: attack counts by class, bypass rates, the minimum-cut
-distribution, and the limitations of the attack set. Those numbers are
-recorded per campaign but are **not yet summarised on this page**. Until they
-are, treat the "complementary coverage" claim as a hypothesis the harness is
-built to test, not an established property.
+The harness's CLI now prints a `layer_resilience` summary for every campaign:
+attempts, bypasses, the exact minimum layer-cut, and the single-layer-failure
+counts. Those numbers are per campaign and depend on the attack set; they are
+the raw material for a published diversity claim.
+
+What is **not** on this page is a rolled-up result across campaigns with the
+attack-set limitations spelled out. Until that exists, treat the
+"complementary coverage" claim as a hypothesis the harness is built to test,
+not an established property - and note the third level, real-world
+performance, is external evaluation this project does not claim.
 
 ## See Also
 
