@@ -690,6 +690,10 @@ def analyze_package_text(
         acknowledged_urls=acknowledged_url_rows(url_acks),
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
+        # Addendum 5 §6.2 / remediation T4: the corpus cycle runs the
+        # collective G-series correlation, so L8 was exercised for this
+        # package's corpus result.
+        correlation_ran=True,
         comparison_base="recorded",
         tree_analyzed=bool(tree_manifest),
         coverage_gaps=gaps,

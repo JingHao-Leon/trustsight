@@ -131,6 +131,12 @@ class PackageFact:
     diff_truncated: bool = False
     scan_truncated: bool = False
 
+    # True when this analysis ran as part of a corpus correlation cycle
+    # (Addendum 5 §6.2 / remediation T4): the collective G-series pass ran,
+    # so L8 evidence was exercised.  False for a single-package review,
+    # where L8 is genuinely not applicable.
+    correlation_ran: bool = False
+
     recent_commit_burst: bool = False
 
     # True when the repository file manifest (git tree / snapshot tarball)
@@ -315,6 +321,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "acknowledged_urls": fact.acknowledged_urls,
         "diff_truncated": fact.diff_truncated,
         "scan_truncated": fact.scan_truncated,
+        "correlation_ran": fact.correlation_ran,
         "tree_analyzed": fact.tree_analyzed,
         "changes": fact.changes,
         "dependency_changes": {k: sorted(v) for k, v in fact.dependency_changes.items()},
@@ -387,6 +394,7 @@ _STORED_FACT_KEYS = (
     "acknowledged_urls",
     "diff_truncated",
     "scan_truncated",
+    "correlation_ran",
     "tree_analyzed",
     "changes",
     "dependency_changes",
@@ -482,6 +490,8 @@ def fact_from_dict(data: dict) -> PackageFact | None:
             acknowledged_urls=list(data.get("acknowledged_urls", [])),
             diff_truncated=data["diff_truncated"],
             scan_truncated=data["scan_truncated"],
+            # `.get`: rows written before the field existed still serve.
+            correlation_ran=bool(data.get("correlation_ran", False)),
             tree_analyzed=data["tree_analyzed"],
             changes=list(data["changes"]),
             dependency_changes={
