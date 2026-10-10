@@ -1090,6 +1090,15 @@ def test_full_aur_help_documents_watch():
         assert flag in out
 
 
+def test_full_aur_verify_reports_l9_unavailable_by_default():
+    """Addendum 5 §12.2: the batch L9 lane, gated off by default."""
+    result = CliRunner().invoke(
+        app, ["full-aur", "verify", "--package", "demo", "--json"])
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.stdout)
+    assert body["results"][0]["status"] == "l9_unavailable"
+
+
 def test_full_aur_watch_invokes_the_loop(monkeypatch):
     # `full-aur` refuses to start when TRUSTSIGHT_OFFLINE is set, which the
     # suite sets for every test. What is asserted here is the argument

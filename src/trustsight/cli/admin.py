@@ -457,8 +457,14 @@ def register_commands(app: typer.Typer):
                 )
                 set_metadata("ruleset_age_prompted", str(SHIPPED_RULESET_VERSION))
 
-    @app.command("full-aur")
+    full_aur_app = typer.Typer(
+        help="Bootstrap or update the full-AUR baseline corpus.",
+        invoke_without_command=True, no_args_is_help=False,
+    )
+
+    @full_aur_app.callback()
     def full_aur_cmd(
+        ctx: typer.Context,
         resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap (now implied: cycles resume automatically)"),
         bootstrap: bool = typer.Option(False, "--bootstrap", help="Allow a from-scratch bootstrap of the whole AUR when no snapshot exists (capped per cycle, resumes)"),
         export: str | None = typer.Option(None, "--export", help="Path to write the baseline artifact (.tar.zst)"),
@@ -481,6 +487,8 @@ def register_commands(app: typer.Typer):
         large amount of work advances in gentle chunks. With --watch the
         cycle repeats on an interval.
         """
+        if ctx.invoked_subcommand is not None:
+            return
         from .. import release
         from ..full_aur.pipeline import run_baseline_build, run_watch
         ensure_default_configs()
@@ -571,3 +579,46 @@ def register_commands(app: typer.Typer):
         maybe_notify(result, notify)
         if result.refused:
             raise typer.Exit(code=2)
+
+    @full_aur_app.command("verify")
+    def full_aur_verify_cmd(
+        package: list[str] = typer.Option(
+            [], "--package", help="Verify only these packages (repeatable)"),
+        limit: int = typer.Option(0, "--limit", help="Cap the number verified (0 = all)"),
+        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    ):
+        """Batch L9 verification for corpus operators (Addendum 5 §12.2).
+
+        Results land in the corpus DB as artifact properties, feeding future
+        reproducibility comparison.  The static core never runs package code:
+        with the lane disabled, or no sandbox container, every package reports
+        ``l9_unavailable`` - a weight-0 boundary, never a verdict.
+        """
+        from ..api import TrustSight
+        from ..config import ensure_default_configs
+        from ..db import get_all_packages, init_db
+
+        ensure_default_configs()
+        init_db()
+        names = [str(n) for n in package if n]
+        if not names:
+            names = [str(p.get("name")) for p in get_all_packages()
+                     if p.get("name")]
+        if limit:
+            names = names[:limit]
+        client = TrustSight()
+        results = [client.verify_build(name) for name in names]
+        unavailable = sum(
+            1 for r in results if r["status"] == "l9_unavailable")
+        if json_output:
+            typer.echo(json.dumps(
+                {"packages": len(results), "results": results}, indent=2))
+            return
+        if results and unavailable == len(results):
+            typer.echo(
+                f"L9 build lane unavailable for all {len(results)} package(s)")
+            return
+        for result in results:
+            typer.echo(f"{result['package']}: {result['status']}")
+
+    app.add_typer(full_aur_app, name="full-aur")

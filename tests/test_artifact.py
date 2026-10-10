@@ -98,3 +98,20 @@ def test_l9_divergence_when_static_and_artifact_disagree(monkeypatch):
         "demo", manifest=[{"path": "/usr/bin/x", "setuid": True}],
         static_clean=False)
     assert "l9_divergence" not in agreeing
+
+
+def test_a_normal_artifact_fires_no_a_rule():
+    """Benign coverage: an ordinary package's manifest trips no A rule."""
+    manifest = [
+        {"path": "/usr/bin/demo", "mode": 0o755, "links": ["libdemo.so.1"]},
+        {"path": "/usr/lib/libdemo.so.1", "mode": 0o644},
+        {"path": "/usr/lib/systemd/system/demo.service", "mode": 0o644},
+        {"path": "/usr/share/doc/demo/README", "mode": 0o644},
+    ]
+    declared = {
+        "depends": ["glibc", "libdemo"],
+        "units": ["/usr/lib/systemd/system/demo.service"],
+        "install_text": "post_install() {\n  echo ok\n}\n",
+        "built_install_text": "post_install() {\n  echo ok\n}\n",
+    }
+    assert _ids(manifest, declared) == set()

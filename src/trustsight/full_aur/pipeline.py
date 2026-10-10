@@ -1,6 +1,5 @@
 """Bootstrap and incremental corpus pipeline."""
 
-import json
 import logging
 import sys
 import time
@@ -197,40 +196,32 @@ def _correlation_records(
     corpus feed yet, so they are empty here (the G002 engine ships and is
     unit-tested; the literal hash view is the pending corpus work).
     """
-    from ..db import get_property_transitions, package_added_literals
+    from ..db import correlation_feed, record_property_transition
 
-    records: list[dict] = []
+    # Addendum 5 §9: record this cycle's maintainer transitions so the
+    # adoption_events view serves G003.  H044 is an ownership transition
+    # between two recorded maintainers; H086 is the orphan-to-maintained
+    # shape (the prior snapshot held no maintainer).  H074 (mass adoption) is
+    # the cross-package aggregation G003 itself performs.
     for name in processed:
-        hosts_gained: set[str] = set()
-        for transition in get_property_transitions(
-                name, property_key="source_hosts", limit=20):
-            try:
-                old = set(json.loads(transition["old_value"]) or [])
-                new = set(json.loads(transition["new_value"]) or [])
-            except (TypeError, ValueError):
-                continue
-            hosts_gained |= new - old
         current = (new_meta.get(name) or {}).get("Maintainer") or ""
         previous = (old_meta or {}).get(name, {}).get("Maintainer") or ""
-        # Addendum 5 §6.2: G003 joins on the *temporal* adoption predicates,
-        # not a bare maintainer-change boolean.  H044 is an ownership
-        # transition between two recorded maintainers; H086 is the
-        # orphan-to-maintained shape (the prior snapshot held no maintainer).
-        # H074 (mass adoption) is the cross-package aggregation G003 itself
-        # performs.
-        adoption_predicates: list[str] = []
-        if current and previous and current != previous:
-            adoption_predicates.append("H044")
-        elif current and not previous:
-            adoption_predicates.append("H086")
+        if current and current != previous:
+            record_property_transition(name, "maintainer", previous, current)
+
+    feed = correlation_feed(processed)
+    records: list[dict] = []
+    for name in processed:
+        info = feed.get(name, {})
+        predicates = list(info.get("adoption_predicates", ()))
         records.append({
             "package": name,
-            "hosts_gained": sorted(hosts_gained),
-            # Addendum 5 §9: the literal feed G002 joins across packages.
-            "added_literals": [lit for lit, _length in package_added_literals(name)],
-            "maintainer": current,
-            "adoption": bool(adoption_predicates),
-            "adoption_predicates": adoption_predicates,
+            "hosts_gained": sorted(set(info.get("hosts_gained", ()))),
+            # The literal feed G002 joins across packages is the view.
+            "added_literals": list(info.get("added_literals", ())),
+            "maintainer": info.get("maintainer", ""),
+            "adoption": bool(predicates),
+            "adoption_predicates": predicates,
         })
     return records
 

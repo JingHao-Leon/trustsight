@@ -691,6 +691,14 @@ With a prior snapshot present (any `trustsight review` run creates one), a cycle
 
 Use `--export` to produce a shareable baseline that other TrustSight instances can consume via `trustsight import-baseline`.
 
+### `trustsight full-aur verify`
+
+```
+trustsight full-aur verify [--package NAME ...] [--limit N] [--json]
+```
+
+The batch L9 lane (Addendum 5 §12.2) for corpus operators: it runs the optional artifact inspection over the corpus (or the named packages) and lands the results in the corpus DB as artifact properties, feeding future reproducibility comparison. The static core never runs package code - the build that produces a manifest runs outside TrustSight. With `[verify] enabled = false` (the default) or no sandbox container, every package reports `l9_unavailable`, a weight-0 boundary rather than a verdict.
+
 ### What one cycle does
 
 1. Fetch the AUR metadata snapshot and diff it against the stored copy.
@@ -761,6 +769,7 @@ containing `manifest.json` and `iocs.jsonl`; they supplement the local
 trustsight ioc sources
 trustsight ioc import <dir> [--source NAME] [--allow-unsigned]
 trustsight ioc update [--path DIR]...
+trustsight ioc update --federation URL --publisher-key KEY.pem
 trustsight ioc list [--source SOURCE] [--type TYPE] [--include-expired]
 trustsight ioc export [<dir>] [--source SOURCE] [--json]
 ```
@@ -771,7 +780,7 @@ trustsight ioc export [<dir>] [--source SOURCE] [--json]
 |------------|-------------|
 | `sources` | Show configured and imported baseline sources. |
 | `import` | Import a baseline directory. Replaces any existing rows for the same source. |
-| `update` | Re-import baselines from local directories, or, when no `--path` is given, update every enabled feed whose `url` is a release-channel URL: the `baseline-ioc-<prefix>-manifest.json` / `-iocs.jsonl` pair is downloaded, verified against the pinned distribution key, and imported (curator-key verification still applies). Feeds with any other URL are refused. |
+| `update` | Re-import baselines from local directories, or, when no `--path` is given, update every enabled feed whose `url` is a release-channel URL: the `baseline-ioc-<prefix>-manifest.json` / `-iocs.jsonl` pair is downloaded, verified against the pinned distribution key, and imported (curator-key verification still applies). Feeds with any other URL are refused. `--federation URL` instead fetches a publisher's `manifest.json`/`iocs.jsonl` and verifies them against `--publisher-key`. |
 | `list` | List active IOC entries, optionally filtered by source or type. |
 | `export` | Write the current IOC database to a baseline directory, or with `--json` and no directory, print the merged IOC view to stdout for debugging. |
 
@@ -782,6 +791,8 @@ trustsight ioc export [<dir>] [--source SOURCE] [--json]
 | `--source` | Override or filter by baseline source name. |
 | `--allow-unsigned` | Import a baseline whose signature is missing or cannot be verified. Use only for local baselines. |
 | `--path` | Baseline directory to re-import with `ioc update`. Can be repeated. |
+| `--federation` | Base URL of a publisher's signed indicator set. `manifest.json` and `iocs.jsonl` (each with a detached `.sig`) are fetched and verified against `--publisher-key` before import (Addendum 5 §10, hashed indicators only). |
+| `--publisher-key` | Path to the Ed25519 public key pinning a federation publisher. Required with `--federation`. |
 | `--type` | Filter `ioc list` by indicator type (`package`, `domain`, `hash`, `file_path`, or `pkgbuild_pattern`). |
 | `--include-expired` | Include expired entries in `ioc list`. |
 

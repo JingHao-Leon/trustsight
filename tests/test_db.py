@@ -846,3 +846,35 @@ def test_checkpoint_wal_is_best_effort(db):
 
     checkpoint_wal()
     checkpoint_wal()
+
+
+def test_the_three_correlation_views_exist_and_serve(db):
+    """Addendum 5 §9: the G-series reads indexed views, not per-package scans."""
+    from trustsight.db import (
+        correlation_feed,
+        get_connection,
+        record_property_transition,
+    )
+
+    with get_connection() as conn:
+        views = {
+            r["name"] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='view'")
+        }
+        assert {"gained_hosts_window", "added_literal_hashes",
+                "adoption_events"} <= views
+
+    record_property_transition("pkg", "source_hosts", [], ["new.cdn"])
+    record_property_transition("pkg", "maintainer", "", "m@x")
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO observed_added_literals "
+            "(package_name, literal, literal_len, observed_at) "
+            "VALUES ('pkg', 'XYZ', 3, datetime('now'))")
+        conn.commit()
+
+    feed = correlation_feed(["pkg"])
+    assert feed["pkg"]["hosts_gained"] == ["new.cdn"]
+    assert feed["pkg"]["added_literals"] == ["XYZ"]
+    assert feed["pkg"]["maintainer"] == "m@x"
+    assert feed["pkg"]["adoption_predicates"] == ["H086"]

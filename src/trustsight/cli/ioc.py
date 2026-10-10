@@ -240,17 +240,62 @@ def _update_feed(feed: dict, show_progress: bool = False) -> dict:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def _update_federation(
+    base_url: str, pubkey_path: Path, allow_unsigned: bool = False
+) -> dict:
+    """Fetch and import a federated indicator set, signature-verified.
+
+    Addendum 5 §10: ``manifest.json`` and ``iocs.jsonl`` are fetched from
+    *base_url* and verified against the pinned *pubkey_path* before import
+    (hashed indicators only, the curator signature inside the manifest is
+    checked by ``import_baseline``).
+    """
+    from .. import release
+    from ..ioc_baseline import (
+        InvalidSignatureError,
+        MalformedBaselineError,
+        UnsignedBaselineError,
+        import_baseline,
+    )
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-ioc-federation-"))
+    try:
+        for asset, target in (("manifest.json", "manifest.json"),
+                              ("iocs.jsonl", "iocs.jsonl")):
+            (tmp_dir / target).write_bytes(
+                release.fetch_verified_url(base_url, asset,
+                                           pubkey_path=pubkey_path))
+        result = import_baseline(tmp_dir, source_name=base_url.rstrip("/"),
+                                 trust_manifest_key=True,
+                                 allow_unsigned=allow_unsigned)
+        return {"feed": base_url, "status": "ok", "url": base_url, **result}
+    except (release.ReleaseError, UnsignedBaselineError, InvalidSignatureError,
+            MalformedBaselineError, FileNotFoundError) as exc:
+        return {"feed": base_url, "status": "error", "error": str(exc)}
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 @ioc_app.command("update")
 def ioc_update(
     path: list[str] = typer.Option(None, "--path", help="Local baseline directory (repeatable)"),
+    federation: str | None = typer.Option(
+        None, "--federation",
+        help="Base URL of a publisher's signed indicator set (manifest.json + iocs.jsonl)"),
+    publisher_key: str | None = typer.Option(
+        None, "--publisher-key",
+        help="Path to the Ed25519 public key pinning the federation publisher"),
     allow_unsigned: bool = typer.Option(False, "--allow-unsigned", help="Allow unsigned baselines"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
-    """Re-import IOC baselines from local directories or configured feeds.
+    """Re-import IOC baselines from local directories, configured feeds, or a
+    signed federation URL.
 
     Without ``--path`` the command updates every enabled feed whose url is a
     TrustSight release channel URL: the ``baseline-ioc-*`` assets are
     downloaded, verified against the pinned distribution key, and imported.
+    ``--federation URL`` fetches a publisher's ``manifest.json``/``iocs.jsonl``
+    from that base URL and verifies them against ``--publisher-key``.
     """
     from ..ioc_baseline import (
         InvalidSignatureError,
@@ -261,6 +306,28 @@ def ioc_update(
 
     ensure_default_configs()
     init_db()
+
+    if federation:
+        if not publisher_key:
+            msg = "--federation requires --publisher-key (a pinned Ed25519 public key)"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
+        result = _update_federation(
+            federation, Path(publisher_key), allow_unsigned=allow_unsigned)
+        if json_output:
+            typer.echo(json.dumps({"results": [result]}, indent=2))
+        elif result["status"] == "error":
+            _print_colored(f"{federation}: {result['error']}", "red", stderr=True)
+        else:
+            _print_colored(
+                f"{federation}: verified {result.get('entries_imported', 0)} "
+                "IOCs", "green")
+        if result["status"] == "error":
+            raise typer.Exit(code=2)
+        return
 
     paths = path or []
     if not paths:

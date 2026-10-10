@@ -318,3 +318,53 @@ def fetch_verified_asset(
             "refused"
         )
     return data
+
+
+def _download_url(url: str, max_bytes: int = _MAX_RELEASE_BYTES) -> bytes:
+    """Download *url* with the same byte cap and wall-clock deadline."""
+    try:
+        with urllib.request.urlopen(
+                url, timeout=_REQUEST_TIMEOUT_SECONDS) as resp:
+            from .bounded_io import (
+                ReadTimedOut,
+                ReadTooLarge,
+                read_capped_with_deadline,
+            )
+            try:
+                return read_capped_with_deadline(
+                    resp, max_bytes, url, _DOWNLOAD_DEADLINE_SECONDS)
+            except ReadTooLarge as exc:
+                raise ReleaseTooLargeError(str(exc)) from exc
+            except ReadTimedOut as exc:
+                raise ReleaseFetchError(str(exc)) from exc
+    except (ReleaseTooLargeError, ReleaseFetchError):
+        raise
+    except Exception as exc:
+        raise ReleaseFetchError(f"could not download {url}: {exc}") from exc
+
+
+def fetch_verified_url(
+    base_url: str, asset_name: str, *, pubkey_path: Path,
+) -> bytes:
+    """Fetch *asset_name* from an arbitrary *base_url*, signature-verified.
+
+    Addendum 5 §10 (federation sketch): the same detached-Ed25519 path the
+    release channel uses, against a publisher key the operator pins.  The
+    sibling ``<asset_name>.sig`` must verify over the exact bytes before the
+    payload is returned; an unsigned or mismatched asset is refused.
+    """
+    if offline():
+        raise ReleaseFetchError(
+            "federation fetches are disabled (TRUSTSIGHT_OFFLINE is set)")
+    base = base_url.rstrip("/")
+    data = _download_url(f"{base}/{asset_name}")
+    signature = _download_url(f"{base}/{asset_name}.sig", max_bytes=64 * 1024)
+    try:
+        pubkey = _load_trusted_pubkey(pubkey_path)
+    except Exception as exc:
+        raise ReleaseSignatureError(str(exc)) from exc
+    if not verify_artifact(data, signature, pubkey):
+        raise ReleaseSignatureError(
+            f"{asset_name} failed Ed25519 verification against the publisher "
+            "key; refused")
+    return data

@@ -406,6 +406,34 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_added_literals_package
                 ON observed_added_literals(package_name);
+
+            /* Addendum 5 §9: three indexed views the G-series correlates
+               over at cycle end (O(cycle) queries, not O(packages^2)).
+               equivalent tables exist - these are the queryable surfaces. */
+            CREATE VIEW IF NOT EXISTS gained_hosts_window AS
+                SELECT pt.package_name AS package_name,
+                       je.value AS host,
+                       pt.observed_at AS observed_at
+                FROM property_transitions pt, json_each(pt.new_value) je
+                WHERE pt.property_key = 'source_hosts'
+                  AND je.value NOT IN (
+                      SELECT je2.value
+                      FROM json_each(COALESCE(pt.old_value, '[]')) je2);
+
+            CREATE VIEW IF NOT EXISTS added_literal_hashes AS
+                SELECT package_name, literal, literal_len, observed_at
+                FROM observed_added_literals;
+
+            CREATE VIEW IF NOT EXISTS adoption_events AS
+                SELECT pt.package_name AS package_name,
+                       json_extract(pt.new_value, '$') AS maintainer,
+                       CASE WHEN json_extract(pt.old_value, '$') IS NULL
+                                 OR json_extract(pt.old_value, '$') = ''
+                            THEN 'H086' ELSE 'H044' END AS predicate,
+                       pt.observed_at AS observed_at
+                FROM property_transitions pt
+                WHERE pt.property_key = 'maintainer'
+                  AND COALESCE(json_extract(pt.new_value, '$'), '') <> '';
         """)
         _migrate(conn)
         conn.commit()
@@ -1915,6 +1943,8 @@ def save_pkgbuild_snapshot(
 #: like every other corpus table: the index answers "seen before", and an
 #: unbounded history of near-identical tuples buys nothing.
 MAX_RECIPE_OBSERVATIONS_PER_PACKAGE = 128
+#: Rows kept per property key in the timeline (mirrors full_aur.properties).
+MAX_PROPERTY_TRANSITIONS_PER_KEY = 256
 
 
 def _array_entries_hash(entries) -> str:
@@ -2151,6 +2181,72 @@ def package_added_literals(package_name: str) -> list[tuple[str, int]]:
             ((package_name or "").strip(),),
         ).fetchall()
     return [(r[0], int(r[1])) for r in rows]
+
+
+def record_property_transition(
+    package_name: str, property_key: str,
+    old_value, new_value, observed_at: Optional[str] = None,
+) -> None:
+    """Append one property-value transition (Addendum 5 §9).
+
+    The same row shape ``full_aur.properties`` writes; exposed so the corpus
+    sweep can record a maintainer transition and the ``adoption_events`` view
+    can serve G003 without re-deriving it per package.  Values are stored as
+    JSON so ``json_extract`` reads them back.
+    """
+    import json as _json
+
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO property_transitions "
+            "(package_name, property_key, old_value, new_value, observed_at) "
+            "VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')))",
+            (package_name, property_key, _json.dumps(old_value),
+             _json.dumps(new_value), observed_at),
+        )
+        conn.execute(
+            "DELETE FROM property_transitions WHERE package_name=? AND "
+            "property_key=? AND id NOT IN ("
+            "SELECT id FROM property_transitions WHERE package_name=? AND "
+            "property_key=? ORDER BY id DESC LIMIT ?)",
+            (package_name, property_key, package_name, property_key,
+             MAX_PROPERTY_TRANSITIONS_PER_KEY),
+        )
+        conn.commit()
+
+
+def correlation_feed(package_names) -> dict[str, dict]:
+    """Per-package G-series inputs, read from the Addendum 5 §9 views.
+
+    ``{package: {hosts_gained, added_literals, maintainer,
+    adoption_predicates}}``.  One pass over each view instead of a query per
+    package, so correlation is O(cycle).
+    """
+    names = {str(n) for n in package_names if n}
+    out = {
+        name: {"hosts_gained": [], "added_literals": [],
+               "maintainer": "", "adoption_predicates": []}
+        for name in names
+    }
+    if not names:
+        return out
+    with get_connection() as conn:
+        for row in conn.execute(
+                "SELECT package_name, host FROM gained_hosts_window"):
+            if row[0] in out:
+                out[row[0]]["hosts_gained"].append(row[1])
+        for row in conn.execute(
+                "SELECT package_name, literal FROM added_literal_hashes"):
+            if row[0] in out:
+                out[row[0]]["added_literals"].append(row[1])
+        for row in conn.execute(
+                "SELECT package_name, maintainer, predicate "
+                "FROM adoption_events ORDER BY observed_at"):
+            if row[0] in out:
+                out[row[0]]["maintainer"] = row[1]
+                if row[2] not in out[row[0]]["adoption_predicates"]:
+                    out[row[0]]["adoption_predicates"].append(row[2])
+    return out
 
 
 def get_package_profile(package_name: str) -> Optional[dict]:

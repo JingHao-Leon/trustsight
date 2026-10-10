@@ -64,7 +64,12 @@ CASES = [
     ("corpus fetch", ["corpus", "fetch", "--yes"]),
     ("ioc sources", ["ioc", "sources"]),
     ("ioc import", ["ioc", "import", "/nonexistent"]),
+    ("full-aur verify", ["full-aur", "verify", "--package", "demo"]),
     ("ioc update", ["ioc", "update"]),
+    ("ioc update", [
+        "ioc", "update", "--federation", "https://example.org/ioc",
+        "--publisher-key", "/nonexistent.pem",
+    ]),
     ("ioc list", ["ioc", "list"]),
     ("ioc export", ["ioc", "export"]),
     ("seed info", ["seed", "info"]),
@@ -135,6 +140,12 @@ def _json_commands() -> set[str]:
         for group in typer_app.registered_groups:
             sub = group.typer_instance
             label = group.name or (sub.info.name if sub else None)
+            # A group whose no-args callback declares ``--json`` (full-aur)
+            # is itself a runnable command, so it counts too.
+            callback_info = getattr(sub, "registered_callback", None)
+            callback = getattr(callback_info, "callback", None)
+            if callback and "json_output" in inspect.signature(callback).parameters:
+                found.add(" ".join(prefix + [label]))
             walk(sub, prefix + [label])
 
     walk(app, [])
