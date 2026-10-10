@@ -1096,17 +1096,33 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
             hosts=", ".join(hosts))
 
     # G6 (C024): an added/modified .install no install= declaration names.
+    # This is the "dead hook" case: either install= is entirely absent, or it
+    # names a different file, so pacman never runs the shipped hook.
     if scope_doc is not None:
         declared = post.scalars.get("install", "") if post is not None else ""
-        if not declared:
-            for file in scope_doc.files:
-                if file.path.endswith(".install") and file.status != "removed":
-                    add("C024", "Install Script Not Declared", "MEDIUM",
-                        "composition",
-                        f"{file.path} is shipped but install= does not name "
-                        "it; pacman never runs the hook",
-                        file=file.path, line=None)
-                    break
+        declared_base = declared.rsplit("/", 1)[-1] if declared else ""
+        # A variable-bearing declaration cannot be basename-compared without
+        # resolution; treat it as declaring rather than guess a mismatch.
+        if "$" in declared:
+            declared_base = ""
+        for file in scope_doc.files:
+            if not file.path.endswith(".install") or file.status == "removed":
+                continue
+            base = file.path.rsplit("/", 1)[-1]
+            if not declared:
+                add("C024", "Install Script Not Declared", "MEDIUM",
+                    "composition",
+                    f"{file.path} is shipped but install= does not name "
+                    "it; pacman never runs the hook",
+                    file=file.path, line=None)
+                break
+            if declared_base and base and base != declared_base:
+                add("C024", "Install Script Not Declared", "MEDIUM",
+                    "composition",
+                    f"{file.path} is shipped but install= names "
+                    f"{declared_base}, not it; pacman never runs this hook",
+                    file=file.path, line=None)
+                break
         # G6(a) (C027): install= names a file the diff/tree does not carry -
         # a dangling declaration, almost always benign but worth an INFO.
         # Tree knowledge is required (never guess): without the manifest the
