@@ -8,7 +8,8 @@
 
 - **Mechanism (series):** R / H / C / X / E / T / G / I / M
 - **Subject (category):** the reference page that owns it
-- **Trajectory hole (layer):** which layer the attack would otherwise pass
+- **Evidence category (layer):** which kind of evidence this finding
+  represents, and the coverage hole it closes
 - **Diversity vs redundancy:** if another layer's series covers the same
   attack, why is this a *different* mechanism rather than a redundant one?
   (If it is redundant, file it as an instance of the existing mechanism.)

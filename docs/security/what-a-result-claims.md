@@ -4,6 +4,8 @@
 
 A TrustSight result is an assertion about **evidence found in a diff**, not a statement about whether a package is safe. The distinction is the whole model, and every clause below is a limit on the claim.
 
+**Three levels of assurance, kept apart.** The security gates prove the *implementation* of the model is correct. The adversarial harness measures whether different mechanisms give *complementary coverage*. Independent (ideally blinded) evaluation would speak to *real-world performance*. TrustSight intends the first level and publishes measurements toward the second; it claims nothing about the third. A finding is labelled by the **kind of evidence** it represents - its evidence category, or layer - not by a stage an attacker passed, and the series (mechanism) and category (kind of evidence) axes are independent. [The Assurance Layers](../assurance-layers.md) and [Security](../security.md) carry the full statement.
+
 ### B1. A score is a sum of matched evidence, nothing more
 
 Determinism is algorithmic, not configurational. The same input, under the same configuration and the same shipped ruleset, always produces the same score and the same breakdown. Changing rules, thresholds or overrides changes the instrument, deliberately, visibly, and at the operator's hand. That is a different instrument, not a nondeterministic one.
