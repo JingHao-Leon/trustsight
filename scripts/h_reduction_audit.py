@@ -23,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests" / "harness"))
 
 import calibration_gates as gates  # noqa: E402
 
@@ -41,14 +42,24 @@ def cofire_row(left: str, right: str,
                benign_fired: dict[str, set[int]],
                mal_sets: dict[str, set[int]],
                mal_counts: dict[str, int],
-               epsilon: float) -> dict:
-    """The co-fire measurement for one candidate pair (pure, testable)."""
+               epsilon: float,
+               history_fired: dict[str, set[int]] | None = None) -> dict:
+    """The co-fire measurement for one candidate pair (pure, testable).
+
+    Every dimension is "the inputs a rule fired on": benign diffs, malicious
+    fixtures, and (Addendum 3) the history cycles.  A pair co-fires when both
+    sides fire on the *same* input in any dimension.
+    """
+    history_fired = history_fired or {}
     both = (
         len(benign_fired.get(left, set()) & benign_fired.get(right, set()))
         + len(mal_sets.get(left, set()) & mal_sets.get(right, set()))
+        + len(history_fired.get(left, set()) & history_fired.get(right, set()))
     )
-    a_hits = len(benign_fired.get(left, ())) + mal_counts.get(left, 0)
-    b_hits = len(benign_fired.get(right, ())) + mal_counts.get(right, 0)
+    a_hits = (len(benign_fired.get(left, ())) + mal_counts.get(left, 0)
+              + len(history_fired.get(left, ())))
+    b_hits = (len(benign_fired.get(right, ())) + mal_counts.get(right, 0)
+              + len(history_fired.get(right, ())))
     rarer = min(a_hits, b_hits)
     ratio = (both / rarer) if rarer else 0.0
     return {
@@ -94,34 +105,60 @@ def main(argv: list[str]) -> int:
     fired = _fired_sets()
     mal_counts, mal_sets = _malicious_sets()
 
+    # Addendum 3: the history cycles exercise the observation-history rules
+    # the stateless corpus cannot, so they join the co-fire measurement.
+    from history_replay import replay as _history_replay
+
+    history_rows = _history_replay()
+    history_fired: dict[str, set[int]] = {}
+    for cycle_index, row in enumerate(history_rows):
+        for rule_id in row["fired"]:
+            history_fired.setdefault(rule_id, set()).add(cycle_index)
+
     from trustsight.categories import RULE_CATEGORIES
+    from trustsight.rule_id_history import ANCHOR_RULE_IDS
 
     all_h = sorted(rid for rid in RULE_CATEGORIES if rid.startswith("H"))
     per_rule = {
         rule_id: {
             "benign": len(fired.get(rule_id, ())),
             "malicious": mal_counts.get(rule_id, 0),
+            "history": len(history_fired.get(rule_id, ())),
         }
         for rule_id in all_h
     }
 
-    cofire = [
-        cofire_row(left, right, fired, mal_sets, mal_counts, args.epsilon)
-        for left, right in CANDIDATES
-    ]
+    cofire = []
+    for left, right in CANDIDATES:
+        row = cofire_row(left, right, fired, mal_sets, mal_counts,
+                         args.epsilon, history_fired=history_fired)
+        # The epsilon is necessary but not sufficient: a merge also needs the
+        # two rules' evidence to describe the same shape.  The categories are
+        # reported so the adjudication has both inputs.
+        row["categories"] = [
+            RULE_CATEGORIES.get(left, "").value if left in RULE_CATEGORIES
+            else "",
+            RULE_CATEGORIES.get(right, "").value if right in RULE_CATEGORIES
+            else "",
+        ]
+        row["same_category"] = row["categories"][0] == row["categories"][1]
+        cofire.append(row)
 
     zero_fire = [
         rule_id for rule_id in all_h
-        if rule_id not in _META
+        if rule_id not in _META and rule_id not in ANCHOR_RULE_IDS
         and per_rule[rule_id]["benign"] == 0
         and per_rule[rule_id]["malicious"] == 0
+        and per_rule[rule_id]["history"] == 0
     ]
 
     report = {
         "epsilon": args.epsilon,
+        "history_cycles": len(history_rows),
         "candidates": cofire,
         "zero_fire": zero_fire,
-        "live_h": len(all_h),
+        "live_h": len([rid for rid in all_h if rid not in ANCHOR_RULE_IDS]),
+        "anchors": sorted(ANCHOR_RULE_IDS),
         "per_rule": per_rule,
     }
     if args.json:

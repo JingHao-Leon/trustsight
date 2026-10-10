@@ -3241,9 +3241,12 @@ def gate_h_series_reduction_residue() -> Gate:
     is measured on the locked corpus).
     """
     from trustsight.categories import RULE_CATEGORIES
+    from trustsight.rule_id_history import ANCHOR_RULE_IDS
 
     h_ids = sorted(rid for rid in RULE_CATEGORIES if rid.startswith("H"))
-    live = len(h_ids)
+    # The live count is the *emitting* rules: the retained documentation
+    # anchors are not live H logic (Addendum 3 Phase 5 Step 2).
+    live = len([rid for rid in h_ids if rid not in ANCHOR_RULE_IDS])
     low, high = H_SERIES_REDUCTION_TARGET
     if live > high:
         detail = (f"{live} live H rules; {live - high} above the target band "
