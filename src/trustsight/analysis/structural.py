@@ -17,14 +17,11 @@ from .build import (
     _build_findings,
     _build_flag_findings,
     _function_shadow_findings,
-    _indirect_expansion_findings,
-    _indirect_remote_execution_findings,
     _INTERPRETER_FETCH,
     _reconstruction_findings,
     _sudo_findings,
 )
 from ..config import NETWORK_CLIENT
-from .composition import _recon_findings
 from .delivery import (
     _delivery_findings,
     install_hook_transition,
@@ -34,10 +31,7 @@ from .delivery import (
 from .dependencies import _dependency_findings
 from .ioc import _ioc_findings
 from .network import (
-    _covert_egress_findings,
     _dlagents_override_findings,
-    _parse_time_fetch_findings,
-    _paste_egress_findings,
     _exotic_protocol_findings,
     _moved_git_ref_findings,
     _version_in_url_findings,
@@ -473,6 +467,12 @@ def _structural_findings(
     # file.  The typed parse already knows the true location; project it
     # once here rather than trust each producer to carry it.
     line_map = map_diff_lines(diff_text)
+    # Addendum 3 Phase 3: the resolved pipeline facts, computed once and
+    # shared by the edge-engine predicates dispatched below.
+    from .edges import build_context, run_edge_instances
+
+    ctx = build_context(diff_text, config or {}, current_text=current_text,
+                        tree_manifest=tree_manifest, whole_recipe=whole_recipe)
 
     def add(rule_id: str, name: str, severity: str, category: str, match: str, file: str = "PKGBUILD", line: int | None = None, span=None, **extra) -> None:
         if span is not None:
@@ -834,29 +834,31 @@ def _structural_findings(
     _dependency_findings(
         diff_text, package_name, config or {}, add, current_text=current_text,
     )
-    _build_findings(diff_text, config or {}, add, current_text=current_text)
+    _build_findings(diff_text, config or {}, add, current_text=current_text,
+                    ctx=ctx)
     _sudo_findings(diff_text, config or {}, add, current_text=current_text)
     _build_flag_findings(diff_text, config or {}, add)
     _function_shadow_findings(diff_text, config or {}, add)
     _reconstruction_findings(diff_text, config or {}, add)
     _signing_key_findings(diff_text, add)
-    _indirect_remote_execution_findings(diff_text, config or {}, add)
-    _indirect_expansion_findings(diff_text, config or {}, add)
+    run_edge_instances(ctx, add, only=frozenset({"H075"}))
+    run_edge_instances(ctx, add, only=frozenset({"H080"}))
     _delivery_findings(
         diff_text, config or {}, add, tree_manifest=tree_manifest,
-        current_text=current_text,
+        current_text=current_text, ctx=ctx,
     )
-    _persistence_findings(diff_text, config or {}, add, current_text=current_text)
-    _recon_findings(diff_text, config or {}, add, current_text=current_text)
+    _persistence_findings(diff_text, config or {}, add, current_text=current_text,
+                          ctx=ctx)
+    run_edge_instances(ctx, add, only=frozenset({"H040"}))
     _exotic_protocol_findings(diff_text, config or {}, add)
     _version_in_url_findings(diff_text, config or {}, add)
-    _parse_time_fetch_findings(diff_text, config or {}, add)
+    run_edge_instances(ctx, add, only=frozenset({"H077"}))
     _dlagents_override_findings(diff_text, config or {}, add)
-    _paste_egress_findings(diff_text, config or {}, add)
+    run_edge_instances(ctx, add, only=frozenset({"H041"}))
     # H033 asks the current file which variable feeds a git ref; the diff
     # alone shows only the hunk around the pin.
     _moved_git_ref_findings(diff_text, config or {}, add, current_text=current_text)
-    _covert_egress_findings(diff_text, config or {}, add)
+    run_edge_instances(ctx, add, only=frozenset({"H071"}))
     _epoch_findings(diff_text, config or {}, add, whole_recipe=whole_recipe)
     # H056 reads the current file where the caller has it: an indicator that
     # predates this diff is still a fact about the package being reviewed.

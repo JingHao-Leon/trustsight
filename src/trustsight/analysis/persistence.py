@@ -225,10 +225,15 @@ def _worldwritable_staging_findings(diff_text, config, add, current_text=None) -
             return
 
 
-def _hidden_drop_findings(diff_text, config, add, current_text=None) -> None:
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    heredoc_body = _heredoc_body_indices(lines)
+def edge_hidden_drop(ctx, add) -> None:
+    """H042 predicate over the shared graph context.
+
+    A hidden file dropped outside the build trees.  A file the same function
+    later executes is the payload of another rule, not a hidden drop.
+    """
+    lines = ctx.lines
+    scopes = ctx.scopes
+    heredoc_body = ctx.heredoc_body
 
     execs_by_fn: dict[str, set[str]] = {}
     for i, line in enumerate(lines):
@@ -414,11 +419,15 @@ def stand_down_committed_staging(
 # ---------------------------------------------------------------------------
 
 
-def _persistence_findings(diff_text, config, add, current_text=None) -> None:
+def _persistence_findings(diff_text, config, add, current_text=None, ctx=None) -> None:
     """Run the install-path persistence rules (H032/H038/H039/H062/H042/H076)."""
+    from .edges import build_context, run_edge_instances
+
+    if ctx is None:
+        ctx = build_context(diff_text, config, current_text=current_text)
     _systemd_unit_findings(diff_text, config, add, current_text=current_text)
     _libalpm_hook_findings(diff_text, config, add, current_text=current_text)
     _home_rc_findings(diff_text, config, add, current_text=current_text)
     _worldwritable_staging_findings(diff_text, config, add, current_text=current_text)
-    _hidden_drop_findings(diff_text, config, add, current_text=current_text)
+    run_edge_instances(ctx, add, only=frozenset({"H042"}))
     _outside_staging_findings(diff_text, config, add, current_text=current_text)

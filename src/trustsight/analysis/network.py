@@ -32,7 +32,6 @@ from ..config import (
 )
 from ..deps import _strip_comment
 from ..line_lex import lex_lines
-from ..rules import _classify_enclosing_function
 from ..tokenizer import resolve_added_lines
 from .base import iter_scheme_urls, mask_to_recipe
 from .version import any_version_scalar_moved
@@ -364,13 +363,16 @@ def _covert_endpoints(config) -> frozenset[str]:
     return frozenset(e.lower() for e in endpoints)
 
 
-def _covert_egress_findings(diff_text, config, add) -> None:
-    """.onion/.i2p hosts, DoH endpoints or tunneling clients anywhere they
-    have no packaging purpose (H071)."""
-    lines = resolve_added_lines(diff_text)
-    enclosing = _classify_enclosing_function(lines)
-    clients = _covert_clients(config)
-    endpoints = _covert_endpoints(config)
+def edge_covert_egress(ctx, add) -> None:
+    """H071 predicate over the shared graph context.
+
+    .onion/.i2p hosts, DoH endpoints or tunneling clients anywhere they have
+    no packaging purpose.
+    """
+    diff_text = ctx.diff_text
+    lines = ctx.lines
+    clients = _covert_clients(ctx.config)
+    endpoints = _covert_endpoints(ctx.config)
 
     for i, line in enumerate(lines):
         if not line.startswith("+"):
@@ -395,15 +397,16 @@ def _covert_egress_findings(diff_text, config, add) -> None:
             return
 
     for i, line in enumerate(lines):
-        if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
+        fn = ctx.scopes.direct(i)
+        if not line.startswith("+") or fn not in _SCOPE_FUNCTIONS:
             continue
         body = _strip_comment(line[1:])
         for client in clients:
             if client.search(body):
                 add("H071", "Covert Egress", "HIGH", "network",
-                    f"{enclosing[i]}() invokes a tunneling/covert client: "
+                    f"{fn}() invokes a tunneling/covert client: "
                     f"{body.strip()[:80]}",
-                    position=enclosing[i], body=body.strip()[:80])
+                    position=fn, body=body.strip()[:80])
                 return
 
 # ---------------------------------------------------------------------------
@@ -485,23 +488,16 @@ def _fetch_function_names(diff_text: str, config) -> set[str]:
     return fetchers
 
 
-def _parse_time_fetch_findings(diff_text, config, add) -> None:
-    """A network client runs when the PKGBUILD is merely *sourced* (H077).
+def edge_parse_time_fetch(ctx, add) -> None:
+    """H077 predicate over the shared graph context.
 
-    Everything outside a function body executes as soon as makepkg reads the
-    file, which happens on ``makepkg --printsrcinfo``, on an AUR helper's
-    metadata refresh and on any review that sources the recipe - before a
-    single build step, and before the checksum array has covered anything.
-    R010/R011 report a downloader inside a build function at LOW; running
-    one at parse time is a different claim, so it is a different rule.
-
-    Quiet on declarations: ``DLAGENTS=(...)`` and any other assignment whose
-    *value* names a downloader configures makepkg, it does not fetch.  An
-    assignment that *runs* one through a command substitution
-    (``_ver=$(curl ...)``) is not a declaration and is not exempt.
+    A network client runs when the PKGBUILD is merely *sourced*.  Quiet on
+    declarations; an assignment that runs a client through a command
+    substitution is not a declaration.
     """
-    lines = mask_to_recipe(resolve_added_lines(diff_text))
-    enclosing = _classify_enclosing_function(lines)
+    diff_text = ctx.diff_text
+    config = ctx.config
+    lines = mask_to_recipe(ctx.lines)
     lexed = lex_lines(lines, fragment=True)
     patterns = _parse_time_fetch_patterns(config)
     fetch_funcs = _fetch_function_names(diff_text, config)
@@ -510,8 +506,6 @@ def _parse_time_fetch_findings(diff_text, config, add) -> None:
         if not line.startswith("+") or line.startswith("+++"):
             continue
         if lexed[i].heredoc_body:
-            # A fetch spelled inside a heredoc is text the heredoc writes,
-            # not a command the recipe runs at parse time.
             continue
         body = _strip_comment(line[1:])
         stripped = body.strip()
@@ -530,7 +524,7 @@ def _parse_time_fetch_findings(diff_text, config, add) -> None:
             elif in_array and ")" in body:
                 in_array = False
             continue
-        if enclosing.get(i) is not None or _PIPE_TO_SHELL_RE.search(body):
+        if ctx.scopes.direct(i) is not None or _PIPE_TO_SHELL_RE.search(body):
             continue
         if fetch_funcs & set(_CMDSUB_CALL_RE.findall(body)):
             add("H077", "Parse-time Network Fetch", "HIGH", "network",
@@ -596,28 +590,22 @@ def _uploads_from_outside_the_tree(command: str) -> bool:
     return bool(_OUTSIDE_TREE_UPLOAD_RE.search(command))
 
 
-def _paste_egress_findings(diff_text, config, add) -> None:
-    """A build or install function *uploads* to a paste or file-drop host (H041).
+def edge_paste_egress(ctx, add) -> None:
+    """H041 predicate over the shared graph context.
 
-    The paste-host list also feeds the ``raw_hosting`` source bucket, and a
-    rule that fired on a declared `source=` URL would double-count that
-    weight.  This rule reads the other direction, which no bucket can see:
-    a request carrying a body, sent from inside a function, to a host whose
-    entire purpose is to accept an anonymous drop and hand back a link.
-
-    Direction is the distinction that makes it a separate claim.  Fetching
-    from a gist is an undeclared download, which is H016's finding; posting
-    to one is data leaving the machine that is building the package, which is
-    H043's ``exfil`` stage. On a line this rule claims, H016 yields, so one
-    upload is not scored twice.
+    A build or install function uploads to a paste or file-drop host, or
+    sends a file from outside the build tree.  H016 yields on a line this
+    rule claims.
     """
-    lines = mask_to_recipe(resolve_added_lines(diff_text))
-    enclosing = _classify_enclosing_function(lines)
+    diff_text = ctx.diff_text
+    config = ctx.config
+    lines = mask_to_recipe(ctx.lines)
     flags = _upload_flags(config)
     hosts = _paste_hosts(config)
 
     for i, line in enumerate(lines):
-        if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
+        fn = ctx.scopes.direct(i)
+        if not line.startswith("+") or fn not in _SCOPE_FUNCTIONS:
             continue
         body = _strip_comment(line[1:])
         for match in _HTTP_CLIENT_RE.finditer(body):
@@ -631,20 +619,6 @@ def _paste_egress_findings(diff_text, config, add) -> None:
                 drop_host = host in hosts or any(
                     host.endswith("." + h) for h in hosts
                 )
-                # Two auditable conditions, not one guess.  The host list
-                # is the original: a host whose entire purpose is to accept
-                # an anonymous drop.  The second is the *file*: a build
-                # sends nothing off the machine, and one that reads from
-                # outside its own tree - `/etc/passwd`, `~/.ssh/id_rsa`,
-                # `$HOME/...` - is not uploading a build artifact.
-                #
-                # `curl -F file=@report.json https://ci.example.com` stays
-                # quiet under both: a relative path inside the build tree,
-                # to a host nobody can call a drop site. That case is
-                # pinned in tests/test_gap_rules.py, and the principle it
-                # states - "defined by an auditable host list, not by a
-                # guess about what an endpoint is for" - is why this adds a
-                # second list rather than dropping the first.
                 outside = _uploads_from_outside_the_tree(command)
                 if not drop_host and not outside:
                     continue
@@ -652,12 +626,12 @@ def _paste_egress_findings(diff_text, config, add) -> None:
                         else "Upload Of A File From Outside The Build Tree")
                 where = f"a drop host ({host})" if drop_host else host
                 add("H041", name, "HIGH", "exfil",
-                    f"{enclosing[i]}() uploads to {where}: "
+                    f"{fn}() uploads to {where}: "
                     f"{command.strip()[:80]}",
                     line=_find_line(diff_text, command.strip()[:40]),
-                    position=enclosing[i], host=host,
+                    position=fn, host=host,
                     body=command.strip()[:80],
-                    detail=f"{enclosing[i]}() uploads to {where}")
+                    detail=f"{fn}() uploads to {where}")
                 return
 
 
