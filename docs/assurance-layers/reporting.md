@@ -42,20 +42,31 @@ and `coverage`.
 
 ## A worked JSON example
 
+A single-package review of a diff that was read in full, whose `source=` value
+was resolved, and which fired `R001` would carry the complete profile below.
+This one is the *truncated* variant: the diff was cut short, so every category
+that depends on reading the changed text is `incomplete` (`L8` is not applicable
+to one package). Detection and coverage move independently, which is the point
+of the shape.
+
 ```json
 "layers": {
-  "L3": {"name": "Payload signature", "detection": "fired",
-         "coverage": "complete", "status": "fired", "findings": ["R001"]},
-  "L1": {"name": "Structural coherence", "detection": "none",
-         "coverage": "incomplete", "status": "unreadable", "findings": []},
-  "L8": {"name": "Campaign correlation", "detection": "none",
-         "coverage": "not_applicable", "status": "not_exercised", "findings": []}
+  "L1": {"name": "Structural coherence", "detection": "none",  "coverage": "incomplete",     "status": "unreadable",    "findings": []},
+  "L2": {"name": "Readability",          "detection": "none",  "coverage": "incomplete",     "status": "unreadable",    "findings": []},
+  "L3": {"name": "Payload signature",    "detection": "fired", "coverage": "incomplete",     "status": "fired",         "findings": ["R001"]},
+  "L4": {"name": "Evasion shape",        "detection": "none",  "coverage": "incomplete",     "status": "unreadable",    "findings": []},
+  "L5": {"name": "Behavioral suspicion", "detection": "none",  "coverage": "incomplete",     "status": "unreadable",    "findings": []},
+  "L6": {"name": "Ecosystem memory",     "detection": "none",  "coverage": "incomplete",     "status": "unreadable",    "findings": []},
+  "L7": {"name": "Known indicators",     "detection": "none",  "coverage": "incomplete",     "status": "unreadable",    "findings": []},
+  "L8": {"name": "Campaign correlation", "detection": "none",  "coverage": "not_applicable", "status": "not_exercised", "findings": []}
 }
 ```
 
-Read it as: a payload-signature check fired; the structural-coherence check
-could not be fully assessed (so its silence is not evidence); cross-package
-correlation did not apply to this run.
+Read it as: a payload-signature check fired (that evidence is real), and at the
+same time every text-reading category is `incomplete`, so its silence is not
+evidence. The same run with the whole diff present would show `coverage:
+"complete"` on every row but `L8`, and `status: "passed"` wherever detection is
+`none`.
 
 ## The verdict sentence
 

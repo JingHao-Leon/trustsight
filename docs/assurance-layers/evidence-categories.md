@@ -24,7 +24,7 @@ that the two categories can share infrastructure.
 | L2 Readability | Was anything hidden from the reader? | W, and the refusal rules X026/X027 |
 | L3 Payload signature | Does it do a known-bad thing? | R, S |
 | L4 Evasion shape | Was it *written* to defeat reading? | X, E |
-| L5 Behavioural suspicion | Does the package's story make sense? | H |
+| L5 Behavioral suspicion | Does the package's story make sense? | H |
 | L6 Ecosystem memory | Has the ecosystem seen this before? | D, T |
 | L7 Known indicators | Is it on the list? | I |
 | L8 Campaign correlation | Do other packages tell the same story? | G |

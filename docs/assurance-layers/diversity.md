@@ -3,6 +3,8 @@
 # Part 2: How to add a useful new detector
 
 This page answers: what does a new rule have to demonstrate before it ships?
+The four labels it names are defined once in the
+[glossary](../reference/glossary.md).
 
 ## The intake checklist
 
