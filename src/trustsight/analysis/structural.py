@@ -2,11 +2,9 @@ import re
 
 from ..differ import (
     _post_diff_lines,
-    checksum_array_parity,
     checksum_array_parity_in_text,
     is_skip_justified,
     map_diff_lines,
-    source_array_grew_in_diff,
     source_array_has_command_substitution,
 )
 from .base import _url_domain
@@ -456,6 +454,7 @@ def _structural_findings(
     previous_diff: str = "",
     previous_commit: str = "",
     current_commit: str = "",
+    delta=None,
 ) -> list[dict]:
     source_buckets = source_buckets or {}
     findings: list[dict] = []
@@ -473,6 +472,15 @@ def _structural_findings(
 
     ctx = build_context(diff_text, config or {}, current_text=current_text,
                         tree_manifest=tree_manifest, whole_recipe=whole_recipe)
+    # Spec §1 / Addendum 3 Phase 1: the change-as-data object, built once and
+    # shared by the dependency, epoch and checksum rules below.
+    if delta is None:
+        from ..changes import change_delta
+
+        delta = change_delta(diff_text, package_name)
+    # Distinct name: the local ``delta`` is reused below for per-array
+    # ``ArrayDelta`` values, and the shared change object must survive that.
+    cdelta = delta
 
     def add(rule_id: str, name: str, severity: str, category: str, match: str, file: str = "PKGBUILD", line: int | None = None, span=None, **extra) -> None:
         if span is not None:
@@ -530,10 +538,11 @@ def _structural_findings(
             line=find_line_in_diff(diff_text, r"sha256sums\s*=\s*\(\s*\)"))
 
     # H091 - makepkg pairs `source=()` with each `*sums=()` by position,
-    # and no rule looked at the two lengths together. A source slipped in
-    # beside a checksum list nobody recounted scored nothing but priors.
-    parity = checksum_array_parity(diff_text)
-    if parity is None and current_text and source_array_grew_in_diff(diff_text):
+    # and no rule looked at the two lengths together. The shared ChangeDelta
+    # carries the diff-side parity (spec §1); the whole-recipe fallback stays
+    # here because the complete PKGBUILD is not part of a diff object.
+    parity = cdelta.checksum_parity
+    if parity is None and current_text and cdelta.source_array_grew:
         # The arrays are not wholly added, but the source list grew: the
         # lengths are read from the complete recipe instead of the hunk, so
         # no partially visible array is ever counted.
@@ -833,6 +842,7 @@ def _structural_findings(
     _sabotage_findings(diff_text, config or {}, add)
     _dependency_findings(
         diff_text, package_name, config or {}, add, current_text=current_text,
+        delta=cdelta,
     )
     _build_findings(diff_text, config or {}, add, current_text=current_text,
                     ctx=ctx)
@@ -859,7 +869,8 @@ def _structural_findings(
     # alone shows only the hunk around the pin.
     _moved_git_ref_findings(diff_text, config or {}, add, current_text=current_text)
     run_edge_instances(ctx, add, only=frozenset({"H071"}))
-    _epoch_findings(diff_text, config or {}, add, whole_recipe=whole_recipe)
+    _epoch_findings(diff_text, config or {}, add, whole_recipe=whole_recipe,
+                    delta=cdelta)
     # H056 reads the current file where the caller has it: an indicator that
     # predates this diff is still a fact about the package being reviewed.
     _ioc_findings(diff_text, package_name, config or {}, add,
