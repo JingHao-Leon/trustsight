@@ -69,7 +69,35 @@ def test_unread_execution_predicate_reports_w001_in_build_scope():
     assert "W001" in _ids("build() {\n  ./x.sh\n}\n")
 
 
-def test_run_edge_instances_is_scoped_by_rule():
+def test_every_registered_emitter_is_dispatched():
+    """No migration may leave a registered predicate silently unreachable."""
+    from trustsight import categories
+    from trustsight.analysis import edges
+
+    for instance in EDGE_INSTANCES:
+        assert instance.rule_id in categories.RULE_CATEGORIES, instance.rule_id
+
+    called: list[str] = []
+
+    def spy(ctx, add):
+        called.append("spy")
+
+    seen_diff = _diff("package() {\n  ./x.sh\n}\n")
+    original = edges.EDGE_INSTANCES
+    edges.EDGE_INSTANCES = tuple(
+        edges.EdgeInstance("H094", "spy", "unread", None, None, (), "HIGH",
+                           "docs/reference/rules/fetch-and-execution.md",
+                           ("tests/test_edges.py",), spy)
+        for _ in range(3)
+    )
+    try:
+        edges.run_edge_instances(build_context(seen_diff, {}), lambda *a, **k: None)
+    finally:
+        edges.EDGE_INSTANCES = original
+    assert called == ["spy", "spy", "spy"]
+
+
+def test_run_edge_instances_honours_only():
     ctx = build_context(_diff("package() {\n  ./x.sh\n}\n"), {})
     seen: list[str] = []
 
@@ -78,3 +106,14 @@ def test_run_edge_instances_is_scoped_by_rule():
 
     run_edge_instances(ctx, add, only=frozenset({"H094"}))
     assert seen == ["H094"]
+
+
+def test_run_edge_instances_does_not_double_dispatch():
+    ctx = build_context(_diff("package() {\n  ./x.sh\n}\n"), {})
+    seen: list[str] = []
+
+    def add(rule_id, *_args, **_kwargs):
+        seen.append(rule_id)
+
+    run_edge_instances(ctx, add)
+    assert len(seen) == len(set(seen))
