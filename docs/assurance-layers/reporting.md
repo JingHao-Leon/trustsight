@@ -30,6 +30,11 @@ was also unread, and an unread category must not hide a finding.
 | L1-L4 | any | incomplete | A `source=` value is computed dynamically or the diff was truncated, so the category was not fully assessed. |
 | L8 Campaign correlation | none | not_applicable | A single-package review has no cross-package input; the check did not run. |
 
+`L8` is `not_applicable` only in a single-package review. In a corpus
+correlation cycle (`full-aur`), where the collective G-series pass runs, the
+layer is marked exercised and reports `complete`; an `L8` finding in a report
+also proves the pass ran.
+
 For one release the object also carries a derived `status`
 (`fired`/`passed`/`unreadable`/`not_exercised`) that collapses the two
 dimensions for back-compat consumers; new consumers should read `detection`

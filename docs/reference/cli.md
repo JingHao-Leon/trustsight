@@ -328,6 +328,7 @@ trustsight status [--json]
 | Seed observations | Bootstrap count from the novelty seed, or 0 if not imported. |
 | Dependency corpus | Whether the dependency observation table has been populated. |
 | Rule patterns | Whether shipped rule patterns match the installed `rules.toml`. Shows "Up to date" or "N stale". |
+| Ruleset age | A one-time `config sync-rules` suggestion when the installed `rules.toml` is more than one shipped generation behind (its `ruleset-version` marker). Shown at most once per generation, suppressed when a drift/missing note already prompts. The JSON body carries `ruleset_age_drift`. |
 
 ---
 
@@ -372,6 +373,12 @@ update, or skip.
 Adding is always safe and happens by default. Replacing is not, which is why it
 is opt-in and limited to rules you demonstrably have not customised.
 `trustsight lint-rules` reports both conditions.
+
+`sync-rules` stamps the current shipped generation into `rules.toml` as a
+`ruleset-version` marker. `trustsight status` reads that marker to decide
+whether the installed ruleset is a generation behind and surfaces the one-time
+age-drift suggestion above; a file the operator has never synced reads as
+stale, not current.
 
 ### Config file location
 

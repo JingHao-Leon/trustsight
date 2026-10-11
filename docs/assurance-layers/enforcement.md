@@ -48,12 +48,17 @@ which evidence categories fire on each attempt. For each attempt it records
 campaign up into:
 
 - **minimum layer-cut**: the exact smallest set of fired categories that covers
-  every caught attempt (enumerated, not approximated). A fully-bypassed attempt
-  (nothing fired) is uncuttable and is reported separately as a bypass.
+  every caught attempt (enumerated, not approximated; `exact_minimum_cut` is
+  the same function under its explicit name). A fully-bypassed attempt
+  (nothing fired) is uncuttable and is reported separately as a bypass
+  (`layers_fully_bypassed` is the count).
 - **single-layer-failure**: for each category, how many caught attempts fire
   *only* in that category - disable it and they pass. This is the empirical
   "does one layer's failure reopen a path" number.
-- **bypasses**: attempts that fired nothing.
+- **resilience distribution**: the histogram of how many distinct categories
+  caught each caught attempt. A campaign whose mass sits at `1` is one
+  regression from a bypass regardless of its minimum cut.
+- **bypasses**: attempts that fired nothing (`fully_bypassed`).
 
 An earlier version of this metric inferred a traversal path, which made every
 path contain L1 and the minimum cut structurally one. It is now a projection
@@ -65,15 +70,18 @@ The harness's own gates are unchanged: it never executes package code (a
 ## What is published, and what is not
 
 The harness's CLI now prints a `layer_resilience` summary for every campaign:
-attempts, bypasses, the exact minimum layer-cut, and the single-layer-failure
-counts. Those numbers are per campaign and depend on the attack set; they are
-the raw material for a published diversity claim.
+attempts, outcome counts, bypasses, the exact minimum layer-cut, the
+single-layer-failure counts, the resilience distribution, and the campaign's
+declared attack-set **limitations** (`limitations` in the record). Those
+numbers are per campaign and depend on the attack set; the limitations travel
+beside them so a rate is never read as a whole-corpus claim.
 
-What is **not** on this page is a rolled-up result across campaigns with the
-attack-set limitations spelled out. Until that exists, treat the
-"complementary coverage" claim as a hypothesis the harness is built to test,
-not an established property - and note the third level, real-world
-performance, is external evaluation this project does not claim.
+What is **not** on this page is a single rolled-up figure across every
+campaign. A cross-campaign published number would have to state its combined
+attack-set limitations; until that exists, treat the "complementary coverage"
+claim as a hypothesis the harness is built to test, not an established
+property - and note the third level, real-world performance, is external
+evaluation this project does not claim.
 
 ## See Also
 

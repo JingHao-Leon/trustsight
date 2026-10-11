@@ -212,6 +212,23 @@ def test_every_public_api_name_is_documented():
     assert undocumented == [], f"undocumented API names: {undocumented}"
 
 
+def test_every_public_api_method_is_documented():
+    """`api.__all__` is the top-level surface; the `TrustSight` methods are
+    the other half. A method nobody documented is one nobody meant to
+    promise (`verify_build` shipped undocumented)."""
+    import inspect
+
+    from trustsight.api import TrustSight
+
+    md = API_MD.read_text()
+    public = [n for n, _ in inspect.getmembers(TrustSight, callable)
+              if not n.startswith("_")]
+    undocumented = sorted(
+        n for n in public if f"`{n}(" not in md and f"`{n}`" not in md
+    )
+    assert undocumented == [], f"undocumented TrustSight methods: {undocumented}"
+
+
 def test_the_package_root_reexports_exactly_the_api_surface():
     """`from trustsight import X` must mean the same X as `trustsight.api.X`."""
     import trustsight
