@@ -87,6 +87,22 @@ def test_added_dependencies_carry_the_normalised_view():
     assert delta.added_dependencies["optdepends"] == ("libbaz",)
 
 
+def test_added_dependencies_match_the_extractor_over_the_corpus():
+    """The delta's normalised view must be the extractor's exact answer, so
+    the dependency rules read the same facts after the migration."""
+    from trustsight.deps import extract_dependency_changes
+
+    for path in _sample_corpus():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for pkgbase in ("", "demo"):
+            delta = change_delta(text, pkgbase)
+            ref = extract_dependency_changes(text, pkgbase)
+            assert dict(delta.added_dependencies) == {
+                f: tuple(sorted(ref.get(f, ())))
+                for f in delta.added_dependencies
+            }, (path.name, pkgbase)
+
+
 def test_relational_arrays_are_deltas():
     text = (
         "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
