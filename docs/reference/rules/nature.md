@@ -1,8 +1,8 @@
-<!-- description: How each rule series detects: the mechanism behind R, H, C, D, S, X, P and W rules, and what that means for tuning and interpretation. -->
+<!-- description: How each rule series detects: the mechanism behind R, H, C, D, S, X, T, G, E, I, M, A, P and W rules, and what that means for tuning and interpretation. -->
 
 # Rule Nature
 
-Every rule in TrustSight belongs to a **series** (R, H, C, D, S, X, P, or W) that determines *how* it detects, not *what* it detects. The series is the mechanism; the [category](index.md) is the subject. A rule can be `category = "integrity"` and still be an R-series regex, an H-series heuristic, or a C-series structural check.
+Every rule in TrustSight belongs to a **series** (R, H, C, D, S, X, T, G, E, I, M, A, P, or W) that determines *how* it detects, not *what* it detects. The series is the mechanism; the [category](index.md) is the subject. A rule can be `category = "integrity"` and still be an R-series regex, an H-series heuristic, or a C-series structural check.
 
 Understanding the nature of a rule tells you what you can tune, what you cannot, and what the finding means.
 
@@ -60,7 +60,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## C-series: **Check** Structural Invariants
 
-**Count:** 28 rules (C001-C030)
+**Count:** 30 rules (C001-C030)
 
 **Mechanism:** Deterministic structural checks across the PKGBUILD. C-series rules enforce invariants that cannot be expressed as a single regex match: two conditions must hold simultaneously, or a relationship between fields must be consistent. Unlike H-series (which reasons about behavioral suspicion), C-series checks are purely mechanical: if condition A and condition B co-occur, the invariant is violated.
 
@@ -128,7 +128,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## X-series: **Crossfire** Evasion Detection
 
-**Count:** 31 rules (X001-X032)
+**Count:** 32 rules (X001-X032)
 
 **Mechanism:** Detects evasion techniques, not the payloads they hide. X-series rules fire on *how* a thing was written rather than *what* it does. The tokenizer could not resolve the command, so the evasion technique itself is the signal.
 
@@ -175,7 +175,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## W-series: **Warning** Analysis Boundaries
 
-**Count:** 7 rules (W001-W008)
+**Count:** 8 rules (W001-W008)
 
 **Mechanism:** Reports what the analysis *could not read*. W-series findings mark visibility boundaries in the analysis: a package will run code the examination did not cover, and silence about that would be dishonest. They **warn** the reviewer where the analysis stopped.
 
@@ -192,6 +192,139 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 **Example:** W001 reports "a script invoked from inside the source tree was not read." W002 reports "npm install resolving dependencies from a registry." Neither changes the score; both tell the reviewer where the analysis stopped.
 
 **When it fires:** When the analysis encounters a boundary it cannot cross. Always shown, never scored.
+
+## T-series: **Temporal** Observation History
+
+**Count:** 3 rules (T001-T003; 16 further history-backed rules still carry H ids)
+
+**Mechanism:** Predicates over the observation database - the history of the package, its maintainers, its signing keys and its rates. The input is stored history, not the diff, which is what makes T a distinct kind from H: fire rates depend on how much history exists, cold-start semantics are special, and reproducibility requires a pinned DB fixture. The observation-database H rules (H020, H021, H022, H026, H037, H044, H045, H046, H058, H060, H073, H074, H086, H088) are T-natured and keep their H ids for citation stability; new history-backed rules take T ids.
+
+**What you can tune:**
+
+- `severity` and `weight`: adjust via `config.toml` overrides
+- Per-instance thresholds under `[thresholds]` (`t_key.min_observations`, `t_dom.window_days`, ...)
+
+**What you cannot tune:**
+
+- The history reads (they are the instrument)
+- The cold-start abstention contract: insufficient history is a decline, not a guess
+- The rule ID
+
+**Example:** T001 fires when an added `validpgpkeys` fingerprint has never been observed in the ecosystem key ledger. T003 fires when a key is removed and a different one added in one diff - the xz shape - and needs no history, so it fires cold.
+
+**Cold start.** A fresh index has no baseline, so T rules **decline silently** rather than flag every key and domain a new install sees; the abstention is named as a weight-0 boundary, never read as a clean result.
+
+**When it fires:** When the stored history makes the change anomalous, or a ledger entry is novel. Never on a diff alone.
+
+## G-series: **Correlation** Cross-Package Joins
+
+**Count:** 3 rules (G001-G003)
+
+**Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N.
+
+**What you can tune:**
+
+- Per-rule thresholds: `g_host.min_packages`, `g_blob.min_length`/`min_packages`, `g_adopt.min_members`, and the cycle window
+
+**What you cannot tune:**
+
+- The join logic and the member-list rendering
+- Where it runs: cycle end only, never per package
+- The rule ID
+
+**Example:** G001 fires when the same gained canonical host appears in at least `g_host.min_packages` (default 5) unrelated packages within the window - atomic-arch's signature: a new CDN is plausible once and damning five times.
+
+**Not per package.** A single `review`/`inspect` cannot supply the input, so G runs only in the full-AUR sweep; the layer profile shows L8 as "not exercised" outside a correlation cycle. The shared literal's content is never printed - only its class and the members.
+
+**When it fires:** At cycle end, when a host, literal or adopter is shared by enough packages in the window.
+
+## E-series: **Entropy** Distribution Statistics
+
+**Count:** 3 rules (E001-E003)
+
+**Mechanism:** Distribution analysis of the added content - no patterns, no refusal semantics. E is the statistical twin of X: an attacker who writes *resolvable-but-obfuscated* code defeats X's refusal coupling, but a distribution does not care *why* the content is strange. Both live at L4 by design; the diversity is the point.
+
+**What you can tune:**
+
+- Thresholds under `[thresholds] e001/e002/e003` - **which ship empty**
+
+**What you cannot tune:**
+
+- That the series is suspicion, never a verdict: an E finding never reaches FATAL
+- The rule ID
+
+**Example:** E002 fires when the fraction of added tokens that are base64/base32/hex runs exceeds `e002.min_fraction`. E003 fires when the entropy of newly assigned names falls outside the configured band, checked both as unigram and bigram entropy.
+
+**Calibration.** Every E threshold ships **empty**, so the series is silent until an operator or the calibration job sets it from the first corpus measurement (`scripts/entropy_calibrate.py` prints conservative percentile floors). The benign fire rate is the published number; the tool never rewrites the shipped defaults.
+
+**When it fires:** When the added content's distribution crosses a configured threshold. Silent until one is set.
+
+## I-series: **Indicator** Signed External Data
+
+**Count:** 1 rule (H056, an H id under the indicator mechanism; new matches take `I` ids)
+
+**Mechanism:** Membership in **signed external data** - the shipped/imported `iocs.toml` baseline, or a federated publisher's signed indicator set. The answer is exact equality against a list TrustSight did not invent; there is no heuristic and no pattern shape, only "is this surface on the list". H056 and the IOC federation are the same mechanism, so H056 is filed here with its id unchanged.
+
+**What you can tune:**
+
+- Which signed baselines are imported and their cadence (`ioc update`, `ioc update --federation`)
+- `severity` by confidence tier via `config.toml` (a `confirmed` entry is FATAL and cannot be suppressed)
+
+**What you cannot tune:**
+
+- That a match is **outside the heuristic score** and reported at maximum alert priority
+- The list's contents: TrustSight consumes signed output and never decides what belongs on it
+- The rule ID
+
+**Example:** H056 fires when a declared surface (package name, a dependency name, a URL host, a digest, or an added/`install=` file) exactly matches an entry in a signed baseline. Matching is exact - case, trailing root dot, IDNA spelling and quotes are normalised; subdomains are never stripped and names are never stemmed.
+
+**Empty by default.** A fresh install ships an empty list, so a miss is uninformative until the operator imports a signed set; a stale or unsigned baseline is refused, never merged.
+
+**When it fires:** On an exact indicator match, at maximum alert priority, outside the score.
+
+## M-series: **Meta** Confluence Of Findings
+
+**Count:** 3 rules (M001-M003; M004 is a tool-health check, never a package finding)
+
+**Mechanism:** Predicates over the finding set itself. Every other series reads the recipe; M reads the *findings* - a declared practice contradicted by structure, or a composition of weak signals that is only visible from the whole profile. Its input is the finding multiset **after** the ownership resolver, so two rules that matched the same line have already collapsed to one owner.
+
+**What you can tune:**
+
+- `[thresholds] m002.min_layers` (the layer-span count) and the per-layer ceiling
+
+**What you cannot tune:**
+
+- The constitutional rule: **M never lowers a score; it only escalates**
+- The cluster-rate gate: every M rule's benign fire rate must stay at or below its members' before its threshold ships
+- The rule ID
+
+**Example:** M001 fires when the recipe declares a practice and a structural finding contradicts it in the same run - checksums declared (P001) while H091 reports the arrays do not cover every source. M002 fires when three or more layers fired, none above the alert bar, and raises the reported band one step (never adding points).
+
+**Fires at its inputs' layer.** M owns no static layer: it records which inputs composed and is labelled by them. M002/M003 are weight 0 but escalate the band one step, gated by `M escalation stays below the benign cap`.
+
+**When it fires:** After the ownership resolver, when a contradiction or a weak-signal composition is present.
+
+## A-series: **Artifact** Built-Package Inspection
+
+**Count:** 8 rules (A001-A008)
+
+**Mechanism:** Inspects the built `pkg.tar.zst` manifest - file list, modes, types and the `.INSTALL` payload - not the diff. A is the optional **L9 build lane**: mechanically distinct from every text-analysis series, off by default, run only inside the project's rootless, networkless container, and never blended into the static score. Nothing in the built package's code is executed; the container runs `makepkg`, nothing else.
+
+**What you can tune:**
+
+- Enablement only: `[verify] enabled` (default **false**)
+
+**What you cannot tune:**
+
+- That L9 evidence is never folded into the L1-L8 score
+- The failure semantics: a failed/timed-out/capped build is `l9_unavailable` (weight 0), never "malicious" or "clean"
+- The rule ID
+
+**Example:** A001 fires for a setuid/setgid file the recipe cannot justify; A008 for an eBPF object or loader shipped in the package (the Atomic Arch rootkit's artifact shape).
+
+**Disagreement stays visible.** When L9 contradicts L1-L8, both profiles render in full and the verdict carries an explicit `l9_divergence` notice; L9 never edits, suppresses or reweights static findings. Reproducibility comparison is a v1.1 query over recorded artifact hashes.
+
+**When it fires:** Only in the optional L9 lane, when the built artifact does not match the recipe's declared surface.
 
 ## Known fuzzy edges
 

@@ -24,6 +24,8 @@ This is a reference page. For how weight and scope work, see
 - One firing covers the whole cluster, so the alert count is the campaign
   count.
 
+---
+
 <!-- generated: page-index -->
 ## Rules on this page
 
@@ -36,28 +38,27 @@ This is a reference page. For how weight and scope work, see
 
 ### G001: Shared Gained Host {#g001}
 
-**HIGH** (weight 25) · category `correlation`
+- **Target:** programmatic (cycle records)
+- **Severity:** HIGH (weight 25)
+- **Category:** `correlation`
+- **Condition:** The same gained canonical host appears in `[thresholds] g_host.min_packages` (default 5) distinct packages within the cycle window.
 
-Fires when the same gained canonical host appears in `[thresholds]
-g_host.min_packages` (default 5) distinct packages within the cycle window.
 atomic-arch's signature: a new CDN added by many unrelated packages at once.
 
 ### G002: Shared Added Literal {#g002}
 
-**HIGH** (weight 25) · category `correlation`
+- **Target:** programmatic (cycle records)
+- **Severity:** HIGH (weight 25)
+- **Category:** `correlation`
+- **Condition:** An identical added literal above `[thresholds] g_blob.min_length` (default 256) characters appears in `g_blob.min_packages` (default 2) unrelated packages in the window.
 
-Fires when an identical added literal above `[thresholds]
-g_blob.min_length` (default 256) characters appears in `g_blob.min_packages`
-(default 2) unrelated packages in the window. The literal's content is
-never printed - only its length and the members.
+The literal's content is never printed - only its length and the members.
 
 ### G003: Coordinated Adoption {#g003}
 
-**MEDIUM** (weight 15) · category `correlation`
+- **Target:** programmatic (cycle records)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `correlation`
+- **Condition:** One maintainer key adopts at least `[thresholds] g_adopt.min_members` (default 3) packages in the window.
 
-Fires when one maintainer key adopts at least `[thresholds]
-g_adopt.min_members` (default 3) packages in the window. Adoption is the
-temporal engine's own predicate - H044 (ownership transition) or H086
-(orphan-to-maintained) - recorded per package, not a bare maintainer-change.
-The finding's `predicates` names which T instance the group joined on; H074
-(mass adoption) is the cross-package aggregation this rule performs.
+Adoption is the temporal engine's own predicate - H044 (ownership transition) or H086 (orphan-to-maintained) - recorded per package, not a bare maintainer-change. The finding's `predicates` names which T instance the group joined on; H074 (mass adoption) is the cross-package aggregation this rule performs.

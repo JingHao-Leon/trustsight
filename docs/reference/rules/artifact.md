@@ -23,6 +23,8 @@ This is a reference page. For how weight and scope work, see
 - Disagreement between L9 and L1-L8 renders both profiles in full and
   carries an explicit `l9_divergence` notice.
 
+---
+
 <!-- generated: page-index -->
 ## Rules on this page
 
@@ -40,58 +42,62 @@ This is a reference page. For how weight and scope work, see
 
 ### A001: Setuid File In Artifact {#a001}
 
-**HIGH** - category `artifact`
+- **Target:** programmatic (built package manifest)
+- **Severity:** HIGH
+- **Category:** `artifact`
+- **Condition:** A setuid/setgid file the recipe cannot justify (justification is a documented mode intent).
 
-Fires for a setuid/setgid file the recipe cannot justify (justification is
-a documented mode intent). The conservative default fires and the reviewer
-decides.
+The conservative default fires and the reviewer decides.
 
 ### A002: Undeclared Unit In Artifact {#a002}
 
-**MEDIUM** - category `artifact`
-
-Fires for a systemd unit, timer or tmpfiles entry the recipe's declared
-surface does not explain.
+- **Target:** programmatic (built package manifest)
+- **Severity:** MEDIUM
+- **Category:** `artifact`
+- **Condition:** A systemd unit, timer or tmpfiles entry the recipe's declared surface does not explain.
 
 ### A003: Library Outside Depends {#a003}
 
-**MEDIUM** - category `artifact`
-
-Fires for a linked shared library of a shipped binary outside the declared
-`depends` closure.
+- **Target:** programmatic (built package manifest)
+- **Severity:** MEDIUM
+- **Category:** `artifact`
+- **Condition:** A linked shared library of a shipped binary outside the declared `depends` closure.
 
 ### A004: Install Hook Diverges From Declaration {#a004}
 
-**HIGH** - category `artifact`
-
-Fires when the built `.INSTALL` script's effective behavior differs from the
-recipe's `install=` file - a tampered or regenerated hook.
+- **Target:** programmatic (built package manifest)
+- **Severity:** HIGH
+- **Category:** `artifact`
+- **Condition:** The built `.INSTALL` script's effective behavior differs from the recipe's `install=` file - a tampered or regenerated hook.
 
 ### A005: Unusual Artifact Mode {#a005}
 
-**INFO** - category `artifact`
+- **Target:** programmatic (built package manifest)
+- **Severity:** INFO
+- **Category:** `artifact`
+- **Condition:** World-writable files or executables in unusual paths.
 
-Fires for world-writable files or executables in unusual paths. The L1
-C018 rule's artifact twin.
+The L1 C018 rule's artifact twin.
 
 ### A006: File Capabilities In Artifact {#a006}
 
-**HIGH** - category `artifact`
-
-Fires for a file carrying Linux file capabilities (e.g. `cap_setuid`,
-`cap_sys_admin`), which grant privilege without the setuid bit.
+- **Target:** programmatic (built package manifest)
+- **Severity:** HIGH
+- **Category:** `artifact`
+- **Condition:** A file carrying Linux file capabilities (e.g. `cap_setuid`, `cap_sys_admin`), which grant privilege without the setuid bit.
 
 ### A007: Privileged Surface In Artifact {#a007}
 
-**MEDIUM** - category `artifact`
-
-Fires for a file in a privilege/persistence surface the recipe does not
-declare: polkit rules, sudoers, PAM config, modprobe/modules-load, or a
-kernel module (`.ko`).
+- **Target:** programmatic (built package manifest)
+- **Severity:** MEDIUM
+- **Category:** `artifact`
+- **Condition:** A file in a privilege/persistence surface the recipe does not declare: polkit rules, sudoers, PAM config, modprobe/modules-load, or a kernel module (`.ko`).
 
 ### A008: eBPF Artifact In Package {#a008}
 
-**HIGH** - category `artifact`
+- **Target:** programmatic (built package manifest)
+- **Severity:** HIGH
+- **Category:** `artifact`
+- **Condition:** An eBPF object or loader shipped in the package - the Atomic Arch rootkit's artifact shape.
 
-Fires for an eBPF object or loader shipped in the package - the Atomic Arch
-rootkit's artifact shape. Inspection only; nothing is loaded or executed.
+Inspection only; nothing is loaded or executed.
