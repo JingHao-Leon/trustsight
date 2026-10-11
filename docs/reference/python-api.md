@@ -149,6 +149,10 @@ The effective configuration: defaults merged with the user's file.
 
 Database and corpus health. What `trustsight status` reports, plus the config directory, database path and fingerprint.
 
+### `close()`
+
+Release the instance's database connection. `TrustSight` is also a context manager, so `with TrustSight() as ts:` closes it on exit.
+
 ---
 
 ## Analysis
@@ -184,6 +188,10 @@ Analyse a unified diff directly, with no git and no network. The analyzer's real
 ```python
 report = ts.analyze_diff(pathlib.Path("change.diff").read_text())
 ```
+
+### `verify_build(package, *, diff_text="", manifest=None, declared=None, static_clean=None) -> dict`
+
+The optional **L9 build lane**, off by default (`[verify] enabled = false`). With the lane disabled or the container unavailable it returns `{"status": "l9_unavailable", ...}` - a weight-0 boundary that never reads as clean or malicious. Given a `manifest` it inspects the built artifact (A001-A008) without executing anything (the build that produced the manifest runs outside the static core) and returns `{"status": "l9_analyzed", "findings": [...]}`. Pass `static_clean` (the L1-L8 outcome) to set `l9_divergence: true` when the two disagree; both profiles render and L9 never edits the static verdict. See [Artifact](rules/artifact.md).
 
 ### `review(*, packages=None, limit=0, repos=None, foreign=False, all_repos=False, all_packages=False, on_progress=None, on_warning=None, depth=None, deps=False, record=False) -> ReviewResult`
 
@@ -328,6 +336,15 @@ The analysis of one package.
 | `version_comparison` | `str` | How the installed version relates to the AUR `pkgver`, or `""` if nothing compared them. |
 | `adapter` | `str` | `git`, `corpus`, or `diff`. |
 | `config_fingerprint` | `str` | Which instrument produced this. |
+| `scan_truncated` | `bool` | More lines than `rules.MAX_SCANNED_LINES`; the tail was not matched. Separate from `diff_truncated` because the caps are separate. |
+| `comparison_base` | `str` | The saved state the diff was taken against (`recorded`, `none`, ...), carried on the fact path as well as the review-row path (a B11 surface-parity fix). |
+| `indicators` | `tuple[IocMatch, ...]` | The indicator tier, mirroring `ioc_matches` as a first-class surface. Outside the heuristic score, at maximum alert priority. |
+| `change` | `dict` | The typed change-as-data view (`ChangeDelta.to_dict()`); the same object the prose summary renders. See the [report schema](report-schema.md). |
+| `unresolved_assignments` | `tuple[dict, ...]` | Every assignment the tokenizer refused, as `{name, line, file}`. Non-empty forbids `fully_vetted`. |
+| `partial_files` | `tuple[str, ...]` | `.install` files whose diff showed only part of the file, behind a `partial_file_analysis` gap. |
+| `resolution_coverage` | `dict` | How much of the diff the tokenizer resolved, which resolved-target R-rules fired, and the `x026_pointer` when refusals left one silent. |
+| `layers` | `dict` | The assurance-layer profile (`L1`-`L8`), a projection of `findings`; each `{name, detection, coverage, status, findings}`. See the [report schema](report-schema.md). |
+| `boundaries` | `tuple[AnalysisBoundary, ...]` | The unified analysis boundaries: one per coverage gap and one per W-rendering, each `{kind, gap, w_rule, detail, forbids_clean}`. |
 
 Derived properties: `flagged` (score above the 20-point threshold), `fully_vetted` (no coverage gaps), `comparable_versions` (`False` for a VCS package, whose AUR `pkgver` is a build-time placeholder), `coverage_note` (the caveat prefixed to the verdict).
 

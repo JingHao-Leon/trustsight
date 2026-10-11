@@ -412,6 +412,21 @@ own project's names from firing a scope-expansion rule.
 | `h074.window_days` | H074 | `14` | How recent the modification must be after an adoption. |
 | `h098.min_signals` | H098 | `2` | Distinct naming/deception signals a package's findings must carry before the cluster is scored. One signal can be a coincidence; two is a method. |
 | `longitudinal.stability_floor` | Class C | `10` | Consecutive observations a property must hold before a change is reported at all. |
+| `t_key.min_observations` | T001 | `1` | Ecosystem signing keys recorded before T001 judges a new `validpgpkeys` fingerprint novel; below the floor the rule declines silently. |
+| `t_dom.min_observations` / `t_dom.window_days` | T002 | `1` / `30` | Domains recorded before T002 judges a maintainer domain novel, and the observation window that counts as "new". |
+| `e001.max_ratio` | E001 | *empty* | gzip ratio below which added lines read as repetitive/padded. Ships empty: silent until the calibration job or an operator sets it. |
+| `e002.min_fraction` / `e002.min_length` | E002 | *empty* / `64` | Fraction of added tokens that must be base64/base32/hex runs, and the run-length floor. |
+| `e003.min_entropy` / `e003.max_entropy` / `e003.min_bigram` / `e003.max_bigram` | E003 | *empty* | Unigram and bigram entropy band for newly assigned variable/function names; generated names sit low, packed names high. |
+| `g_host.min_packages` | G001 | `5` | Distinct packages that must add the same canonical host within the cycle window. |
+| `g_blob.min_length` / `g_blob.min_packages` | G002 | `256` / `2` | Length floor for a shared added literal and the number of unrelated packages that must carry it. |
+| `g_adopt.min_members` | G003 | `3` | Packages one maintainer key must adopt within the window for a coordinated-adoption finding. |
+| `m002.min_layers` | M002 | `3` | Distinct evidence categories that must fire (none above the alert bar) before M002 escalates the reported band one step. |
+
+The E-series thresholds (`e001`/`e002`/`e003`) ship **empty** by design: the
+series is silent until a threshold is set from the first corpus measurement
+(`scripts/entropy_calibrate.py` prints conservative floors in the calibration
+CI job). The T/G/M keys are not written to the shipped `thresholds.toml`, but
+are honoured if you add them; their code defaults are the table above.
 
 ### `iocs.toml`
 
