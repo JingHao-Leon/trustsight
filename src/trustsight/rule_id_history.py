@@ -39,16 +39,24 @@ ANCHOR_RULE_IDS: frozenset[str] = frozenset({
 })
 
 #: Addendum 3's intake freeze: the H ids that exist as of the reduction plan.
-#: A PR that adds a new ``H`` id while the live count is above the target
-#: fails CI (``tests/test_h_reduction.py``).  The set only ever shrinks: a
+#: A PR that adds a new ``H`` id fails CI (the ``H-series intake is frozen``
+#: gate and ``tests/test_h_reduction.py``).  The set only ever shrinks: a
 #: retired id moves to :data:`RETIRED_RULE_IDS` and stays out of the freeze
 #: so its former id is never reused for a new rule.
 FROZEN_H_IDS = frozenset(f"H{n:03d}" for n in range(1, 104))
 
 #: Retired H ids, mapped to the survivor that now carries their detection
-#: (Addendum 3, Phase 5).  Empty today: the overlap audit (co-fire matrix on
-#: the locked corpus + malicious fixtures) has not been measured, so no id is
-#: retired by fiat.  The mechanism ships now so the mergers are a data change.
+#: (Addendum 3, Phase 5).  **Empty on purpose**: the overlap audit has been
+#: measured (co-fire matrix over the locked corpus, malicious fixtures and the
+#: history cycles), and every ratio candidate refutes on evidence shape -
+#: H026 is a strict subset of H044, and H053/H059 describe different
+#: mismatches (host vs repo path).  The other pairs are distinct.  The
+#: zero-fire ledger is not a retirement licence either: it includes
+#: high-value detection that simply has no fixture (H089/H090/H093/H094,
+#: H083/H084/H085, the whole temporal and correlation family), so retiring
+#: from it would delete detections the security model does not license
+#: removing.  The mechanism ships ready; the map is a data change that no
+#: evidence currently supports.
 #:
 #: A retired id stays readable as an alias of its survivor: ``config.toml``
 #: overrides keyed to the old id keep working, the reference page becomes a

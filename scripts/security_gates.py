@@ -3202,43 +3202,53 @@ def gate_critical_paths_are_synchronised() -> Gate:
 # ---------------------------------------------------------------------------
 
 
-#: The live H-series count at the intake freeze (Addendum 3 Phase 0).
-H_SERIES_LIVE_CEILING = 103
+#: The live H-series count at the intake freeze (Addendum 3 Phase 0).  Derived
+#: from the frozen id set minus the retained anchors, so the ceiling and the
+#: set cannot drift: a new H id past the freeze is caught by the intake gate,
+#: and the residue gate fails if the live count moves above this.
+def _h_series_live_ceiling() -> int:
+    from trustsight.rule_id_history import ANCHOR_RULE_IDS, FROZEN_H_IDS
+
+    return len(FROZEN_H_IDS) - len(ANCHOR_RULE_IDS)
 
 
 def gate_h_series_intake_is_frozen() -> Gate:
-    """No new H IDs while the live count is above the reduction target.
+    """No new H id beyond the frozen set.
 
-    The H series is a junk drawer by exclusion (98+ IDs), and new
-    detections must be instances of an existing family or filed in another
-    series until the reduction target (55-65) is reached.  A PR that adds
-    an H ID fails here with a pointer to the family tables.
+    The H series is a junk drawer by exclusion, and new detections must be
+    instances of an existing family or filed in another series until the
+    reduction target is reached.  The frozen set is the authority (not a
+    count), so a PR that adds an H id fails here with a pointer to the
+    family tables.
     """
     from trustsight.categories import RULE_CATEGORIES
+    from trustsight.rule_id_history import FROZEN_H_IDS
 
     h_ids = sorted(rid for rid in RULE_CATEGORIES if rid.startswith("H"))
+    new = sorted(set(h_ids) - FROZEN_H_IDS)
     problems = []
-    if len(h_ids) > H_SERIES_LIVE_CEILING:
+    if new:
         problems.append(
-            f"a new H ID arrived above the reduction target "
-            f"({len(h_ids)} > {H_SERIES_LIVE_CEILING}, newest {h_ids[-1]}); "
-            "file it as an instance of an existing family or in another "
-            "series (docs/reference/rules/nature.md)"
+            f"new H id(s) beyond the intake freeze: {new}; file it as an "
+            "instance of an existing family or in another series "
+            "(docs/reference/rules/nature.md)"
         )
-    return Gate("H-series intake is frozen", not problems, problems)
+    return Gate("H-series intake is frozen", not problems,
+                {"frozen": len(FROZEN_H_IDS)}, problems)
 
 #: Addendum 3 Phase 6: the H-series live-count target band.
 H_SERIES_REDUCTION_TARGET = (55, 65)
 
 
 def gate_h_series_reduction_residue() -> Gate:
-    """Addendum 3 Phase 6: report the live H count against the target band.
+    """Addendum 3 Phase 6: the live H count, and the frozen ceiling.
 
-    The intake freeze (above) stops *new* H ids; this reports how far the
-    live count is from the 55-65 target so the residue is visible rather than
-    forgotten.  Reporting only: it never fails, because the reduction is a
-    multi-release effort (the mergers are a data change once the co-fire audit
-    is measured on the locked corpus).
+    Reports the live (emitting) H count against the 55-65 target band so the
+    residue is visible, and **fails only above the documented ceiling** (the
+    frozen set minus the retained anchors).  It never fails merely for being
+    above the target band: the overlap audit adjudicated every merge
+    candidate and no merger is evidence-supported, so no id is retired by
+    fiat (the reduction is a data change, not a bookkeeping one).
     """
     from trustsight.categories import RULE_CATEGORIES
     from trustsight.rule_id_history import ANCHOR_RULE_IDS
@@ -3247,16 +3257,21 @@ def gate_h_series_reduction_residue() -> Gate:
     # The live count is the *emitting* rules: the retained documentation
     # anchors are not live H logic (Addendum 3 Phase 5 Step 2).
     live = len([rid for rid in h_ids if rid not in ANCHOR_RULE_IDS])
+    ceiling = _h_series_live_ceiling()
     low, high = H_SERIES_REDUCTION_TARGET
-    if live > high:
+    if live > ceiling:
+        detail = (f"{live} live H rules exceed the frozen ceiling "
+                  f"{ceiling}; a new H id slipped past the intake freeze")
+    elif live > high:
         detail = (f"{live} live H rules; {live - high} above the target band "
-                  f"{low}-{high}")
+                  f"{low}-{high} (no evidence-supported merger remains)")
     elif live < low:
         detail = f"{live} live H rules, below the target band {low}-{high}"
     else:
         detail = f"{live} live H rules, within the target band {low}-{high}"
-    return Gate("H-series reduction residue", True,
-                {"live": live, "target": [low, high]}, detail)
+    return Gate("H-series reduction residue", live <= ceiling,
+                {"live": live, "ceiling": ceiling, "target": [low, high]},
+                detail)
 
 
 def gate_retired_ids_resolve_to_live_survivors() -> Gate:
