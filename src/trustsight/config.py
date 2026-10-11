@@ -1323,7 +1323,7 @@ name = "Setuid Or Setgid Bit Set In Package Root"
 # `setcap cap_setuid+ep` grants the same power the setuid bit does, by a
 # different mechanism, and was claimed by neither rule: a file capability
 # is not a mode.
-pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+(?!["\\x27]?/)|\\s+(?!--\\s)(?!["\\x27]?/))|\\bsetcap\\s+(?:-\\S+\\s+)*["\\x27]?cap_\\w+[^\\s]*\\s+(?!["\\x27]?/)'
+pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+(?!["\\x27]?/)|\\s+(?!--\\s)(?!["\\x27]?/))|\\bsetcap\\s+(?:-\\S+\\s+)*["\\x27]?cap_\\w+[^\\s]*\\s+(?!["\\x27]?/)|\\binstall\\s+(?:-\\S+\\s+)*(?:--mode=|-m\\s*)[2467][0-7]{3}\\b[^;\\n&|]*?\\$\\{?(?:pkgdir|DESTDIR)\\}?'
 severity = "MEDIUM"
 category = "privilege"
 match_target = "raw_line"
@@ -1336,7 +1336,7 @@ name = "Setuid Or Setgid Bit Set Outside Package Root"
 # The same operation against an absolute path touches the live
 # filesystem rather than $pkgdir, so it is a privilege change on the
 # build host and not packaging.
-pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+["\\x27]?/|\\s+(?!--\\s)["\\x27]?/)|\\bsetcap\\s+(?:-\\S+\\s+)*["\\x27]?cap_\\w+[^\\s]*\\s+["\\x27]?/'
+pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+["\\x27]?/|\\s+(?!--\\s)["\\x27]?/)|\\bsetcap\\s+(?:-\\S+\\s+)*["\\x27]?cap_\\w+[^\\s]*\\s+["\\x27]?/|\\binstall\\s+(?:-\\S+\\s+)*(?:--mode=|-m\\s*)[2467][0-7]{3}\\b[^;\\n&|]*?(?<![\\w$}])["\\x27]?/'
 severity = "HIGH"
 category = "privilege"
 match_target = "raw_line"

@@ -145,6 +145,12 @@
       "H038"
     ]
   },
+  "H076-interpreter-write.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "H076"
+    ]
+  },
   "H083-absolute-interpreter.diff": {
     "min_score": 25,
     "must_fire": [
@@ -1138,6 +1144,12 @@
       "H002"
     ],
     "relabelled": "R027 -> H002"
+  },
+  "R053-install-setuid.diff": {
+    "min_score": 15,
+    "must_fire": [
+      "R053"
+    ]
   },
   "R152-free-hosting-source.diff": {
     "min_score": 25,

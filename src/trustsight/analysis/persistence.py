@@ -127,6 +127,16 @@ _WW_DIR_RE = re.compile(r"^/(?:tmp|var/tmp|dev/shm)(?:/|$)")
 _WW_CD_RE = re.compile(r"\bcd\s+/(?:tmp|var/tmp|dev/shm)\b")
 _MKTEMP_RE = re.compile(r"\bmktemp\b")
 
+#: An interpreter editing a live-system file in place.  `sed -i` is read by
+#: the write-target scan, but `perl -pi`/`ruby -i` are not, so the same edit
+#: through them walked past H076.
+_INPLACE_EDIT_RE = re.compile(
+    r"\b(?:perl|ruby)\b[^\n;&|]*?-[A-Za-z]*i[A-Za-z]*\b.*?(\S+)\s*$")
+#: An inline interpreter `open(..., "a"/"w")` against an absolute path - a
+#: write the shell-command target scan cannot see.
+_INLINE_OPEN_WRITE_RE = re.compile(
+    r"\bopen\s*\(\s*[\"'](/[^\"']+)[\"']\s*,\s*[\"'][wa]")
+
 
 def collapse_path_slashes(text: str) -> str:
     """Collapse ``//`` runs and ``/.`` segments a shell path also collapses.
