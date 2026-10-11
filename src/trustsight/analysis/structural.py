@@ -17,7 +17,6 @@ from .build import (
     _function_shadow_findings,
     _INTERPRETER_FETCH,
     _reconstruction_findings,
-    _sudo_findings,
 )
 from ..config import NETWORK_CLIENT
 from .delivery import (
@@ -841,7 +840,9 @@ def _structural_findings(
     )
     _build_findings(diff_text, config or {}, add, current_text=current_text,
                     ctx=ctx)
-    _sudo_findings(diff_text, config or {}, add, current_text=current_text)
+    from .persistence_engine import run_persistence_instances
+
+    run_persistence_instances(ctx, add, only=frozenset({"H004"}))
     _build_flag_findings(diff_text, config or {}, add)
     _function_shadow_findings(diff_text, config or {}, add)
     _reconstruction_findings(diff_text, config or {}, add)

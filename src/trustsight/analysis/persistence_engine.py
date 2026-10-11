@@ -18,7 +18,20 @@ from dataclasses import dataclass
 from typing import Callable
 
 from ..deps import _strip_comment
-from .delivery import _SCOPE_FUNCTIONS, _collect_executions, _norm_path
+from ..rules import _classify_line_context
+from .build import (
+    _HOOK_EXEC_RE,
+    _INSTALL_HOOKS,
+    _added_line_number,
+    _network_fetch_url,
+    _sudo_escalates,
+)
+from .delivery import (
+    _SCOPE_FUNCTIONS,
+    _collect_executions,
+    _norm_path,
+    _printed_heredoc_body_indices,
+)
 from .edges import GraphContext
 from .persistence import (
     _BUILD_TIME_FUNCTIONS,
@@ -163,6 +176,38 @@ def emit_outside_staging(ctx: GraphContext, add: Callable) -> None:
             return
 
 
+def emit_sudo(ctx: GraphContext, add: Callable) -> None:
+    """H004: a build/install function escalates privilege."""
+    for i, line in enumerate(ctx.lines):
+        if not line.startswith("+") or not ctx.scopes.within(i, _SCOPE_FUNCTIONS):
+            continue
+        body = _strip_comment(line[1:])
+        if _sudo_escalates(body):
+            add("H004", "Privilege Escalation", "CRITICAL", "privilege",
+                f"{ctx.scopes.label(i, _SCOPE_FUNCTIONS)}() escalates privilege: "
+                f"{body.strip()[:80]}",
+                line=_added_line_number(ctx.diff_text, body.strip()[:30]),
+                position=ctx.scopes.direct(i), body=body.strip()[:80])
+            return
+
+
+def emit_install_hook(ctx: GraphContext, add: Callable) -> None:
+    """H017: an install hook fetches or executes."""
+    context = _classify_line_context(ctx.lines)
+    printed_heredoc = _printed_heredoc_body_indices(ctx.lines)
+    for i, line in enumerate(ctx.lines):
+        if not line.startswith("+") or not ctx.scopes.within(i, _INSTALL_HOOKS):
+            continue
+        if context.get(i) == "message" or i in printed_heredoc:
+            continue
+        body = _strip_comment(line)
+        if _network_fetch_url(body) or _HOOK_EXEC_RE.search(body):
+            add("H017", "Install Hook Fetches Or Executes", "HIGH", "installer",
+                f"{ctx.scopes.label(i, _INSTALL_HOOKS)}() runs as root and contains: {body.strip()[:80]}",
+                position=ctx.scopes.direct(i), body=body.strip()[:80])
+            break
+
+
 #: Dispatch order mirrors the historical emission order so finding order is
 #: preserved.  H042 (hidden drop) is intentionally absent here - it is the
 #: quietest rule and is registered in the edge engine.
@@ -185,6 +230,13 @@ PERSISTENCE_INSTANCES: tuple[PersistenceInstance, ...] = (
                         "absolute_outside", False, "HIGH",
                         "docs/reference/rules/staging-and-recon.md",
                         ("tests/test_phase3.py",), emit_outside_staging),
+    PersistenceInstance("H004", "Privilege Escalation", "privilege", False,
+                        "CRITICAL", "docs/reference/rules/fetch-and-execution.md",
+                        ("tests/test_rules.py",), emit_sudo),
+    PersistenceInstance("H017", "Install Hook Fetches Or Executes",
+                        "install_hook", False, "HIGH",
+                        "docs/reference/rules/install-and-persist.md",
+                        ("tests/test_deps_rules.py",), emit_install_hook),
 )
 
 
