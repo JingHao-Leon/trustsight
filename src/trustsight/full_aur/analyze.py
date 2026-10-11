@@ -545,6 +545,7 @@ def analyze_package_text(
         raw_indices=raw_indices,
     )
     triggered_rules.extend(metadata_findings)
+    change_delta_obj = change_delta(clamp_text(diff_text), pkg_name)
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
@@ -552,6 +553,7 @@ def analyze_package_text(
             package_name=pkg_name, config=config,
             current_text=clamp_text(new_pkgbuild),
             tree_manifest=tree_manifest,
+            delta=change_delta_obj,
         )
     )
     triggered_rules.extend(
@@ -704,7 +706,7 @@ def analyze_package_text(
         unresolved_assignments=unresolved_assignments,
         partial_hunks=cut_hunk_details(cut_hunks),
         partial_files=partial_files,
-        change=change_delta(clamp_text(diff_text)).to_dict(),
+        change=change_delta_obj.to_dict(),
         risk=risk,
         temporal_source=temporal.source,
         score_breakdown=breakdown,

@@ -75,6 +75,42 @@ def test_change_delta_round_trips_through_dict():
     assert "new.example" in delta.hosts_gained
 
 
+def test_added_dependencies_carry_the_normalised_view():
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        "+depends=('libfoo>=1.2' 'libbar')\n"
+        "+optdepends=('libbaz: for extras')\n"
+    )
+    delta = change_delta(text, "demo")
+    assert delta.added_dependencies["depends"] == ("libbar", "libfoo")
+    assert delta.added_dependencies["optdepends"] == ("libbaz",)
+
+
+def test_relational_arrays_are_deltas():
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        "+provides=('foo')\n"
+        "+conflicts=('bar')\n"
+    )
+    delta = change_delta(text)
+    assert delta.provides.gained == ("foo",)
+    assert delta.conflicts.gained == ("bar",)
+
+
+def test_checksum_parity_and_source_growth():
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        "+source=('a' 'b')\n"
+        "+sha256sums=('x')\n"
+    )
+    delta = change_delta(text)
+    assert delta.checksum_parity == (2, 1, "sha256sums")
+    assert delta.source_array_grew is True
+
+
 def test_version_facts_resolve_the_scalar_move():
     text = (
         "--- a/PKGBUILD\n+++ b/PKGBUILD\n"

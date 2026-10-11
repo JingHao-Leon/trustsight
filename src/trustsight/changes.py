@@ -18,11 +18,9 @@ single query every consumer shares.  The prose summary above and the JSON
 construction.
 """
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
 
-if TYPE_CHECKING:
-    from .recipedoc import ArrayDelta
+from .recipedoc import ArrayDelta
 
 # Files that regenerate on nearly every bump.  Listing them trains the
 # reader to skim the section, which costs more than the information is
@@ -37,6 +35,10 @@ _CHECKSUM_NAMES = frozenset(
 
 #: The dependency array families ``ChangeDelta`` reports separately.
 _DEP_FAMILIES = ("depends", "makedepends", "checkdepends", "optdepends")
+
+#: Every field ``deps.extract_dependency_changes`` extracts: the four
+#: dependency families plus the three relational arrays.
+_DEP_ALL_FIELDS = _DEP_FAMILIES + ("provides", "replaces", "conflicts")
 
 
 @dataclass(frozen=True)
@@ -132,6 +134,18 @@ class ChangeDelta:
     checkdependencies: "ArrayDelta"
     optdependencies: "ArrayDelta"
     version: VersionFacts
+    #: The relational arrays, raw (spec §1 / Addendum 4 G6).  ``provides`` /
+    #: ``replaces`` / ``conflicts`` claim or remove another name; they are
+    #: dependency-shaped and share the extraction path.
+    provides: ArrayDelta = field(default_factory=lambda: ArrayDelta((), (), False))
+    replaces: ArrayDelta = field(default_factory=lambda: ArrayDelta((), (), False))
+    conflicts: ArrayDelta = field(default_factory=lambda: ArrayDelta((), (), False))
+    #: The *normalised* added names per dependency field, the exact view
+    #: ``deps.extract_dependency_changes`` produces (version constraints and
+    #: optdepends descriptions dropped, unresolved/soname entries filtered).
+    #: H030/H064 and the D-series read this instead of re-extracting, so the
+    #: change view and the rules cannot disagree (spec §1, deviation E1).
+    added_dependencies: dict[str, tuple[str, ...]] = field(default_factory=dict)
     #: The checksum-behaviour classification the summary already emits
     #: (``checksum_added_or_changed``, ``checksum_array_emptied``, ...).
     #: Carried so the prose summary is a pure render of this object and
@@ -148,6 +162,13 @@ class ChangeDelta:
     #: Populated from ``sources``/``checksums``/``pgp_keys``; no rule
     #: consumes it in v1 (spec §6).
     reordered: bool = False
+    #: H091's parity result over wholly-added arrays, and whether the source
+    #: array grew in the diff (the gate for reading the complete recipe
+    #: instead).  Carried so the rule reads one shared object rather than
+    #: re-walking the diff; the ``current_text`` fallback still runs in the
+    #: rule, because the whole PKGBUILD is not part of a diff object.
+    checksum_parity: "tuple[int, int, str] | None" = None
+    source_array_grew: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -161,11 +182,24 @@ class ChangeDelta:
             "makedependencies": self.makedependencies.to_dict(),
             "checkdependencies": self.checkdependencies.to_dict(),
             "optdependencies": self.optdependencies.to_dict(),
+            "provides": self.provides.to_dict(),
+            "replaces": self.replaces.to_dict(),
+            "conflicts": self.conflicts.to_dict(),
+            "added_dependencies": {
+                k: list(v) for k, v in sorted(self.added_dependencies.items())
+            },
             "version": self.version.to_dict(),
             "checksum_behavior": self.checksum_behavior,
             "local_sources_gained": sorted(self.local_sources_gained),
             "local_sources_lost": sorted(self.local_sources_lost),
             "reordered": self.reordered,
+            "checksum_parity": (
+                {"sources": self.checksum_parity[0],
+                 "sums": self.checksum_parity[1],
+                 "var": self.checksum_parity[2]}
+                if self.checksum_parity is not None else None
+            ),
+            "source_array_grew": self.source_array_grew,
         }
 
     @classmethod
@@ -186,11 +220,25 @@ class ChangeDelta:
                 data.get("checkdependencies", {})),
             optdependencies=ArrayDelta.from_dict(
                 data.get("optdependencies", {})),
+            provides=ArrayDelta.from_dict(data.get("provides", {})),
+            replaces=ArrayDelta.from_dict(data.get("replaces", {})),
+            conflicts=ArrayDelta.from_dict(data.get("conflicts", {})),
+            added_dependencies={
+                k: tuple(v) for k, v in
+                (data.get("added_dependencies", {}) or {}).items()
+            },
             version=VersionFacts.from_dict(data.get("version", {})),
             checksum_behavior=data.get("checksum_behavior", "unchanged"),
             local_sources_gained=frozenset(data.get("local_sources_gained", ())),
             local_sources_lost=frozenset(data.get("local_sources_lost", ())),
             reordered=bool(data.get("reordered", False)),
+            checksum_parity=(
+                (data["checksum_parity"]["sources"],
+                 data["checksum_parity"]["sums"],
+                 data["checksum_parity"]["var"])
+                if data.get("checksum_parity") else None
+            ),
+            source_array_grew=bool(data.get("source_array_grew", False)),
         )
 
 
@@ -225,7 +273,7 @@ def _version_facts(pre, post) -> VersionFacts:
     )
 
 
-def change_delta(diff_text: str) -> ChangeDelta:
+def change_delta(diff_text: str, pkgbase: str = "") -> ChangeDelta:
     """Build the ``ChangeDelta`` for *diff_text* (spec §1).
 
     The one construction site: parse the diff once, project the pre/post
@@ -236,13 +284,19 @@ def change_delta(diff_text: str) -> ChangeDelta:
     the prose summary is byte-identical when it renders from this object
     and the two surfaces cannot disagree by construction.  ``sources`` /
     ``checksums`` / ``pgp_keys`` stay the raw array deltas.
+
+    *pkgbase* lets the normalised ``added_dependencies`` view apply the
+    same self-output filter ``deps.extract_dependency_changes`` uses; the
+    rules pass the analysed package name.
     """
     from .diffdoc import parse_diff
     from .differ import (
         _post_diff_lines,
         _pre_diff_lines,
+        checksum_array_parity,
         extract_urls_from_diff,
         local_source_names,
+        source_array_grew_in_diff,
     )
     from .recipedoc import array_diff, recipe_states
 
@@ -259,6 +313,18 @@ def change_delta(diff_text: str) -> ChangeDelta:
         name: array_diff(_family(pre.arrays, {name}),
                          _family(post.arrays, {name}))
         for name in _DEP_FAMILIES
+    }
+    relational = {
+        name: array_diff(_family(pre.arrays, {name}),
+                         _family(post.arrays, {name}))
+        for name in ("provides", "replaces", "conflicts")
+    }
+    from .deps import extract_dependency_changes
+
+    extracted = extract_dependency_changes(diff_text, pkgbase)
+    added_dependencies = {
+        name: tuple(sorted(extracted.get(name, ())))
+        for name in _DEP_ALL_FIELDS
     }
     # The summary's host and checksum facts, reproduced exactly: added
     # URLs' hosts minus removed URLs' hosts (and the mirror for lost), and
@@ -284,12 +350,18 @@ def change_delta(diff_text: str) -> ChangeDelta:
         makedependencies=dep_deltas["makedepends"],
         checkdependencies=dep_deltas["checkdepends"],
         optdependencies=dep_deltas["optdepends"],
+        provides=relational["provides"],
+        replaces=relational["replaces"],
+        conflicts=relational["conflicts"],
+        added_dependencies=added_dependencies,
         version=_version_facts(pre, post),
         checksum_behavior=url_changes.checksum_behavior,
         local_sources_gained=frozenset(post_sources - pre_sources),
         local_sources_lost=frozenset(pre_sources - post_sources),
         reordered=(sources.reordered or checksums.reordered
                    or pgp_keys.reordered),
+        checksum_parity=checksum_array_parity(diff_text),
+        source_array_grew=source_array_grew_in_diff(diff_text),
     )
 
 

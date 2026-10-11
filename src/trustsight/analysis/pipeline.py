@@ -817,6 +817,9 @@ def analyze_package(
                 previous_diff = str(last.get("raw_diff") or "")
         except AttributeError:
             previous_diff = ""
+    # Spec §1 / Addendum 3 Phase 1: one change-as-data construction, shared
+    # by the structural rules and the stored `change` object.
+    change_delta_obj = change_delta(clamp_text(diff_text), pkg_name)
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
@@ -828,6 +831,7 @@ def analyze_package(
             previous_diff=previous_diff,
             previous_commit=old_commit,
             current_commit=head_commit,
+            delta=change_delta_obj,
         )
     )
     triggered_rules.extend(
@@ -946,7 +950,7 @@ def analyze_package(
     # prose summary and the JSON `change` object.  Clamped like every other
     # reader: a pathological line costs the tokenizer per parse, and the
     # run already declares the clamp as a coverage gap.
-    change = change_delta(clamp_text(diff_text)).to_dict()
+    change = change_delta_obj.to_dict()
     # Spec §8 v1: name every assignment the tokenizer refused on the
     # analysed surface (the full post-state PKGBUILD here), plus the
     # refusals the coverage layer knows independently.
@@ -1231,12 +1235,14 @@ def scan_diff(
         resolved_indices=resolved_indices,
         raw_indices=raw_indices,
     )
+    change_delta_obj = change_delta(clamp_text(diff_text), package_name)
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
             package_name=package_name, config=config,
             current_text=clamp_text(current_text),
             tree_manifest=tree_manifest,
+            delta=change_delta_obj,
         )
     )
     triggered_rules.extend(
@@ -1324,7 +1330,7 @@ def scan_diff(
             global_set.add(nurl)
 
     unresolved_sources = unresolved_source_lines(diff_text)
-    change = change_delta(clamp_text(diff_text)).to_dict()
+    change = change_delta_obj.to_dict()
     surface_doc = parse_diff_lines(split_lines(diff_text))
     cut_hunks = surface_doc.cut_hunks()
     partial_hunk_details = cut_hunk_details(cut_hunks)

@@ -422,7 +422,8 @@ def _epoch_removed_unchanged(diff_text: str) -> tuple[bool, str | None]:
     return True, match.group(1) if match else None
 
 
-def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False) -> None:
+def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False,
+                    delta=None) -> None:
     """A diff introduces ``epoch=`` where none existed (H063, MEDIUM).
 
     Introducing an epoch overrides the version ordering: a nonzero epoch
@@ -434,6 +435,10 @@ def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False) -> 
     construction and "newly introduced" would be a claim the run cannot
     support: the epoch is merely present.  The finding is kept (the reader
     still wants to know the field is there), but it says what it knows.
+
+    With *delta* the introduction is read from the shared ``ChangeDelta``
+    (spec §1): ``epoch`` absent pre and present post.  The line number
+    still comes from the diff so the citation is unchanged.
     """
     # Addendum 4, low priority: epoch dropped while pkgver/pkgrel stood still.
     # Checked before H063's early return: a removal is never an introduction.
@@ -454,7 +459,15 @@ def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False) -> 
             ),
             epoch=removed_value or "0")
 
-    introduced, value = _epoch_introduced(diff_text)
+    if delta is None:
+        introduced, value = _epoch_introduced(diff_text)
+    else:
+        # Spec §1: the shared delta answers "was epoch absent before and
+        # present now" from the pre/post projections, the same question the
+        # regex above asks of the diff lines.
+        introduced = (not (delta.version.old_epoch or "").strip()
+                      and bool((delta.version.new_epoch or "").strip()))
+        value = (delta.version.new_epoch or "").strip() or None
     if not introduced:
         return
     severity = "MEDIUM" if value and value != "0" else "INFO"
