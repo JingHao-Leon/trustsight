@@ -776,16 +776,10 @@ def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None
                 break
 
     if "H019" in wanted:
-        before = extract_source_array_urls(diff_text, side="before")
-        after = extract_source_array_urls(diff_text, side="after")
-        for url in sorted(before):
-            if not url.startswith("https://"):
-                continue
-            if url.replace("https://", "http://", 1) in after:
-                add("H019", "Source URL Downgraded To HTTP", "MEDIUM", "network",
-                    f"source URL downgraded from https to http: {url[:70]}",
-                    url=url[:70])
-                break
+        from .url_engine import URLContext, run_url_instances
+
+        run_url_instances(URLContext(diff_text, config), add,
+                          only=frozenset({"H019"}))
 
     if "H035" in wanted:
         run_edge_instances(ctx, add, only=frozenset({"H035"}))
