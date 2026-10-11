@@ -15,6 +15,18 @@ Three different claims are often confused. This page keeps them apart:
 Passing the gates establishes only the first. A gate that passes is not
 evidence that a malicious package will be detected.
 
+```
+implemented correctly ── security gates ──────────────── Gated in CI
+        ▲ a passing gate says nothing about
+complementary coverage ── adversarial harness ────────── Measured, not published
+        ▲ a harness number says nothing about
+real-world performance ── independent, blinded eval ──── Not claimed
+```
+
+Each row is established only by its own method. A green build does not move
+down the list. The vocabulary these pages share is defined once in the
+[glossary](../reference/glossary.md).
+
 ## Implementation gates
 
 The layer model's invariants are enforced by gates that fail the build:
@@ -82,6 +94,37 @@ attack-set limitations; until that exists, treat the "complementary coverage"
 claim as a hypothesis the harness is built to test, not an established
 property - and note the third level, real-world performance, is external
 evaluation this project does not claim.
+
+An illustrative summary (the numbers depend entirely on the attack set):
+
+```json
+"layer_resilience": {
+  "attempts": 12,
+  "outcomes": {"blocked": 10, "bypassed": 2},
+  "bypasses": 2,
+  "minimum_layer_cut": 2,
+  "single_layer_failure": {"L3": 4, "L5": 1},
+  "resilience_distribution": {"1": 5, "2": 3, "3": 2},
+  "layers_fully_bypassed": 2,
+  "limitations": ["no Windows toolchain", "no network access during the attempt"],
+  "cofire_health": []
+}
+```
+
+and the CLI's two-line form of the same record:
+
+```
+layer resilience: minimum layer-cut 2, single-layer failures {'L3': 4, 'L5': 1}, bypasses 2
+attack-set limitations: no Windows toolchain; no network access during the attempt
+```
+
+Read it: two categories (`L3`, `L5`) cover every caught attempt, so the minimum
+cut is 2. `L5` alone holds up one attempt (`single_layer_failure: {"L5": 1}`), so
+disabling it reopens a path. Five caught attempts fired exactly one category
+(`resilience_distribution: {"1": 5}`), each one regression from a bypass. The
+two remaining attempts fired nothing and are counted as bypasses. The
+`limitations` list travels beside the numbers so a rate is never read as a
+whole-corpus claim.
 
 ## See Also
 

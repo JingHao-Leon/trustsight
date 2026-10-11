@@ -6,7 +6,8 @@ This page answers: what does the `layers` object in a report actually say?
 
 The report groups findings by evidence category and, for each category, records
 two independent facts: whether anything was **detected**, and how far the
-category could be **assessed**.
+category could be **assessed**. Detection, coverage and boundary are defined
+once in the [glossary](../reference/glossary.md).
 
 ## Detection and coverage
 
@@ -68,6 +69,19 @@ evidence. The same run with the whole diff present would show `coverage:
 "complete"` on every row but `L8`, and `status: "passed"` wherever detection is
 `none`.
 
+The same profile as a follow-along list, in category order:
+
+```
+L1  Structural coherence     unreadable    (detection none)
+L2  Readability              unreadable    (detection none)
+L3  Payload signature        fired         (detection fired: R001)
+L4  Evasion shape            unreadable    (detection none)
+L5  Behavioral suspicion     unreadable    (detection none)
+L6  Ecosystem memory         unreadable    (detection none)
+L7  Known indicators         unreadable    (detection none)
+L8  Campaign correlation     not_exercised (detection none)
+```
+
 ## The verdict sentence
 
 When findings score, the verdict names the **fired evidence categories**:
@@ -84,7 +98,15 @@ an attacker reached.
 
 `inspect --verbose` prints a single line beside the panel listing the
 categories whose status is not `passed` and the count of boundaries that
-forbid a clean verdict - the same projection the JSON carries.
+forbid a clean verdict - the same projection the JSON carries. For the profile
+above:
+
+```
+  Layers: L1 unreadable, L2 unreadable, L3 fired, L4 unreadable, L5 unreadable, L6 unreadable, L7 unreadable, L8 not_exercised; 1 boundary(ies) forbid a clean verdict
+```
+
+Every non-`passed` category is named, so the terminal never shows less than the
+JSON. The boundary count moves with the run; only the shape is fixed.
 
 ## The boundary, beside the layers
 

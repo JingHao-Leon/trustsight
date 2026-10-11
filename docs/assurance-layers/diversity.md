@@ -23,17 +23,42 @@ that the existing rules miss?** If a rule on another category already covers
 the same attack, file the change as an instance of that rule instead, or argue
 why the new mechanism adds *complementary* coverage.
 
+### The checklist on a concrete proposal
+
+A proposed invariant: "the `.SRCINFO` `depends` set names a package the
+PKGBUILD never mentions." Filled in:
+
+| Field | Value |
+|---|---|
+| Mechanism (family) | `C`, a structural invariant over two parsed documents |
+| Subject (category) | integrity |
+| Evidence category (layer) | `L1` (the `C`-series default: the change does not hang together) |
+| Shared dependencies | the tokenizer and the `.SRCINFO` parser |
+| Attack variation | `H103` compares `depends` only when both documents state the field and neither carries an unresolved variable, so a variable-guarded divergence evades it |
+
+The last row is the question intake exists to force. If no answer holds, the
+change is an instance of an existing rule, not a new one.
+
 ## Complementary is not the same as independent
 
 Different algorithms are **not** automatically independent. Two rules that use
 different logic can share a failure mode:
 
 ```
-R001  (regex)   matches "curl ... | bash"
-H082  (heuristic) reasons about a fetch that is then executed
+        ┌───────────┐            ┌────────────┐
+        │   R001    │            │   H082     │
+        │  (regex)  │            │(heuristic) │
+        └─────┬─────┘            └─────┬──────┘
+              │                        │
+              └────────────┬───────────┘
+                           ▼
+                    ┌─────────────┐
+                    │  tokenizer  │   one failure blinds both
+                    └─────────────┘
 ```
 
-Both depend on the **tokenizer**. If the tokenizer folds a construct
+R001 matches `curl ... | bash`; H082 reasons about a fetch that is then
+executed. Both depend on the **tokenizer**. If the tokenizer folds a construct
 incorrectly, both can go blind together. Their family labels differ; their
 failure is correlated. The dependency is recorded in
 [`trustsight.detectors`](enforcement.md) and named at intake, so common-mode

