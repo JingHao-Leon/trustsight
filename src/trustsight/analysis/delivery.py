@@ -2003,7 +2003,7 @@ _SOURCE_EXEC_RE = re.compile(
     # `(?![<>])`: a redirect is not a filename argument. Without it this
     # arm captured the `<` of `sh < file` and the redirect arm below never
     # got a turn - the same trap `_EXECUTION_RE` documents.
-    r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby|node|php|lua(?:jit)?"
+    r"(?:/(?:usr/)?bin/)?(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby|node|php|lua(?:jit)?"
     r"|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh"
     r"|julia|Rscript|bun|deno|escript|fennel|zx|guile|racket|pwsh|elixir"
     r"|ts-node|gjs|csi|bb|babashka|clj|janet)\s+(?![<>])"
@@ -2023,7 +2023,7 @@ _SOURCE_EXEC_RE = re.compile(
     # `sh < file` - the interpreter reads the script from its stdin.
     # `(?!\(|<)` keeps process substitution and here-strings out: those are
     # different constructs that H075 owns.
-    r"|" + _CMD_START + r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby"
+    r"|" + _CMD_START + r"(?:/(?:usr/)?bin/)?(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby"
     r"|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish"
     r"|xonsh|nu|osh|julia|Rscript|bun|deno|escript|fennel|zx|guile"
     r"|racket|pwsh|elixir|ts-node|gjs|csi|bb|babashka|clj|janet)"
