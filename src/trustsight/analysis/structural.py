@@ -30,9 +30,7 @@ from .dependencies import _dependency_findings
 from .ioc import _ioc_findings
 from .network import (
     _dlagents_override_findings,
-    _exotic_protocol_findings,
     _moved_git_ref_findings,
-    _version_in_url_findings,
 )
 from .persistence import (
     _HOME_PREFIX_RE,
@@ -517,14 +515,11 @@ def _structural_findings(
     # H003 is about sources that arrive with *no* checksum backing at all.
     # Removing one hash still leaves the array in place, so it is not this
     # rule's business; a whole array removed, or emptied, or set to SKIP,
-    # does leave the source unbacked.
-    if cs_behavior not in ("checksum_added_or_changed", "checksum_entry_removed"):
-        http_sources = [url for url in added if url.startswith("http://")]
-        if http_sources:
-            add("H003", "Insecure Download Protocol", "LOW", "integrity",
-                f"http:// sources without checksum backing: {http_sources}",
-                line=find_line_in_diff(diff_text, r"http://"),
-                http_sources=", ".join(http_sources))
+    # does leave the source unbacked.  Consolidated into the URL engine.
+    from .url_engine import URLContext, run_url_instances
+
+    urlctx = URLContext(diff_text, config or {}, source_changes=source_changes)
+    run_url_instances(urlctx, add, only=frozenset({"H003"}))
 
     if cs_behavior == "changed_from_sha256_to_skip":
         skip_reason = is_skip_justified(diff_text)
@@ -860,8 +855,8 @@ def _structural_findings(
     _persistence_findings(diff_text, config or {}, add, current_text=current_text,
                           ctx=ctx)
     run_edge_instances(ctx, add, only=frozenset({"H040"}))
-    _exotic_protocol_findings(diff_text, config or {}, add)
-    _version_in_url_findings(diff_text, config or {}, add)
+    run_url_instances(urlctx, add, only=frozenset({"H034"}))
+    run_url_instances(urlctx, add, only=frozenset({"H031"}))
     run_edge_instances(ctx, add, only=frozenset({"H077"}))
     _dlagents_override_findings(diff_text, config or {}, add)
     run_edge_instances(ctx, add, only=frozenset({"H041"}))
