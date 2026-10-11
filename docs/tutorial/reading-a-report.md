@@ -3,8 +3,9 @@
 # Reading a Report
 
 By the end of this page you can read every part of a TrustSight report - the
-score, the band, the breakdown lines, and the gaps - and you will know what
-none of them claim. A misread verdict is worse than no verdict.
+findings, the change summary, the coverage gaps, and the score when you ask for
+it - and you will know what none of them claim. A misread verdict is worse than
+no verdict.
 
 ## What a score is and is not
 

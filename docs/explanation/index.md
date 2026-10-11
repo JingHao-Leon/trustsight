@@ -2,7 +2,7 @@
 
 # How TrustSight Works
 
-TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0 to 100 over the **end-state** of a diff: the post-patch PKGBUILD, not the delta. Every decision is reproducible: the same diff, effective configuration, and observation history produce the same score and the same evidence record.
+TrustSight is a deterministic AUR PKGBUILD audit tool. It analyses the **end-state** of a diff - the post-patch PKGBUILD, not the delta - and reports the same findings every time: the same diff, effective configuration, and observation history produce the same evidence record. A weighted score is available on request; the evidence is what the tool leads with.
 
 These explanation pages describe *why* the tool makes the decisions it does. If you are looking for how to use it, start with the tutorial. If you want the reference, see the reference section.
 
