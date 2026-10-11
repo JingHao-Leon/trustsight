@@ -4,7 +4,7 @@
 
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
-rules X001-X032, integrity-change rules C001-C030, dependency rules
+rules X001-X033, integrity-change rules C001-C030, dependency rules
 D001-D004, temporal rules T001-T003, correlation rules G001-G003, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M003, artifact
 rules A001-A008, declared-practice rules P001-P008 (P004 skipped), and
@@ -50,7 +50,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
-| [Crossfire](crossfire.md) | `crossfire` | 32 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
+| [Crossfire](crossfire.md) | `crossfire` | 33 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 8 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 3 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
@@ -334,6 +334,7 @@ is deliberately non-contiguous; see
 | [X030](crossfire.md#x030) | ANSI-C Quoted Content In Commands | Crossfire | HIGH | [Crossfire](crossfire.md) |
 | [X031](crossfire.md#x031) | Build Reads Non-Code Text | Crossfire | HIGH | [Crossfire](crossfire.md) |
 | [X032](crossfire.md#x032) | Command Name Assembled By Splicing | Crossfire | HIGH | [Crossfire](crossfire.md) |
+| [X033](crossfire.md#x033) | File With No Provenance Executed | Crossfire | HIGH | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
 Weight-0 declared-practice findings (`P001`-`P008`, P004 skipped) are not detections

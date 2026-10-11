@@ -416,7 +416,12 @@ def edge_covert_egress(ctx, add) -> None:
 
 def _parse_time_fetch_patterns(config=None) -> list[re.Pattern]:
     patterns = load_patterns().get("patterns", {})
-    frags = patterns.get("parse_time_fetch") or DEFAULT_PARSE_TIME_FETCH
+    # The config file extends the shipped list rather than replacing it:
+    # it is written once at install, and a shipped client added later
+    # (elinks, rsync, …) must still be recognised in existing configs.
+    # `sync_rules` appends missing rules the same way.
+    frags = list(dict.fromkeys(
+        (patterns.get("parse_time_fetch") or []) + DEFAULT_PARSE_TIME_FETCH))
     return [re.compile(f, re.IGNORECASE) for f in frags]
 
 
@@ -501,6 +506,7 @@ def edge_parse_time_fetch(ctx, add) -> None:
     lexed = lex_lines(lines, fragment=True)
     patterns = _parse_time_fetch_patterns(config)
     fetch_funcs = _fetch_function_names(diff_text, config)
+    from .crossfire import _split_commands
     in_array = False
     for i, line in enumerate(lines):
         if not line.startswith("+") or line.startswith("+++"):
@@ -516,8 +522,11 @@ def edge_parse_time_fetch(ctx, add) -> None:
             _ASSIGNMENT_LINE_RE.match(body) and "(" in body and ")" not in body
         )
         if not substitutes and (
-            in_array or opens_array or _ASSIGNMENT_LINE_RE.match(body)
-            or _ARRAY_CONTINUATION_RE.match(body)
+            in_array or opens_array or _ARRAY_CONTINUATION_RE.match(body)
+            # `x=3#; rsync URL` is an assignment *and* a command: only a
+            # line that is nothing but the assignment is a declaration.
+            or (_ASSIGNMENT_LINE_RE.match(body)
+                and len(_split_commands(body)) <= 1)
         ):
             if opens_array:
                 in_array = True

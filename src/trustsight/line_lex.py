@@ -35,6 +35,11 @@ class LexedLine:
     opens_brace: bool
     closes_line: bool
     heredoc_body: bool
+    #: The first heredoc this line opens, quote- and comment-aware:
+    #: ``(delimiter, strip_tabs)``.  A ``<<`` inside a comment or a quoted
+    #: string is prose, not an opener - the payload scanner downstream
+    #: used to disagree with this lexer and blanked whole functions.
+    heredoc_opener: tuple[str, bool] | None = None
 
 
 def _diff_boundary(line: str) -> bool:
@@ -163,6 +168,7 @@ def _lex_lines_cached(
             opens_brace="{" in code,
             closes_line=code.rstrip().endswith("}"),
             heredoc_body=False,
+            heredoc_opener=opener,
         ))
     return tuple(out)
 

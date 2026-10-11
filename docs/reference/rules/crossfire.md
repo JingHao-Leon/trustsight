@@ -78,6 +78,7 @@ evasion in a recipe is ordinary content there.
 | [X030](#x030) | ANSI-C Quoted Content In Commands | HIGH |
 | [X031](#x031) | Build Reads Non-Code Text | HIGH |
 | [X032](#x032) | Command Name Assembled By Splicing | HIGH |
+| [X033](#x033) | File With No Provenance Executed | HIGH |
 <!-- /generated: page-index -->
 
 ### X001: Encoded Payload Decoded And Executed {#x001}
@@ -622,3 +623,17 @@ reason to disguise a command name, so the splicing itself is the finding,
 whether or not the hidden command is harmless. It closes the refusal
 family's residual: a splice a shell executes but the tokenizer folds can
 still be reported as the *attempt* it is.
+
+### X033: File With No Provenance Executed {#x033}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a build function executes a file at the `$srcdir` root that the
+recipe neither declares in `source=()`, writes itself, nor fetches inline
+with a network client. `build()` running `bash "$srcdir"/stage.sh` where
+`stage.sh` came from nowhere is a payload the source array never showed: a
+checksummed tarball unpacks into its own subdirectory, so a file sitting at
+the source root has no provenance at all. Files inside the unpacked tree (a
+relative path after `cd`, or `$srcdir/pkg-ver/...`), declared source names,
+freshly written names, and anything a fetch client produced (H082's case)
+stay out of scope.

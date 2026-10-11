@@ -128,7 +128,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## X-series: **Crossfire** Evasion Detection
 
-**Count:** 32 rules (X001-X032)
+**Count:** 33 rules (X001-X033)
 
 **Mechanism:** Detects evasion techniques, not the payloads they hide. X-series rules fire on *how* a thing was written rather than *what* it does. The tokenizer could not resolve the command, so the evasion technique itself is the signal.
 

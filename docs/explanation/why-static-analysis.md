@@ -150,7 +150,7 @@ C-series rules (C001-C030) enforce structural invariants that depend on comparin
 
 S-series sabotage rules (S001-S008) use command-position matching to distinguish build-sandbox cleanup from system damage: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not.
 
-X-series crossfire rules (X001-X032) are anti-evasion rules that detect patterns designed to exploit the analysis itself.
+X-series crossfire rules (X001-X033) are anti-evasion rules that detect patterns designed to exploit the analysis itself.
 
 Two families report at weight 0 and never score: declared-practice findings (P001-P008) and [unverifiable findings (W001-W008)](../reference/rules/unverifiable.md), the latter naming what an analysis could not read.
 
