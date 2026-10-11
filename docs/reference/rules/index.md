@@ -1,16 +1,19 @@
-<!-- description: The complete TrustSight rule catalog by category, with severity, weight, match target and scope for every R, H, C, D, S, X, W and P identifier. -->
+<!-- description: The complete TrustSight rule catalog by category, with severity, weight, match target and scope for every R, H, C, D, S, X, T, G, E, I, M, A, W and P identifier. -->
 
 # Rules Reference
 
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
 rules X001-X032, integrity-change rules C001-C030, dependency rules
-D001-D004, declared-practice rules P001-P008 (P004 skipped), and unverifiable rules
-W001-W008.
+D001-D004, temporal rules T001-T003, correlation rules G001-G003, entropy
+rules E001-E003, the indicator rule H056, meta rules M001-M003, artifact
+rules A001-A008, declared-practice rules P001-P008 (P004 skipped), and
+unverifiable rules W001-W008.
 
 Each rule contributes according to its severity weight, match target and
-scope, except the P and W series, which are weight 0 and report rather than
-score.
+scope, except the P and W series and the weight-0 M annotations, which are
+weight 0 and report rather than score, and the A and I series, which are
+reported outside the heuristic score.
 
 This page is the map. [The rule system reference](system.md) explains how
 the engine works and holds everything that is not an individual rule: the
@@ -58,7 +61,7 @@ generated from it by `scripts/build_rules_index.py`.
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
-31 rules detect tokenizer defeat and command reconstruction; see
+32 rules detect tokenizer defeat and command reconstruction; see
 [crossfire.md](crossfire.md) for the family boundary and rule descriptions.
 
 ## Reading a rule entry

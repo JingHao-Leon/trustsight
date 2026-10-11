@@ -24,6 +24,8 @@ This is a reference page. For how weight and scope work, see
   `M escalation stays below the benign cap`.
 - It fires at the layer of its inputs, so it has no static layer.
 
+---
+
 <!-- generated: page-index -->
 ## Rules on this page
 
@@ -36,15 +38,12 @@ This is a reference page. For how weight and scope work, see
 
 ### M001: Claim Contradicted By Structure {#m001}
 
-**HIGH** (weight 25) · category `meta`
+- **Target:** programmatic (finding set)
+- **Severity:** HIGH (weight 25)
+- **Category:** `meta`
+- **Condition:** The recipe's declared practice contradicts a structural finding in the same run.
 
-Fires when the recipe's declared practice contradicts a structural finding
-in the same run. It joins the *real* claims ledger - the P-series ids the
-run's declared facts imply (`trustsight.scoring.declared_claims`) - against
-the structural findings: checksums declared (P001) while H091 reports the
-arrays do not cover every source, GPG verification declared (P002) while H024
-reports it removed, a source pinned (P005) while H101 reports the pinning
-lost, a trusted forge declared (P007) while H099 reports the host swapped.
+It joins the *real* claims ledger - the P-series ids the run's declared facts imply (`trustsight.scoring.declared_claims`) - against the structural findings: checksums declared (P001) while H091 reports the arrays do not cover every source, GPG verification declared (P002) while H024 reports it removed, a source pinned (P005) while H101 reports the pinning lost, a trusted forge declared (P007) while H099 reports the host swapped.
 
 Only M can see this. The declared-practice ledger is weight 0 and the
 structural finding is its own claim; "the recipe says one thing and
@@ -59,26 +58,26 @@ because a hit is about the tool, not the package.
 
 ### M002: Weak Signal Across Layers {#m002}
 
-**MEDIUM, weight 0** (annotation) · category `meta`
+- **Target:** programmatic (finding set)
+- **Severity:** MEDIUM, weight 0 (annotation)
+- **Category:** `meta`
+- **Condition:** Three or more distinct assurance layers fired, none above the alert bar (`[thresholds] m002.min_layers`, default 3).
 
-Fires when three or more distinct assurance layers fired, none above the
-alert bar. An attacker who spreads weak signals across layers stays under
-any single threshold; the span is only visible from the whole profile.
-
-Tunable: `[thresholds] m002.min_layers` (default 3). It adds no points but
-raises the reported band one step: a spread across layers is exactly the case
-a single-signal threshold cannot see. Measured on the locked benign corpus:
-112/3,739 (3.0%).
+An attacker who spreads weak signals across layers stays under
+any single threshold; the span is only visible from the whole profile. It
+adds no points but raises the reported band one step: a spread across layers
+is exactly the case a single-signal threshold cannot see. Measured on the
+locked benign corpus: 112/3,739 (3.0%).
 
 ### M003: Composition Not Owned Elsewhere {#m003}
 
-**MEDIUM, weight 0** · category `meta`
+- **Target:** programmatic (finding set)
+- **Severity:** MEDIUM, weight 0 (annotation)
+- **Category:** `meta`
+- **Condition:** Two or more distinct capability families co-occur while none of the cluster owners (H027, H098, X007) recorded the composition - typically because the owner is disabled.
 
-Fires when two or more distinct capability families co-occur while none of
-the cluster owners (H027, H098, X007) recorded the composition - typically
-because the owner is disabled. The composition is never lost. It adds no
-points but raises the reported band one step. Measured on the locked benign
-corpus: 316/3,739 (8.5%).
+The composition is never lost. It adds no points but raises the reported band
+one step. Measured on the locked benign corpus: 316/3,739 (8.5%).
 
 Standing gate: the escalation passes the benign-corpus cap (`M escalation
 stays below the benign cap`, `MAX_BENIGN_FIRE_RATE`) before it ships, the
