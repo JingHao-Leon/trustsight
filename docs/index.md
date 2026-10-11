@@ -89,6 +89,7 @@ promise of safety. The evidence is what you decide on. See
 | [CLI](reference/cli.md) | Full command reference for review, inspect, history, config. |
 | [Configuration](reference/configuration.md) | config.toml and its sibling rule, host, pattern, naming, threshold, and domain files. |
 | [Report Schema](reference/report-schema.md) | Stored PackageFact and CLI/API report JSON shapes. |
+| [Glossary](reference/glossary.md) | The vocabulary: rule family, subject, evidence category, evidence tier, detection, coverage, boundary. |
 | [Evidence Tiers](reference/evidence-tiers.md) | A/B/C/D evidence taxonomy with maturity gating. |
 | [Exit Codes](reference/exit-codes.md) | 0 (analysis completed), 2 (error), and why a flag is not an exit code. |
 

