@@ -16,7 +16,6 @@ from ..diffdoc import parse_diff_lines
 from ..novelty import normalize_url
 from ..rules import (
     _classify_enclosing_function,
-    _classify_line_context,
 )
 from ..tokenizer import (
     join_line_continuations,
@@ -634,10 +633,8 @@ def edge_foreign_pkg(ctx, add) -> None:
 
     An install hook invokes a foreign package manager.
     """
-    from .delivery import _printed_heredoc_body_indices
-
-    context = _classify_line_context(ctx.lines)
-    printed_heredoc = _printed_heredoc_body_indices(ctx.lines)
+    context = ctx.line_context
+    printed_heredoc = ctx.printed_heredoc
     foreign_re = _foreign_pkg_re(ctx.config)
     for i, line in enumerate(ctx.lines):
         if not line.startswith("+") or not ctx.scopes.within(i, _INSTALL_HOOKS):
