@@ -127,6 +127,24 @@ _WW_DIR_RE = re.compile(r"^/(?:tmp|var/tmp|dev/shm)(?:/|$)")
 _WW_CD_RE = re.compile(r"\bcd\s+/(?:tmp|var/tmp|dev/shm)\b")
 _MKTEMP_RE = re.compile(r"\bmktemp\b")
 
+
+def collapse_path_slashes(text: str) -> str:
+    """Collapse ``//`` runs and ``/.`` segments a shell path also collapses.
+
+    The kernel treats `//tmp`, `/./tmp` and `//.//tmp` as `/tmp`, so a
+    literal `/tmp` match misses the same directory written another way - the
+    harness walked `cd //tmp` and `cd /./tmp` straight past H038.  Only runs
+    of slashes and `/.` segments are folded; `http://` becomes `http:/`,
+    which matches none of the world-writable patterns.
+    """
+    out = re.sub(r"/{2,}", "/", text)
+    previous = None
+    while previous != out:
+        previous = out
+        out = re.sub(r"/\.(?=/|$)", "", out)
+    return out
+
+
 _HIDDEN_NAME_RE = re.compile(r"(?:^|/)\.[A-Za-z0-9_][^/]*$")
 _HIDDEN_EXEMPT_RE = re.compile(r"(?:^|/)(?:\.git|\.github|\.gitignore|\.gitmodules)(?:/|$)")
 

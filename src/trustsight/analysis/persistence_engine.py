@@ -63,6 +63,7 @@ from .persistence import (
     _WW_DIR_RE,
     _is_staged,
     _raw_targets,
+    collapse_path_slashes,
 )
 
 
@@ -148,18 +149,18 @@ def emit_worldwritable(ctx: GraphContext, add: Callable) -> None:
         if _MKTEMP_RE.search(body):
             continue
         for t in _raw_targets(body):
-            if _WW_DIR_RE.search(t.strip().strip("\"'")):
+            if _WW_DIR_RE.search(collapse_path_slashes(t.strip().strip("\"'"))):
                 add("H038", "World-Writable Staging", "HIGH", "persistence",
                     f"{ctx.scopes.label(i, _SCOPE_FUNCTIONS)}() stages work in a world-writable path: {t}",
                     line=i + 1, position=ctx.scopes.within(i, _SCOPE_FUNCTIONS), path=t)
                 return
         for t in _collect_executions(body):
-            if _WW_DIR_RE.search(t):
+            if _WW_DIR_RE.search(collapse_path_slashes(t)):
                 add("H038", "World-Writable Staging", "HIGH", "persistence",
                     f"{ctx.scopes.label(i, _SCOPE_FUNCTIONS)}() executes from a world-writable path: {t}",
                     line=i + 1, position=ctx.scopes.within(i, _SCOPE_FUNCTIONS), path=t)
                 return
-        if _WW_CD_RE.search(body):
+        if _WW_CD_RE.search(collapse_path_slashes(body)):
             add("H038", "World-Writable Staging", "HIGH", "persistence",
                 f"{ctx.scopes.label(i, _SCOPE_FUNCTIONS)}() works from a world-writable directory: {body.strip()[:80]}",
                 line=i + 1, position=ctx.scopes.within(i, _SCOPE_FUNCTIONS), body=body.strip()[:80])
