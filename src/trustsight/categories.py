@@ -73,6 +73,11 @@ class RuleCategory(StrEnum):
     #: build lane.  Reads the built package manifest, never the diff, and
     #: is never blended into the static score.
     ARTIFACT = "artifact"
+    #: The I series. Indicator membership (Addendum 5 §6.4): a declared
+    #: surface matches an entry in signed external data.  H056 and the IOC
+    #: federation are the same mechanism, so H056 is filed here (its id is
+    #: unchanged); new federation matches take ``I`` ids.
+    INDICATOR = "indicator"
 
     @property
     def doc_page(self) -> str:
@@ -115,6 +120,7 @@ _TITLES: dict[RuleCategory, str] = {
     RuleCategory.ENTROPY: "Entropy",
     RuleCategory.CORRELATION: "Correlation",
     RuleCategory.ARTIFACT: "Artifact",
+    RuleCategory.INDICATOR: "Indicators",
 }
 
 _SUMMARIES: dict[RuleCategory, str] = {
@@ -195,6 +201,11 @@ _SUMMARIES: dict[RuleCategory, str] = {
     RuleCategory.ARTIFACT: (
         "The built package does not match the recipe: the L9 artifact "
         "layer, off by default, never blended into the static score."
+    ),
+    RuleCategory.INDICATOR: (
+        "A declared surface matches an entry in signed external data: the "
+        "IOC list, or a federated publisher's indicator set.  Outside the "
+        "heuristic score and alerted at maximum priority."
     ),
 }
 
@@ -459,7 +470,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     # --- corpus behavioral ---------------------------------------------
     "H028": _C.CORPUS_BEHAVIORAL,
     "H046": _C.CORPUS_BEHAVIORAL,
-    "H056": _C.CORPUS_BEHAVIORAL,
+    "H056": _C.INDICATOR,
     "H057": _C.CORPUS_BEHAVIORAL,
     "H060": _C.CORPUS_BEHAVIORAL,
     "H061": _C.CORPUS_BEHAVIORAL,

@@ -126,6 +126,7 @@ Rules = [
   {Entropy = "reference/rules/entropy.md"},
   {Correlation = "reference/rules/correlation.md"},
   {Artifact = "reference/rules/artifact.md"},
+  {Indicators = "reference/rules/indicator.md"},
 ]
 
 [[project.nav]]

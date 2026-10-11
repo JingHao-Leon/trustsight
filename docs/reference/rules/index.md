@@ -46,7 +46,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Temporal Context](temporal.md) | `temporal` | 6 | How recently the package or this revision appeared, independent of any diff content. |
 | [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
-| [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 7 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
+| [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
 | [Crossfire](crossfire.md) | `crossfire` | 32 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 8 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
@@ -54,6 +54,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 | [Correlation](correlation.md) | `correlation` | 3 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
 | [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
+| [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
@@ -191,7 +192,7 @@ is deliberately non-contiguous; see
 | [H053](naming-and-dependency.md#h053) | Name/Host Consensus Divergence | Heuristic | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
 | [H054](maintainer-and-metadata.md#h054) | Build System Changed | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [H055](count-based.md#h055) | Attribute Burst | Heuristic | MEDIUM | [Count-Based](count-based.md) |
-| [H056](corpus-behavioral.md#h056) | Known Indicator of Compromise | Heuristic | FATAL | [Corpus Behavioral](corpus-behavioral.md) |
+| [H056](indicator.md#h056) | Known Indicator of Compromise | Heuristic | FATAL | [Indicators](indicator.md) |
 | [H057](corpus-behavioral.md#h057) | Transitive Exposure | Heuristic | INFO | [Corpus Behavioral](corpus-behavioral.md) |
 | [H058](maintainer-and-metadata.md#h058) | Maintainer Baseline Deviation | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [H059](naming-and-dependency.md#h059) | Name/Repo Divergence | Heuristic | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |

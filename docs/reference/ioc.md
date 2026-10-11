@@ -173,19 +173,25 @@ signed output. Keeping the harvester out of the tool is what keeps the IOC gate
 non-evadable by construction: a hash either matches or it does not, and no code
 in TrustSight decides what belongs on the list.
 
-## Federation (sketch)
+## Federation
 
 The indicator tier (Addendum 5 §6.4, I-series) formalizes what this page
 describes: signed external data as a first-class tier, matched outside the
-heuristic score and reported at maximum alert priority. `ioc update`
-refreshes the signed baseline on the operator's cadence; a stale or
-unsigned baseline is refused, never merged.
+heuristic score and reported at maximum alert priority. The [Indicators
+reference](rules/indicator.md) documents the tier and H056.
 
-A **federated** source is deferred until the G-series proves the consumer.
-The fixed shape when it lands: an `ioc update --federation <url>` source
-serving signed indicator sets through the same signature-verification path
-as the release channel, with publisher trust pinned per key in the existing
-keyring and revocable; hashed indicators only (domains, hashes, names - no
-raw maintainer data). The report already exposes the promoted `indicators`
-array (see the [report schema](report-schema.md)), so a consumer written
-against it needs no change when federation ships.
+A **federated** source is a publisher's signed indicator set, fetched with
+`ioc update --federation <url> --publisher-key KEY.pem`. The set is verified
+against the pinned publisher key through the same signature-verification path
+as the release channel before any entry is imported, so an unsigned or
+mis-signed set is refused, never merged. Publisher trust is per key and
+revocable; only hashed indicators travel (domains, hashes, names - no raw
+maintainer data). The report already exposes the promoted `indicators` array
+(see the [report schema](report-schema.md)), so a consumer needs no change.
+
+**Cadence.** `ioc update` refreshes the release-channel baseline and
+`ioc update --federation` refreshes a publisher set, both on the operator's
+cadence - typically the same schedule as the corpus cycle. A stale or
+unsigned baseline is refused rather than merged; the tool never falls back to
+an older signed set silently. A fresh install ships an **empty** list, so a
+miss is uninformative until the operator imports a signed set.
