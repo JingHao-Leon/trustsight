@@ -243,23 +243,23 @@ Two rules carry over from the CLI. Use `report.risk`, never a band re-derived fr
 
 ---
 
-## How scoring works
+## How it works
 
-Scoring is fully deterministic: the same diff, effective configuration, and stored observation history always produce the same score. The pipeline is:
+A run is deterministic: the same diff, effective configuration, and stored observation history always produce the same evidence record. The pipeline is:
 
 1. **Diff** the old and new PKGBUILD
 2. **Apply rules** to detect structural changes, suspicious commands, typosquatting, etc.
 3. **Classify URLs** into trust buckets (trusted forge, official, raw hosting, unknown, homograph)
 4. **Check novelty** against the local database of known URLs and maintainers
-5. **Calculate score** from 0-100 by summing weighted contributions across four evidence tiers
+5. **Report** the findings, the change summary, and any coverage gaps
 
-The score is a heuristic aggregate of weighted findings - not a probability of compromise, not a confidence, and not a prediction. A score of 40 does not mean "40% likely to be malicious"; it means the findings that fired carry that combined weight.
+Verdicts are template-based, describing each triggered finding in plain English. All output is deterministic and generated locally.
 
-Signals come from 226 documented rules across ten scoring namespaces: 37 detection rules (R-series, TOML-configurable), 103 heuristic rules (H-series), 30 code-structure rules (C001-C030), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008), 32 crossfire anti-evasion rules (X001-X032), 3 meta rules (M001-M003), 3 entropy rules (E001-E003), 3 temporal rules (T001-T003), and 3 correlation rules (G001-G003). Two further namespaces report at weight 0 and never score: declared practice (P001-P008) and unverifiable (W001-W008), the latter naming what an analysis could not read. The optional L9 build lane adds five artifact rules (A001-A005), reported outside the score when enabled. Calibration uses a locked, point-in-time 3,739-diff benign corpus of real AUR updates and 195 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
+### The score, on request
 
-Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
+A weighted score is computed on every run but is not part of the default output; ask for it with `--score` (`--risk` for the band). It is a heuristic aggregate of the fired findings - not a probability of compromise, not a confidence, and not a prediction. A score of 40 does not mean "40% likely to be malicious"; it means the findings that fired carry that combined weight. See [How TrustSight Works](https://docs.trustsight.org/explanation/) and the [scoring philosophy](https://docs.trustsight.org/explanation/scoring-philosophy/).
 
-See [scoring philosophy](https://docs.trustsight.org/explanation/scoring-philosophy/).
+Signals come from 226 documented rules across ten rule families: 37 detection rules (R-series, TOML-configurable), 103 heuristic rules (H-series), 30 code-structure rules (C001-C030), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008), 32 crossfire anti-evasion rules (X001-X032), 3 meta rules (M001-M003), 3 entropy rules (E001-E003), 3 temporal rules (T001-T003), and 3 correlation rules (G001-G003). Two further families are reported but never weighted: declared practice (P001-P008) and unverifiable (W001-W008), the latter naming what an analysis could not read. The optional L9 build lane adds five artifact rules (A001-A005), reported outside the heuristic when enabled. Calibration uses a locked, point-in-time 3,739-diff benign corpus of real AUR updates and 195 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
 
 ---
 
