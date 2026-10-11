@@ -1347,35 +1347,23 @@ def _collect_executions(body: str) -> list[str]:
     return paths
 
 
-def _write_execute_findings(diff_text, config, add, current_text=None) -> None:
-    """Same-function write-then-execute dataflow (H069, H072).
+def edge_write_execute(ctx, add) -> None:
+    """H069/H072 predicate over the shared graph context.
 
-    A path written by the recipe and later executed in the same build
-    function is a delivered payload.  H069 fires on generation writes
-    (heredoc/``>``) whose content the recipe itself created; H072 fires on
-    any write.  Both stay silent when the executed path arrived via the
-    declared source array or is one of the project's own configure/make
-    artifacts (H072 only).
+    Same-function write-then-execute dataflow: a path written by the recipe
+    and later executed in the same build function is a delivered payload.
     """
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text, current_text)
-    heredoc_body = _heredoc_body_indices(lines)
+    source_basenames = ctx.source_basenames
 
     writes_by_fn: dict[str, list[tuple[str, str]]] = {}
     h069_claimed: set[tuple[str, str]] = set()
 
-    for i, line in enumerate(lines):
-        # The *resolved* scope, not the enclosing name: a write in a helper
-        # and the execution in build() are one operation, and keying by the
-        # spelling put them in different buckets.
-        fn = scopes.within(i, _SCOPE_FUNCTIONS)
+    for i, line in enumerate(ctx.lines):
+        fn = ctx.scopes.within(i, _SCOPE_FUNCTIONS)
         if not line.startswith("+") or fn is None:
             continue
-        if i in heredoc_body:
+        if i in ctx.heredoc_body:
             continue
-        # A line the rules engine clamps cannot be read by the pairing
-        # passes either; the run already declares `line_truncated`.
         if len(line) > MAX_RULE_LINE_BYTES:
             continue
         body = _strip_comment(line[1:])
@@ -1394,14 +1382,14 @@ def _write_execute_findings(diff_text, config, add, current_text=None) -> None:
                 if kind == "generation":
                     add("H069", "Build-time Generation Then Execution", "HIGH", "execution",
                         f"{fn}() generates {wpath or path} and then executes it",
-                        line=_find_line(diff_text, path or base),
+                        line=_find_line(ctx.diff_text, path or base),
                         position=fn, path=path)
                     return
                 if base in _H072_BENIGN_EXEC or base in source_basenames:
                     continue
                 add("H072", "Write Then Execute", "HIGH", "execution",
                     f"{fn}() writes {wpath or path} and then executes it",
-                    line=_find_line(diff_text, path or base),
+                    line=_find_line(ctx.diff_text, path or base),
                     position=fn, path=path)
                 return
 
@@ -1703,7 +1691,7 @@ def _body_under_dir(body: str, directories) -> bool:
     return False
 
 
-def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> None:
+def edge_fetch_then_execute(ctx, add) -> None:
     """A downloader writes a file and the same function later executes it (H082).
 
     R001/R002 own the single-line pipe form; H082 owns the split form.
@@ -1733,11 +1721,13 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
     """
     from .network import claims_pipe_to_shell, claims_upload_line
 
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text, current_text)
-    declared_urls = _declared_source_urls(diff_text)
-    heredoc_body = _heredoc_body_indices(lines)
+    diff_text = ctx.diff_text
+    config = ctx.config
+    lines = ctx.lines
+    scopes = ctx.scopes
+    source_basenames = ctx.source_basenames
+    declared_urls = ctx.declared_urls
+    heredoc_body = ctx.heredoc_body
 
     #: Fetched paths pair with executions across the diff boundary, so each
     #: entry carries whether the fetch line itself was added: a chain fires
@@ -1942,41 +1932,29 @@ _SOURCE_EXEC_RE = re.compile(
 )
 
 
-def _source_file_execution_findings(diff_text, config, add, current_text=None) -> None:
-    """A file downloaded via ``source=()`` is executed as a script (H083).
+def edge_source_file_execution(ctx, add) -> None:
+    """H083 predicate over the shared graph context.
 
-    Build-system scripts (configure, make, meson, ninja, cmake) are common
-    declared-source executables and stay silent; the rule targets interpreted
-    execution of a downloaded script.  The exemption does not extend to a
-    declared source whose host is foreign to the upstream (bypass c8c3e1b7):
-    executing ``./configure`` fetched from an attacker-controlled host is
-    not an ordinary build step.
+    A file downloaded via ``source=()`` is executed as a script.  Build-system
+    names (configure/make/...) are exempt unless the declared source came from
+    a host foreign to the upstream.  The facts come from *ctx*.
     """
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text, current_text)
-    foreign_bases = _foreign_declared_source_bases(diff_text, current_text)
-    heredoc_body = _heredoc_body_indices(lines)
+    source_basenames = ctx.source_basenames
+    foreign_bases = ctx.foreign_declared_bases
     #: fn -> {renamed basename: declared source basename}.  A transform that
     #: reads a declared file and writes a new name (`awk '1' "$srcdir/x" >
-    #: run.me`) makes the new name the same payload; without this the
-    #: execution of `run.me` matched nothing.
+    #: run.me`) makes the new name the same payload.
     aliases_by_fn: dict[str, dict[str, str]] = {}
-    for i, line in enumerate(lines):
-        fn = scopes.within(i, _BUILD_FUNCTIONS)
+    for i, line in enumerate(ctx.lines):
+        fn = ctx.scopes.within(i, _BUILD_FUNCTIONS)
         if not line.startswith("+") or fn is None:
             continue
-        if i in heredoc_body:
+        if i in ctx.heredoc_body:
             continue
-        # A line the rules engine clamps cannot be read by the pairing
-        # passes either; the run already declares `line_truncated`.
         if len(line) > MAX_RULE_LINE_BYTES:
             continue
         body = _strip_comment(line[1:])
 
-        # `patch -i x.patch` (and `git apply`) consumes the file as data; it
-        # never executes it, and W003 owns that case.  H083 firing on the same
-        # line contradicted W003 (protonup-qt `patch -Np1 -i ../647.patch`).
         patch = _PATCH_APPLY_RE.search(body)
         patch_base = os.path.basename(_norm_path(patch.group(1))) if patch else ""
 
@@ -2000,13 +1978,8 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
             base = os.path.basename(path)
             if not base:
                 continue
-            # A benign build-system name only excuses execution when the
-            # file plausibly came with the project; a declared source from
-            # a host foreign to the upstream is a payload wearing a build
-            # name and keeps the full H083 treatment.
             if base in _H072_BENIGN_EXEC and base not in foreign_bases:
                 continue
-            # A patch application is not an execution of the patch file.
             if patch_base and base == patch_base:
                 continue
             alias_of = aliases_by_fn.get(fn, {}).get(base)
@@ -2019,7 +1992,7 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
                 continue
             add("H083", "Downloaded Source File Executed", "HIGH", "execution",
                 message,
-                line=_find_line(diff_text, raw.strip().strip('"\'')[:60] or base),
+                line=_find_line(ctx.diff_text, raw.strip().strip('"\'')[:60] or base),
                 position=fn, path=path)
             return
 
@@ -2840,19 +2813,20 @@ _SANDBOX_WRAPPER_RE = re.compile(
 )
 
 
-def _unread_execution_findings(diff_text, config, add, tree_manifest=None,
-                               current_text=None) -> None:
-    """Code from the unpacked tree runs and nobody read it (W001)."""
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text, current_text)
-    committed = {os.path.basename(name.rstrip("/"))
-                 for name, _head in (tree_manifest or ())}
-    heredoc_body = _heredoc_body_indices(lines)
+def edge_unread_execution(ctx, add) -> None:
+    """W001/H094 predicate over the shared graph context.
 
-    for i, line in enumerate(lines):
-        fn = scopes.within(i, _BUILD_FUNCTIONS)
-        if not line.startswith("+") or fn is None or i in heredoc_body:
+    Code from the unpacked tree runs and nobody read it.  H094 is the same
+    act in ``package()`` where it is not ordinary; W001 is the weight-0
+    report everywhere else.  The facts (resolved lines, scope, declared
+    basenames, heredoc bodies) come from *ctx*, computed once.
+    """
+    committed = {os.path.basename(name.rstrip("/"))
+                 for name, _head in (ctx.tree_manifest or ())}
+
+    for i, line in enumerate(ctx.lines):
+        fn = ctx.scopes.within(i, _BUILD_FUNCTIONS)
+        if not line.startswith("+") or fn is None or i in ctx.heredoc_body:
             continue
         body = _strip_comment(line[1:])
         m = _W001_RE.search(body)
@@ -2871,31 +2845,20 @@ def _unread_execution_findings(diff_text, config, add, tree_manifest=None,
             continue
         # Anything already claimed by a scoring rule is not this rule's
         # subject: W001 is what is left when nothing else could speak.
-        if base in source_basenames or base in committed:
+        if base in ctx.source_basenames or base in committed:
             continue
-        # H094 - the same act, in the one function where it is not
-        # ordinary. `package()` stages files into `$pkgdir`; it is not
-        # where software gets built, and its output *is* the package.
-        # Running an unaudited script there is a different act from
-        # running one in `build()`, and the corpus agrees: of the three
-        # benign diffs that reach this line, two are in `build()` and one
-        # in `prepare()`, and none is in `package()`.
-        #
-        # That is the split the W series needs. W001 keeps weight 0 over
-        # the surface where the behaviour is ordinary, and the subset that
-        # is not ordinary is scored rather than merely reported.
         if fn in _PACKAGING_FUNCTIONS:
             add("H094", "Unread Script Executed During Packaging", "HIGH",
                 "execution",
                 f"{fn}() runs {raw}, whose content was never read, while "
                 "staging the files that become the package",
-                line=_find_line(diff_text, raw[:60]), position=fn, path=raw)
+                line=_find_line(ctx.diff_text, raw[:60]), position=fn, path=raw)
             return
         add("W001", "Executes Code This Analysis Did Not Read", "INFO",
             "unverifiable",
             f"{fn}() runs {raw}, which is neither declared in source=() nor "
             f"committed to this repository, so its content was never read",
-            line=_find_line(diff_text, raw[:60]), position=fn, path=raw)
+            line=_find_line(ctx.diff_text, raw[:60]), position=fn, path=raw)
         return
 
 
@@ -3189,11 +3152,14 @@ def _generated_config_findings(diff_text, add, current_text=None) -> None:
 
 
 def _unverifiable_findings(diff_text, config, add, tree_manifest=None,
-                           current_text=None) -> None:
+                           current_text=None, ctx=None) -> None:
     """The W series: what ran, or will run, that nobody here read."""
-    _unread_execution_findings(diff_text, config, add,
-                               tree_manifest=tree_manifest,
-                               current_text=current_text)
+    from .edges import build_context, run_edge_instances
+
+    if ctx is None:
+        ctx = build_context(diff_text, config, current_text=current_text,
+                            tree_manifest=tree_manifest)
+    run_edge_instances(ctx, add, only=frozenset({"H094"}))
 
     from .buildfetch import registry_resolutions
 
@@ -3280,11 +3246,15 @@ def _delivery_findings(
     call graph: a helper added by this diff may be called from a ``build()``
     that the hunk does not show.
     """
+    from .edges import build_context, run_edge_instances
+
+    ctx = build_context(diff_text, config, current_text=current_text,
+                        tree_manifest=tree_manifest)
     _anti_analysis_findings(diff_text, config, add, current_text=current_text)
     _reconstructed_payload_findings(diff_text, config, add)
-    _write_execute_findings(diff_text, config, add, current_text=current_text)
-    _fetch_then_execute_findings(diff_text, config, add, current_text=current_text)
-    _source_file_execution_findings(diff_text, config, add, current_text=current_text)
+    run_edge_instances(ctx, add, only=frozenset({"H072"}))
+    run_edge_instances(ctx, add, only=frozenset({"H082"}))
+    run_edge_instances(ctx, add, only=frozenset({"H083"}))
     _service_binary_findings(diff_text, tree_manifest, add, current_text=current_text)
     _path_injection_findings(diff_text, tree_manifest, add, current_text=current_text)
     _committed_execution_findings(
@@ -3294,4 +3264,4 @@ def _delivery_findings(
     _boot_artifact_findings(diff_text, add, current_text=current_text)
     _unverifiable_findings(diff_text, config, add,
                            tree_manifest=tree_manifest,
-                           current_text=current_text)
+                           current_text=current_text, ctx=ctx)
