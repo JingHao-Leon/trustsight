@@ -21,14 +21,9 @@ import re
 import shlex
 
 from ..deps import _strip_comment
-from ..rules import ScopeResolver
-from ..tokenizer import resolve_added_lines
-from .build import _recipe_lines
 from .delivery import (
     _SCOPE_FUNCTIONS,
     _collect_executions,
-    _heredoc_body_indices,
-    _norm_path,
 )
 
 # ---------------------------------------------------------------------------
@@ -149,82 +144,6 @@ _ES_RE = re.compile(r"^\s*Exec(?:Start|StartPre|StartPost|StopPost|Stop)=\s*(\S+
 # ---------------------------------------------------------------------------
 
 
-def _libalpm_hook_findings(diff_text, config, add, current_text=None) -> None:
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    heredoc_body = _heredoc_body_indices(lines)
-    for i, line in enumerate(lines):
-        if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
-            continue
-        if i in heredoc_body:
-            continue
-        for t in _raw_targets(_strip_comment(line[1:])):
-            if _PACMAN_HOOK_RE.search(_norm_path(t)):
-                add("H062", "Pacman Hook Installed", "MEDIUM", "persistence",
-                    f"{scopes.label(i, _SCOPE_FUNCTIONS)}() installs a pacman hook: {t}",
-                    line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), path=t)
-                return
-
-
-def _home_rc_findings(diff_text, config, add, current_text=None) -> None:
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    heredoc_body = _heredoc_body_indices(lines)
-    for i, line in enumerate(lines):
-        if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
-            continue
-        if i in heredoc_body:
-            continue
-        for t in _raw_targets(_strip_comment(line[1:])):
-            t_clean = t.strip().strip("\"'")
-            if _is_staged(t_clean):
-                continue
-            base = os.path.basename(t_clean)
-            if _HOME_PREFIX_RE.search(t_clean) or _RC_BASENAME_RE.match(base):
-                # An install scriptlet runs as root during the pacman
-                # transaction, so a write into a user's home from there is a
-                # different act from the same write during build: nothing a
-                # package installs belongs in somebody's home directory, and
-                # root reaching into it is categorical rather than suspicious.
-                in_scriptlet = scopes.direct(i) in _INSTALL_SCRIPTLETS
-                severity = "CRITICAL" if in_scriptlet else "HIGH"
-                add("H032", "Write To User Home Or RC", severity, "persistence",
-                    f"{scopes.label(i, _SCOPE_FUNCTIONS)}() writes into the user's home/rc: {t}",
-                    line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), path=t)
-                return
-
-
-def _worldwritable_staging_findings(diff_text, config, add, current_text=None) -> None:
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    heredoc_body = _heredoc_body_indices(lines)
-    for i, line in enumerate(lines):
-        if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
-            continue
-        if i in heredoc_body:
-            continue
-        body = _strip_comment(line[1:])
-        if _MKTEMP_RE.search(body):
-            continue
-        for t in _raw_targets(body):
-            if _WW_DIR_RE.search(t.strip().strip("\"'")):
-                add("H038", "World-Writable Staging", "HIGH", "persistence",
-                    f"{scopes.label(i, _SCOPE_FUNCTIONS)}() stages work in a world-writable path: {t}",
-                    line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), path=t)
-                return
-        for t in _collect_executions(body):
-            if _WW_DIR_RE.search(t):
-                add("H038", "World-Writable Staging", "HIGH", "persistence",
-                    f"{scopes.label(i, _SCOPE_FUNCTIONS)}() executes from a world-writable path: {t}",
-                    line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), path=t)
-                return
-        if _WW_CD_RE.search(body):
-            add("H038", "World-Writable Staging", "HIGH", "persistence",
-                f"{scopes.label(i, _SCOPE_FUNCTIONS)}() works from a world-writable directory: {body.strip()[:80]}",
-                line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), body=body.strip()[:80])
-            return
-
-
 def edge_hidden_drop(ctx, add) -> None:
     """H042 predicate over the shared graph context.
 
@@ -267,27 +186,6 @@ def edge_hidden_drop(ctx, add) -> None:
             return
 
 
-def _systemd_unit_findings(diff_text, config, add, current_text=None) -> None:
-    """A systemd unit whose ExecStart points at a runtime-writable path.
-
-    Scans unit *content* (the ExecStart line itself, which can live in a
-    heredoc body), not the unit filename, per the plan's refinement.
-    """
-    for i, line in enumerate(resolve_added_lines(diff_text)):
-        if not line.startswith("+"):
-            continue
-        m = _ES_RE.match(line[1:])
-        if not m:
-            continue
-        target = m.group(1).strip("\"'")
-        if _RUNTIME_WRITABLE_RE.search(target):
-            add("H039", "Systemd ExecStart From Runtime-Writable Path", "HIGH",
-                "persistence",
-                f"systemd unit ExecStart points at runtime-writable path: {target}",
-                line=i + 1, exec_target=target)
-            return
-
-
 # H076 - a build function's only legitimate write destinations.  Devices are
 # not filesystem state ( ``> /dev/null`` is how a build stays quiet), and a
 # target carrying shell metacharacters is a fragment of an awk program or a
@@ -295,53 +193,6 @@ def _systemd_unit_findings(diff_text, config, add, current_text=None) -> None:
 _DEVICE_TARGET_RE = re.compile(r"^/dev/")
 _PLAIN_ABS_PATH_RE = re.compile(r"^/(?:[\w.+@-]+/)*[\w.+@-]+$")
 _BUILD_TIME_FUNCTIONS = frozenset({"prepare", "build", "check", "package"})
-
-
-def _outside_staging_findings(diff_text, config, add, current_text=None) -> None:
-    """H076 - a build-time function writes outside the staging root.
-
-    ``prepare``/``build``/``check``/``package`` run on the *builder's*
-    machine, and everything they produce belongs under ``$srcdir`` or
-    ``$pkgdir``.  A write to an absolute system path is therefore not a
-    packaging step at all: it changes the machine doing the build, and
-    whatever it leaves behind is outside anything pacman tracks or can
-    remove.  This is the shape rule behind the symlink-into-a-hook-directory
-    and drop-a-suid-binary cases - it does not care which directory was
-    chosen, only that the write escaped the staging tree.
-
-    Top-level lines count too, and are the worse case: they run when makepkg
-    *sources* the PKGBUILD, before any build step, so a write there happens
-    even on `makepkg --nobuild`.
-
-    Install hooks are excluded: ``post_install`` legitimately acts on the
-    target system, and its writes are H032/H038/H039/H062's territory.
-    """
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    heredoc_body = _heredoc_body_indices(lines)
-    for i, line in enumerate(lines):
-        if not line.startswith("+"):
-            continue
-        fn = scopes.within(i, _BUILD_TIME_FUNCTIONS)
-        if fn is None:
-            # A helper that build functions call is build-time code; only a
-            # line no build function reaches is genuinely "top level".
-            if scopes.direct(i) is not None:
-                continue
-            fn = "top level"
-        if i in heredoc_body:
-            continue
-        for target in _raw_targets(_strip_comment(line[1:])):
-            path = target.strip().strip("\"'")
-            if _is_staged(path) or _DEVICE_TARGET_RE.match(path):
-                continue
-            if not _PLAIN_ABS_PATH_RE.match(path):
-                continue
-            add("H076", "Build Writes Outside Staging Root", "HIGH",
-                "persistence",
-                f"{fn}() writes to {path}, outside $pkgdir/$srcdir",
-                line=i + 1, position=fn, path=path)
-            return
 
 
 # ---------------------------------------------------------------------------
@@ -422,12 +273,12 @@ def stand_down_committed_staging(
 def _persistence_findings(diff_text, config, add, current_text=None, ctx=None) -> None:
     """Run the install-path persistence rules (H032/H038/H039/H062/H042/H076)."""
     from .edges import build_context, run_edge_instances
+    from .persistence_engine import run_persistence_instances
 
     if ctx is None:
         ctx = build_context(diff_text, config, current_text=current_text)
-    _systemd_unit_findings(diff_text, config, add, current_text=current_text)
-    _libalpm_hook_findings(diff_text, config, add, current_text=current_text)
-    _home_rc_findings(diff_text, config, add, current_text=current_text)
-    _worldwritable_staging_findings(diff_text, config, add, current_text=current_text)
+    # Phase 4: the write-classification predicates share the graph context.
+    run_persistence_instances(
+        ctx, add, only=frozenset({"H039", "H062", "H032", "H038"}))
     run_edge_instances(ctx, add, only=frozenset({"H042"}))
-    _outside_staging_findings(diff_text, config, add, current_text=current_text)
+    run_persistence_instances(ctx, add, only=frozenset({"H076"}))

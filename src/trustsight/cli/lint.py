@@ -118,7 +118,8 @@ def lint_report(text: str, filename: str) -> dict:
     # §7/§9 diff-free rules: H076 (build write outside the staging root) and
     # H091 (checksum array shorter than source=()).  Neither needs a diff, so
     # a first-seen recipe gets the same hygiene view as a change.
-    from ..analysis.persistence import _outside_staging_findings
+    from ..analysis.edges import build_context
+    from ..analysis.persistence_engine import emit_outside_staging
     from ..analysis.structural import recipe_checksum_parity_finding
 
     hits: list[dict] = []
@@ -129,9 +130,10 @@ def lint_report(text: str, filename: str) -> dict:
             "file": extra.get("file", filename), "line": extra.get("line"),
         })
 
-    _outside_staging_findings(
-        _all_added_diff(text, filename), load_config(), _collect,
-        current_text=text)
+    emit_outside_staging(
+        build_context(_all_added_diff(text, filename), load_config(),
+                      current_text=text),
+        _collect)
     findings.extend(hits)
 
     parity = recipe_checksum_parity_finding(text)
