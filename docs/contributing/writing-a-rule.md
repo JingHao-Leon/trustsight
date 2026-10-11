@@ -11,7 +11,7 @@ TrustSight has two rule namespaces to avoid identifier collision:
 | D-series  | D001-D004   | `analysis/*.py`  | No                | Dependency-graph rules      |
 | C-series  | C001-C030   | `analysis/*.py`  | No                | Structural / multi-condition |
 | S-series  | S001-S008   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
-| X-series  | X001-X032   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
+| X-series  | X001-X033   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
 | P-series  | P001-P008 (P004 skipped) | `scoring.py` | No          | Declared practice, reported at weight 0 |
 | W-series  | W001-W008   | `analysis/*.py`  | No                | Unverifiable: what this run could not read, weight 0 |
 

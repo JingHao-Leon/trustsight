@@ -713,8 +713,13 @@ def _structural_findings(
     # which is the transition a watch replay exists to catch.
     lost = pinning_lost(diff_text)
     if lost:
-        name, old_url, new_url, span = lost[0]
-        add("H101", "Source Pinning Lost", "MEDIUM", "integrity",
+        name, old_url, new_url, span, renamed = lost[0]
+        # A pin that moved in place (same local name) is MEDIUM, the H099
+        # signal.  Deleting a checksummed archive and replacing it with a
+        # floating VCS entry under a new name drops the pin outright, which
+        # is HIGH on its own.
+        add("H101", "Source Pinning Lost", "HIGH" if renamed else "MEDIUM",
+            "integrity",
             f"source '{name}' was pinned and now tracks a moving target: "
             f"{old_url} -> {new_url}",
             span=span,

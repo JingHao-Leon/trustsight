@@ -70,6 +70,11 @@ def _is_package_name(token: str) -> bool:
 #: much as to memory it reads.
 _STRIP_COMMENT_CACHE = 8192
 
+#: Characters after which an unquoted ``#`` starts a comment.  Bash starts
+#: a comment only where a new word could begin; a ``#`` glued to the
+#: previous word (``x=1#; curl …``) is ordinary data.
+_WORD_BREAK = frozenset(" \t;&|()<>")
+
 
 @lru_cache(maxsize=_STRIP_COMMENT_CACHE)
 def _strip_comment(body: str) -> str:
@@ -87,6 +92,11 @@ def _strip_comment(body: str) -> str:
 
     Without this, every word of that note is read as a dependency name.
     A ``#`` inside quotes is data, not a comment.
+
+    A ``#`` glued to the preceding word is data too: in ``x=1#; curl url``
+    the shell assigns ``1#`` and then runs the second command, while a
+    naive cut at the first ``#`` hid the curl from every consumer of this
+    helper.
     """
     quote: str | None = None
     for index, char in enumerate(body):
@@ -95,7 +105,7 @@ def _strip_comment(body: str) -> str:
                 quote = None
         elif char in "'\"":
             quote = char
-        elif char == "#":
+        elif char == "#" and (index == 0 or body[index - 1] in _WORD_BREAK):
             return body[:index]
     return body
 
