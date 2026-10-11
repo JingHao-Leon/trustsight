@@ -121,19 +121,89 @@ _FORK_BOMB_DEF_RE = re.compile(
     r"[^}]*+\}",
 )
 
-# A loop whose body backgrounds work with no bound: `while true; do x & done`.
-# The condition must be a constant the shell cannot change, and the two loop
-# keywords test the opposite polarity: `while` loops on a true condition
-# (`while true`), `until` on a false one (`until false`).  `until false; do
-# : & done` is the same infinite fork bomb written from the other side and
-# read as clean until both spellings were matched here.
-_UNBOUNDED_SPAWN_RE = re.compile(
-    r"\b(?:while\s+(?::|true|/bin/true|\[\s*1\s*\]|\(\s*\(\s*1\s*\)\s*\))"
-    r"|until\s+(?:false|/bin/false|\[\s*0\s*\]|\(\s*\(\s*0\s*\)\s*\))"
-    r"|for\s*\(\(\s*;\s*;\s*\)\))(?![A-Za-z0-9_])"
-    r"[^\n]*?\bdo\b[^\n]*?&\s*(?:done|$)",
+# A loop whose body backgrounds work with no bound.  The bound is the
+# condition, and `while`/`until` test opposite polarity, so a loop is
+# unbounded when `while`'s condition is constantly true or `until`'s is
+# constantly false.  Matching the condition spelling alone was a bypass: the
+# harness enumerated `while [ 0 ]`, `while [ 0 = 0 ]`, `while [ -z '' ]`,
+# `while [[ -n x ]]`, `while test 1 = 1` and their `until` mirrors, only
+# `while true` fired, and `until false; do : & done` - the same bomb from the
+# other side - read as clean.  The condition is evaluated instead.
+_LOOP_SHAPE_RE = re.compile(
+    r"\b(?P<kw>while|until|for)\b(?P<cond>.*?)\bdo\b(?P<body>[^\n]*?)\bdone\b",
     re.IGNORECASE,
 )
+
+
+def _test_truth(expr: str) -> bool | None:
+    """Constant truth of a ``test`` expression, or None if it is not constant."""
+    tokens = expr.split()
+    if not tokens:
+        return False
+    if len(tokens) == 1:
+        return bool(tokens[0].strip("\"'"))
+    if len(tokens) == 2:
+        op, value = tokens[0], tokens[1].strip("\"'")
+        if op == "-z":
+            return value == ""
+        if op == "-n":
+            return value != ""
+        return None
+    if len(tokens) == 3:
+        left, op, right = (tokens[0].strip("\"'"), tokens[1],
+                           tokens[2].strip("\"'"))
+        if op in ("=", "=="):
+            return left == right
+        if op == "!=":
+            return left != right
+        if (op in ("-eq", "-ne", "-lt", "-gt", "-le", "-ge")
+                and left.lstrip("-").isdigit() and right.lstrip("-").isdigit()):
+            x, y = int(left), int(right)
+            return {"-eq": x == y, "-ne": x != y, "-lt": x < y,
+                    "-gt": x > y, "-le": x <= y, "-ge": x >= y}[op]
+    return None
+
+
+def _condition_truth(cond: str) -> bool | None:
+    """Constant truth of a ``while``/``until`` condition, or None if unknown."""
+    c = cond.strip().rstrip(";").strip()
+    if not c or re.search(r"[$`]", c):
+        return None                      # expansion: not a constant
+    if c in (":", "true", "/bin/true", "1"):
+        return True
+    if c in ("false", "/bin/false", "0"):
+        return False
+    m = re.fullmatch(r"\(\(\s*(.*?)\s*\)\)", c)
+    if m:
+        return bool(int(m.group(1))) if re.fullmatch(r"\d+", m.group(1)) else None
+    m = re.fullmatch(r"\[\[?\s*(.*?)\s*\]\]?", c)
+    if m:
+        return _test_truth(m.group(1))
+    if c.startswith("test "):
+        return _test_truth(c[5:])
+    return None
+
+
+def _unbounded_spawn(body: str) -> bool:
+    """A loop or function that backgrounds work with no way to stop."""
+    if _FORK_BOMB_DEF_RE.search(body):
+        return True
+    for match in _LOOP_SHAPE_RE.finditer(body):
+        if "&" not in match.group("body"):
+            continue                     # no backgrounding: ordinary iteration
+        kw = match.group("kw").lower()
+        cond = match.group("cond")
+        if kw == "for":
+            parts = re.fullmatch(r"\(\(\s*(.*?);\s*(.*?);\s*(.*?)\s*\)\)",
+                                 cond.strip().rstrip(";").strip())
+            if parts and not parts.group(2).strip():
+                return True              # `for ((init; ; step))` - no bound
+            continue                     # `for x in words` is bounded
+        truth = _condition_truth(cond)
+        if truth is not None and ((kw == "while" and truth)
+                                  or (kw == "until" and not truth)):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +431,7 @@ def _sabotage_findings(diff_text, config, add) -> None:
     for line_no, body in _added_bodies(diff_text):
         quoted = body.strip()[:120]
 
-        if _FORK_BOMB_DEF_RE.search(body) or _UNBOUNDED_SPAWN_RE.search(body):
+        if _unbounded_spawn(body):
             once("S001", "Recursive Self-Spawn", "CRITICAL",
                  f"a function pipes itself into itself and backgrounds it: {quoted}",
                  line_no, body=quoted)
