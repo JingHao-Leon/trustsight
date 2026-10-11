@@ -682,9 +682,9 @@ def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None
 
     if ctx is None:
         ctx = build_context(diff_text, config, current_text=current_text)
-    lines = resolve_added_lines(diff_text)
+    lines = ctx.lines
     enclosing = _classify_enclosing_function(lines)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
+    scopes = ctx.scopes
     # An install hook that *prints* `sudo pacman -S ...` is telling the user
     # what to run, not running it.  Both rules below read the line as a
     # command, which was survivable while a helper named `_cowork_note` sat
