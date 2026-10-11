@@ -540,9 +540,14 @@ _REMOTE_HERESTRING_RE = re.compile(
 )
 
 
-def _indirect_remote_execution_findings(diff_text, config, add) -> None:
-    """A fetched script is executed through an indirect shell path (H075)."""
-    for line in resolve_added_lines(diff_text):
+def edge_indirect_remote_execution(ctx, add) -> None:
+    """H075 predicate over the shared graph context.
+
+    A fetched script is executed through an indirect shell path (process
+    substitution, xargs, here-string).
+    """
+    diff_text = ctx.diff_text
+    for line in ctx.lines:
         if not line.startswith("+"):
             continue
         body = _strip_comment(line[1:])
@@ -593,8 +598,12 @@ def _indirect_remote_execution_findings(diff_text, config, add) -> None:
 _INDIRECT_EXPANSION_RE = re.compile(r"\$\{!\w+\}")
 
 
-def _indirect_expansion_findings(diff_text, config, add) -> None:
-    """A command or shell is reached through indirect expansion (H080)."""
+def edge_indirect_expansion(ctx, add) -> None:
+    """H080 predicate over the shared graph context.
+
+    A command or shell is reached through indirect variable expansion.
+    """
+    diff_text = ctx.diff_text
     for line in parse_diff_lines(join_line_continuations(split_lines(diff_text))).lines:
         if line.side != "add" or line.raw.startswith("+++"):
             continue
@@ -611,7 +620,68 @@ def _indirect_expansion_findings(diff_text, config, add) -> None:
         return
 
 
-def _build_findings(diff_text, config, add, current_text=None) -> None:
+def edge_hidden_fetch(ctx, add) -> None:
+    """H016 predicate over the shared graph context.
+
+    A fetch in a critical build function to a URL the ``source=()`` array
+    does not declare.  Stands down for H041 (upload) and R001/R002 (pipe to
+    shell) so one command is scored once.
+    """
+    config = ctx.config
+    from .network import claims_pipe_to_shell, claims_upload_line
+
+    declared = ctx.declared_urls_full
+    declared_hosts = ctx.declared_hosts
+    for i, line in enumerate(ctx.lines):
+        if not line.startswith("+") or not ctx.scopes.within(i, _CRITICAL_FUNCTIONS):
+            continue
+        if claims_upload_line(_strip_comment(line[1:]), config):
+            continue
+        if claims_pipe_to_shell(_strip_comment(line[1:])):
+            continue
+        for url in fetch_addresses(_strip_comment(line[1:])):
+            if "://" in url:
+                undeclared = normalize_url(url) not in declared
+            else:
+                undeclared = canonical_host(url) not in declared_hosts
+            if undeclared:
+                add("H016", "Hidden Network Fetch In Build", "HIGH", "network",
+                    f"{ctx.scopes.label(i, _CRITICAL_FUNCTIONS)}() downloads {url}, which is not in source=()",
+                    position=ctx.scopes.direct(i), url=url)
+                break
+        else:
+            continue
+        break
+
+
+def edge_foreign_pkg(ctx, add) -> None:
+    """H035 predicate over the shared graph context.
+
+    An install hook invokes a foreign package manager.
+    """
+    from .delivery import _printed_heredoc_body_indices
+
+    context = _classify_line_context(ctx.lines)
+    printed_heredoc = _printed_heredoc_body_indices(ctx.lines)
+    foreign_re = _foreign_pkg_re(ctx.config)
+    for i, line in enumerate(ctx.lines):
+        if not line.startswith("+") or not ctx.scopes.within(i, _INSTALL_HOOKS):
+            continue
+        if context.get(i) == "message" or i in printed_heredoc:
+            continue
+        body = _strip_comment(line)
+        if foreign_re.search(body):
+            add("H035", "Foreign Package Manager In Install Hook", "HIGH", "installer",
+                f"{ctx.scopes.label(i, _INSTALL_HOOKS)}() invokes foreign package manager: {body.strip()[:80]}",
+                position=ctx.scopes.direct(i), body=body.strip()[:80])
+            break
+
+
+def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None:
+    from .edges import build_context, run_edge_instances
+
+    if ctx is None:
+        ctx = build_context(diff_text, config, current_text=current_text)
     lines = resolve_added_lines(diff_text)
     enclosing = _classify_enclosing_function(lines)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
@@ -667,58 +737,7 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
             touched=", ".join(touched))
 
     if wants_061:
-        # Imported here rather than at module scope: network imports this
-        # module for the function-name tuples, so the dependency only runs
-        # one way at import time.
-        from .network import claims_upload_line, claims_pipe_to_shell
-
-        # The declared set is a fact about the post-diff file, not the hunk:
-        # `source=()` routinely sits outside it, and reading only the diff
-        # made H016 fire on a URL the recipe does declare.
-        from ..differ import urls_from_pkgbuild_text
-
-        declared_src = (
-            urls_from_pkgbuild_text(current_text)
-            if current_text
-            else extract_source_array_urls(diff_text)
-        )
-        declared = {normalize_url(u) for u in declared_src}
-        # A host-form address has no scheme to normalise; the comparison is
-        # by canonical host instead, so `ssh u@h` against a declared
-        # `https://h/...` is not a second finding.
-        declared_hosts = {
-            canonical_host(u.split("://", 1)[1].split("/", 1)[0])
-            for u in declared_src if "://" in u
-        }
-        for i, line in enumerate(lines):
-            if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
-                continue
-            # An upload to a paste/file-drop host is H041's finding, and
-            # "downloads {url}" would describe it wrongly as well as score
-            # the same command twice.  The same double-count applies when
-            # the fetch is piped into a shell: executing remote code is
-            # R001/R002's claim, and H016 standing down keeps one command
-            # scored once no matter how many rules could describe it.
-            if claims_upload_line(_strip_comment(line[1:]), config):
-                continue
-            if claims_pipe_to_shell(_strip_comment(line[1:])):
-                continue
-            # The *stripped* body, like the two claims above it: a
-            # commented-out fetch is not a fetch, and reading the raw line
-            # made `# curl ... | bash` an undeclared download.
-            for url in fetch_addresses(_strip_comment(line[1:])):
-                if "://" in url:
-                    undeclared = normalize_url(url) not in declared
-                else:
-                    undeclared = canonical_host(url) not in declared_hosts
-                if undeclared:
-                    add("H016", "Hidden Network Fetch In Build", "HIGH", "network",
-                        f"{scopes.label(i, _CRITICAL_FUNCTIONS)}() downloads {url}, which is not in source=()",
-                        position=enclosing[i], url=url)
-                    break
-            else:
-                continue
-            break
+        run_edge_instances(ctx, add, only=frozenset({"H016"}))
 
     if "H017" in wanted:
         for i, line in enumerate(lines):
@@ -769,18 +788,7 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
                 break
 
     if "H035" in wanted:
-        foreign_re = _foreign_pkg_re(config)
-        for i, line in enumerate(lines):
-            if not line.startswith("+") or not scopes.within(i, _INSTALL_HOOKS):
-                continue
-            if context.get(i) == "message" or i in printed_heredoc:
-                continue
-            body = _strip_comment(line)
-            if foreign_re.search(body):
-                add("H035", "Foreign Package Manager In Install Hook", "HIGH", "installer",
-                    f"{scopes.label(i, _INSTALL_HOOKS)}() invokes foreign package manager: {body.strip()[:80]}",
-                    position=enclosing[i], body=body.strip()[:80])
-                break
+        run_edge_instances(ctx, add, only=frozenset({"H035"}))
 
     if "H036" in wanted:
         # Density is measured on the raw line: reconstruction removes the

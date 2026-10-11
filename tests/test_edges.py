@@ -35,6 +35,25 @@ def test_edge_instances_register_h094():
         assert (ROOT / fixture).exists()
 
 
+#: The 14 traversal rules Addendum 3 Phase 3 migrates to edge predicates.
+_PHASE_3_IDS = {
+    "H016", "H035", "H040", "H041", "H042", "H071", "H072",
+    "H075", "H077", "H080", "H082", "H083", "H090", "H094",
+}
+
+
+def test_edge_instances_cover_every_phase_3_rule():
+    registered = {instance.rule_id: instance for instance in EDGE_INSTANCES}
+    assert _PHASE_3_IDS <= set(registered), sorted(_PHASE_3_IDS - set(registered))
+    for rule_id in _PHASE_3_IDS:
+        instance = registered[rule_id]
+        assert (ROOT / instance.doc).exists(), rule_id
+        assert instance.fixtures, rule_id
+        for fixture in instance.fixtures:
+            assert (ROOT / fixture).exists(), (rule_id, fixture)
+
+
+
 def test_build_context_computes_the_shared_facts():
     ctx = build_context(_diff("build() {\n  ./x.sh\n}\n"), {})
     assert isinstance(ctx, GraphContext)

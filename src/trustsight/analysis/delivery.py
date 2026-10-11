@@ -2499,34 +2499,6 @@ _COMMITTED_CARRIER_RE = re.compile(
 )
 
 
-def _committed_payload_finding(name: str, head: bytes) -> dict | None:
-    """H090 for one committed companion, or ``None``."""
-    if not _COMMITTED_CARRIER_RE.search(name.rstrip("/")):
-        return None
-    try:
-        text = head.decode("utf-8", errors="replace")
-    except Exception:
-        return None
-    # A patch is read by its *added* lines: a hunk that removes a
-    # `curl … | sh` is the opposite of this rule's subject.
-    if name.lower().endswith((".patch", ".diff")):
-        text = "\n".join(
-            ln.content for ln in parse_diff_lines(split_lines(text)).lines
-            if ln.side == "add" and not ln.raw.startswith("+++")
-        )
-    m = _COMMITTED_PAYLOAD_RE.search(text)
-    if not m:
-        return None
-    return stamp({
-        "rule_id": "H090",
-        "name": "Committed Companion Carries A Fetch-Execute Payload",
-        "severity": "CRITICAL", "category": "delivery",
-        "match": f"{name} downloads and runs code: {m.group(0).strip()[:80]}",
-        "file": name,
-        "params": {"path": name, "body": m.group(0).strip()[:120]},
-    })
-
-
 #: Fields that describe rather than run.
 #:
 #: The first version of this rule asked "is this an exec directive" and
@@ -2606,11 +2578,13 @@ def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]
     hook or patch whose content fetches and runs code fires H090.
     """
     source_basenames = {_source_basename(u) for u in source_urls if _source_basename(u)}
+    from .edges import edge_committed_payload
+
     findings: list[dict] = []
     for name, head in files:
         if _is_test_fixture(name, os.path.basename(name.rstrip("/"))):
             continue
-        payload = (_committed_payload_finding(name, head)
+        payload = (edge_committed_payload(name, head)
                    or _committed_build_path_finding(name, head))
         if payload is not None:
             # Every carrier, not just the first.  The early `break` let a
@@ -3238,18 +3212,20 @@ def _unread_patch_findings(diff_text, add, tree_manifest=None,
 
 
 def _delivery_findings(
-    diff_text, config, add, tree_manifest=None, current_text=None
+    diff_text, config, add, tree_manifest=None, current_text=None, ctx=None
 ) -> None:
     """Run the diff-text Phase 2 rules (H067-H069, H072, H081-H085) through *add*.
 
     *current_text* is the PKGBUILD as it now stands, used only to build the
     call graph: a helper added by this diff may be called from a ``build()``
-    that the hunk does not show.
+    that the hunk does not show.  *ctx* is the shared graph context (Phase 3);
+    it is built here only when the caller did not supply one.
     """
     from .edges import build_context, run_edge_instances
 
-    ctx = build_context(diff_text, config, current_text=current_text,
-                        tree_manifest=tree_manifest)
+    if ctx is None:
+        ctx = build_context(diff_text, config, current_text=current_text,
+                            tree_manifest=tree_manifest)
     _anti_analysis_findings(diff_text, config, add, current_text=current_text)
     _reconstructed_payload_findings(diff_text, config, add)
     run_edge_instances(ctx, add, only=frozenset({"H072"}))
