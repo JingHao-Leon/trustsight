@@ -122,8 +122,15 @@ _FORK_BOMB_DEF_RE = re.compile(
 )
 
 # A loop whose body backgrounds work with no bound: `while true; do x & done`.
+# The condition must be a constant the shell cannot change, and the two loop
+# keywords test the opposite polarity: `while` loops on a true condition
+# (`while true`), `until` on a false one (`until false`).  `until false; do
+# : & done` is the same infinite fork bomb written from the other side and
+# read as clean until both spellings were matched here.
 _UNBOUNDED_SPAWN_RE = re.compile(
-    r"\b(?:while\s+(?::|true|\[\s*1\s*\])|for\s*\(\(\s*;\s*;\s*\)\))\b"
+    r"\b(?:while\s+(?::|true|/bin/true|\[\s*1\s*\]|\(\s*\(\s*1\s*\)\s*\))"
+    r"|until\s+(?:false|/bin/false|\[\s*0\s*\]|\(\s*\(\s*0\s*\)\s*\))"
+    r"|for\s*\(\(\s*;\s*;\s*\)\))(?![A-Za-z0-9_])"
     r"[^\n]*?\bdo\b[^\n]*?&\s*(?:done|$)",
     re.IGNORECASE,
 )

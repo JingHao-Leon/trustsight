@@ -139,6 +139,12 @@
     ],
     "relabelled": "H014 dropped 2026-08-07: no shipped rule names exec of fetched output; the top-level wget is a parse-time fetch, which H077 claims (HIGH 25) plus the source bucket (20)."
   },
+  "H083-lone-source-benign-name.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "H083"
+    ]
+  },
   "H087-recipe-only-npm.diff": {
     "min_score": 20,
     "must_fire": [
@@ -1135,6 +1141,12 @@
   },
   "S001-lookalike.diff": {
     "must_not_fire": [
+      "S001"
+    ]
+  },
+  "S001-until-false.diff": {
+    "min_score": 30,
+    "must_fire": [
       "S001"
     ]
   },

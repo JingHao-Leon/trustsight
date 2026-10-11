@@ -923,11 +923,16 @@ def _foreign_declared_source_bases(
         if _is_upstream_owned(url, dom) and _shares_archive_channel(url, dom):
             continue
         if not upstream_dom:
-            # No reference host to diverge from: a lone declared host is the
-            # channel, and a trusted mirror is accepted as one.  A benign
-            # build script from an arbitrary host still qualifies below.
-            if len(domains) == 1:
-                continue
+            # No reference host to diverge from.  A trusted channel (forge,
+            # official mirror, raw-content host) is accepted as the
+            # upstream's own; an arbitrary host is not, even when it is the
+            # recipe's only source.  The old `len(domains) == 1` shortcut
+            # accepted a lone attacker host, so deleting `url=` and declaring
+            # a single payload named `Makefile`/`configure` disabled the
+            # divergence check entirely - a bypass the adversarial harness
+            # found.  A benign lone source still passes when it is an archive
+            # (H083 only matches an executed *declared* file) or sits on a
+            # trusted bucket.
             if classify_url(url)[0] in _TRUSTED_SOURCE_BUCKETS:
                 continue
         foreign.add(name)
@@ -2175,6 +2180,16 @@ def edge_undeclared_provenance_execution(ctx, add) -> None:
         for m in _SOURCE_EXEC_RE.finditer(body):
             raw = next((g for g in m.groups() if g), None)
             if not raw:
+                continue
+            # An interpreter flag is not a file: ``python -m build`` captures
+            # ``-m``, which has no provenance because it is not a path.
+            if raw.startswith("-"):
+                continue
+            # The bare `./script` arm drops the `./` from its capture, so a
+            # relative path would otherwise read as a `$srcdir`-root file.
+            # `./build` runs the project's own script inside the unpacked
+            # tree; only a `$srcdir`-root file has no provenance.
+            if m.group(0).rstrip().endswith("./" + raw):
                 continue
             path = _norm_path(raw)
             # Only a ``$srcdir``-root file: legitimate build scripts live
