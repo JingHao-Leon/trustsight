@@ -20,7 +20,7 @@ from typing import Callable
 from ..deps import _strip_comment
 from ..diffdoc import parse_diff_lines
 from ..findings import stamp
-from ..rules import MAX_RULE_LINE_BYTES, _classify_line_context
+from ..rules import MAX_RULE_LINE_BYTES
 from ..tokenizer import split_lines
 from .build import (
     _HOOK_EXEC_RE,
@@ -46,7 +46,6 @@ from .delivery import (
     _find_line,
     _installed_executables,
     _norm_path,
-    _printed_heredoc_body_indices,
 )
 from .edges import GraphContext
 from .persistence import (
@@ -209,8 +208,8 @@ def emit_sudo(ctx: GraphContext, add: Callable) -> None:
 
 def emit_install_hook(ctx: GraphContext, add: Callable) -> None:
     """H017: an install hook fetches or executes."""
-    context = _classify_line_context(ctx.lines)
-    printed_heredoc = _printed_heredoc_body_indices(ctx.lines)
+    context = ctx.line_context
+    printed_heredoc = ctx.printed_heredoc
     for i, line in enumerate(ctx.lines):
         if not line.startswith("+") or not ctx.scopes.within(i, _INSTALL_HOOKS):
             continue
@@ -308,7 +307,7 @@ def emit_path_injection(ctx: GraphContext, add: Callable) -> None:
                 return
 
 
-def _report_packaged_path(add: Callable, diff_text: str, index: int,
+def _report_packaged_path(add: Callable, diff_text: str,
                           body: str, target: str) -> None:
     named = _BUILD_ONLY_PATH_RE.search(body)
     add("H089", "Packaged File Names A Build-Only Path", "HIGH", "persistence",
@@ -335,7 +334,7 @@ def emit_packaged_content(ctx: GraphContext, add: Callable) -> None:
             continue
         if delims:
             if open_target and _BUILD_ONLY_PATH_RE.search(raw):
-                _report_packaged_path(add, ctx.diff_text, i, raw, open_target)
+                _report_packaged_path(add, ctx.diff_text, raw, open_target)
                 return
             continue
         if ctx.scopes.within(i, _SCOPE_FUNCTIONS) is None:
@@ -355,7 +354,7 @@ def emit_packaged_content(ctx: GraphContext, add: Callable) -> None:
         if not _CONTENT_WRITE_RE.search(content):
             continue
         if _BUILD_ONLY_PATH_RE.search(content):
-            _report_packaged_path(add, ctx.diff_text, i, body, target)
+            _report_packaged_path(add, ctx.diff_text, body, target)
             return
 
 
@@ -474,8 +473,14 @@ PERSISTENCE_INSTANCES: tuple[PersistenceInstance, ...] = (
 def run_persistence_instances(
     ctx: GraphContext, add: Callable, *, only: frozenset[str] | None = None
 ) -> None:
-    """Dispatch the persistence predicates over *ctx*."""
+    """Dispatch the persistence predicates over *ctx*.
+
+    A row with no graph emitter (the manifest-scope H093) is skipped, so a
+    dispatch without *only* is safe rather than a ``TypeError``.
+    """
     for instance in PERSISTENCE_INSTANCES:
+        if instance.emitter is None:
+            continue
         if only is not None and instance.rule_id not in only:
             continue
         instance.emitter(ctx, add)

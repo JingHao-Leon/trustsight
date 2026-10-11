@@ -23,6 +23,7 @@ from ..diffdoc import parse_diff_lines
 from ..findings import stamp
 from ..novelty import normalize_url
 from ..rules import ScopeResolver
+from ..rules import _classify_line_context
 from ..tokenizer import resolve_added_lines, split_lines
 from .build import (
     _recipe_lines,
@@ -45,6 +46,7 @@ from .delivery import (
     _declared_source_urls,
     _foreign_declared_source_bases,
     _heredoc_body_indices,
+    _printed_heredoc_body_indices,
     edge_fetch_then_execute,
     edge_source_file_execution,
     edge_unread_execution,
@@ -83,6 +85,12 @@ class GraphContext:
     declared_urls_full: frozenset[str] = field(default_factory=frozenset)
     #: Canonical hosts named by the declared sources.
     declared_hosts: frozenset[str] = field(default_factory=frozenset)
+    #: Per-line comment/message context (``_classify_line_context``), shared
+    #: by the install-hook predicates (H017, H035) instead of each computing
+    #: it.
+    line_context: dict = field(default_factory=dict)
+    #: Indices of heredoc bodies that only *print* (message context).
+    printed_heredoc: frozenset[int] = field(default_factory=frozenset)
 
 
 def build_context(
@@ -118,6 +126,8 @@ def build_context(
             canonical_host(u.split("://", 1)[1].split("/", 1)[0])
             for u in declared_src if "://" in u
         ),
+        line_context=_classify_line_context(lines),
+        printed_heredoc=frozenset(_printed_heredoc_body_indices(lines)),
     )
 
 
