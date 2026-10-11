@@ -538,11 +538,11 @@ def test_the_landing_page_rule_count_matches_the_catalog():
             RuleCategory.UNVERIFIABLE, RuleCategory.ARTIFACT)
     )
     text = (ROOT / "docs" / "index.md").read_text()
-    match = re.search(r"TrustSight ships ([\d,]+) documented scoring rules", text)
-    assert match, "docs/index.md no longer states a scoring-rule count"
+    match = re.search(r"TrustSight ships ([\d,]+) documented detection rules", text)
+    assert match, "docs/index.md no longer states a detection-rule count"
     claimed = int(match.group(1).replace(",", ""))
     assert claimed == scoring, (
-        f"docs/index.md claims {claimed} scoring rules; the catalog holds {scoring}"
+        f"docs/index.md claims {claimed} detection rules; the catalog holds {scoring}"
     )
 
 

@@ -82,6 +82,8 @@ Measured against the locked benign corpus as `tests/fixtures/corpus.lock` record
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model on this corpus and fixture set. CI rejects gate regressions, not changes to an external performance claim.
 
+In one line: 68.0% benign zero-rate, benign p95 = 35 against malicious p5 = 60 on the 3,739-diff locked corpus.
+
 ## Reproducible methodology
 
 - **Corpus pinned** via `corpus.lock`: the AUR snapshot is versioned and reproducible. The same lock names the same packages and diffs on any machine, but a rebuild is not byte-stable across git versions (`git diff -W` output moves), so reproducible numbers come from the packed corpus release asset, not a local rebuild.

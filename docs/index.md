@@ -19,28 +19,28 @@ Ready to get started? Head over to the [Tutorial](tutorial/installation.md) for 
 
 ---
 
-## How scoring works
+## What a run produces
 
-TrustSight computes a deterministic score from 0 to 100 for every AUR package update. The score is calculated entirely in Python from structured data: rule firings, URL classification, novelty tracking, and verification metadata.
+Every review is a deterministic, structured **evidence report**, computed
+locally from the bytes on disk. Findings come first:
 
-The scoring system is organized into four evidence tiers:
+- **Findings** - each is a named rule with the file, side and line it matched,
+  and a plain-English description of what it saw.
+- **The change summary** - what the update altered: modified files, source and
+  checksum array moves, dependency additions, and maintainer or version changes.
+- **Coverage gaps** - what the run could not fully assess, stated outright so an
+  incomplete analysis is never mistaken for a clean one.
+- **A template verdict** - the findings rendered into a review direction. It
+  describes what fired; it never grants permission to skip review.
 
-| Tier | Name | What it measures |
-|------|------|-----------------|
-| A | Structural | Pattern-matched rules against PKGBUILD commands (curl pipe bash, checksum disabled, sudo in functions) |
-| B | Priors/Context | Domain reputation of new source URLs (trusted forge, official, raw hosting, unknown, homograph) |
-| C | History/Novelty | First-seen URLs and maintainers, scaled by observation count |
-| D | Verification | Declared integrity metadata (checksums, PGP keys, GPG verify) reported at weight 0, never scored |
-
-A package with checksums, a trusted forge source, and no rule firings scores 0. A package with `curl | bash` on an unknown domain with no checksum scores 60+. FATAL rule findings (prompt injection or Unicode deception) hard-stop at 100. Confirmed IOC matches are reported separately with their curator attribution; they do not change the score or risk band.
-
-**Key numbers:** 68.0% benign zero-rate, benign p95 = 35 against malicious p5 = 60 on the 3,739-diff locked corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
-
-See [How TrustSight Works](explanation/index.md) for the full pipeline explanation and [Rules Reference](reference/rules/index.md) for the complete rule catalog.
+The default output is evidence, not a verdict, and nothing it prints is a
+promise of safety. The evidence is what you decide on. See
+[How TrustSight Works](explanation/index.md) for the full pipeline and the
+[security model](security.md) for what a result does and does not claim.
 
 !!! tip "Rules Reference"
 
-    TrustSight ships 226 documented scoring rules across ten families: 37 R-series detection rules, 103 H-series heuristics, 30 C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, 32 X-series crossfire rules, three M-series meta rules, three E-series entropy rules, two T-series temporal rules, and three G-series correlation rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W008 are weight zero and never move a number. The optional L9 build lane adds five artifact rules A001-A005, reported outside the score when enabled. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
+    TrustSight ships 226 documented detection rules across ten families: 37 R-series detection rules, 103 H-series heuristics, 30 C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, 32 X-series crossfire rules, three M-series meta rules, three E-series entropy rules, two T-series temporal rules, and three G-series correlation rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families are reported but never weighted: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W008. The optional L9 build lane adds five artifact rules A001-A005, reported outside the heuristic when enabled. Each rule has a severity, match target, and scope that determine how it fires and what it reports.
 
     [Browse the full rule catalog &rarr;](reference/rules/index.md)
 
@@ -52,15 +52,14 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 |------|----------------|
 | [Installation](tutorial/installation.md) | Build the repository's PKGBUILD with `makepkg`. |
 | [Quickstart](tutorial/quickstart.md) | Run your first review, read the output table, understand the verdicts. |
-| [Reading a Report](tutorial/reading-a-report.md) | Deep dive into score breakdown, evidence tiers, rule firings, and novelty context. |
+| [Reading a Report](tutorial/reading-a-report.md) | Deep dive into the findings, evidence tiers, rule firings, and novelty context. |
 
 ## Explanation
 
 | Page | What it covers |
 |------|----------------|
-| [How TrustSight Works](explanation/index.md) | Full pipeline: parse, analyze, score, classify, translate. |
-| [Security Model](security.md) | What TrustSight guarantees while reading hostile input, why the score is deterministic and reproducible, what a verdict claims, and how each invariant is enforced. |
-| [Scoring Philosophy](explanation/scoring-philosophy.md) | Evidence tiers, why verification is declared rather than scored, corpus-derived weights, rule design decisions. |
+| [How TrustSight Works](explanation/index.md) | Full pipeline: parse, analyse, classify, translate. |
+| [Security Model](security.md) | What TrustSight guarantees while reading hostile input, why every result is deterministic and reproducible, what a verdict claims, and how each invariant is enforced. |
 | [Cold Start and Maturity](explanation/cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating. |
 | [Corpus and Priors](explanation/corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting. |
 | [Fire Rates](explanation/fire-rates.md) | Per-rule false-positive rates on the benign corpus. |
@@ -77,7 +76,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 |-------|----------------|
 | [Auditing Before Update](guides/auditing-before-update.md) | Everyday workflow: scan AUR packages before `yay -Syu`. |
 | [Using in CI](guides/using-in-ci.md) | Gate package installs in CI/CD on the JSON report. |
-| [Acting on a Flag](guides/acting-on-a-flag.md) | A package scored above 20 or returned INCONCLUSIVE - next steps. |
+| [Acting on a Flag](guides/acting-on-a-flag.md) | A package flagged above the review bar or returned INCONCLUSIVE - next steps. |
 | [Configuring Rules and Weights](guides/configuring-rules-and-weights.md) | Edit `rules.toml` or `config.toml` to match your threat model. |
 | [Tuning False Positives](guides/tuning-false-positives.md) | A rule is firing too often on your packages - identify and fix it. |
 
@@ -90,7 +89,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [CLI](reference/cli.md) | Full command reference for review, inspect, history, config. |
 | [Configuration](reference/configuration.md) | config.toml and its sibling rule, host, pattern, naming, threshold, and domain files. |
 | [Report Schema](reference/report-schema.md) | Stored PackageFact and CLI/API report JSON shapes. |
-| [Evidence Tiers](reference/evidence-tiers.md) | A/B/C/D taxonomy with maturity gating. |
+| [Evidence Tiers](reference/evidence-tiers.md) | A/B/C/D evidence taxonomy with maturity gating. |
 | [Exit Codes](reference/exit-codes.md) | 0 (analysis completed), 2 (error), and why a flag is not an exit code. |
 
 ## Contributing
@@ -99,7 +98,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 |------|----------------|
 | [Development Setup](contributing/development-setup.md) | Set up a local dev environment. |
 | [Writing a Rule](contributing/writing-a-rule.md) | R-series regex, H-series heuristic and C-series rule guidelines. |
-| [Re-baselining](contributing/re-baselining.md) | Update benchmarks after scoring changes. |
+| [Re-baselining](contributing/re-baselining.md) | Update benchmarks after detection changes. |
 
 ---
 
