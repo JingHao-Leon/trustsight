@@ -15,7 +15,6 @@ from ..differ import extract_source_array_urls
 from ..diffdoc import parse_diff_lines
 from ..novelty import normalize_url
 from ..rules import (
-    ScopeResolver,
     _classify_enclosing_function,
     _classify_line_context,
 )
@@ -483,30 +482,6 @@ def _recipe_lines(current_text: str | None) -> list[str] | None:
     return [" " + ln for ln in split_lines(current_text)]
 
 
-def _sudo_findings(diff_text, config, add, current_text=None) -> None:
-    """A build/install function executes ``sudo`` (H004, CRITICAL).
-
-    Replaces the old ``\\bsudo\\b`` regex rule: that fired on any mention
-    inside a function body, including optdepends names, path segments and
-    unquoted echo strings.  The command-position test fires only when sudo
-    is actually invoked, and only inside build/install functions.
-    """
-    lines = resolve_added_lines(diff_text)
-    enclosing = _classify_enclosing_function(lines)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    for i, line in enumerate(lines):
-        if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
-            continue
-        body = _strip_comment(line[1:])
-        if _sudo_escalates(body):
-            add("H004", "Privilege Escalation", "CRITICAL", "privilege",
-                f"{scopes.label(i, _SCOPE_FUNCTIONS)}() escalates privilege: "
-                f"{body.strip()[:80]}",
-                line=_added_line_number(diff_text, body.strip()[:30]),
-                position=enclosing[i], body=body.strip()[:80])
-            return
-
-
 # H075 - a fetched script reaches a shell through an indirect path the
 # pipe-to-shell regexes (R001/R002) and the R039/R040 eval / sh -c rules do
 # not see: process substitution (``bash <(curl ...)``), xargs (``curl ... |
@@ -685,19 +660,6 @@ def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None
     lines = ctx.lines
     enclosing = _classify_enclosing_function(lines)
     scopes = ctx.scopes
-    # An install hook that *prints* `sudo pacman -S ...` is telling the user
-    # what to run, not running it.  Both rules below read the line as a
-    # command, which was survivable while a helper named `_cowork_note` sat
-    # outside every hook scope; following calls puts it inside one, so the
-    # message context the rule engine already computes has to be consulted
-    # here too.
-    context = _classify_line_context(lines)
-    # A heredoc that only prints is the multi-line half of the message
-    # context above: `cat <<'MESSAGE'` listing instructions is not a
-    # command.  The helper lives in delivery, which imports this module, so
-    # the import is deferred.
-    from .delivery import _printed_heredoc_body_indices
-    printed_heredoc = _printed_heredoc_body_indices(lines)
 
     high_found = False
     med_found = False
@@ -740,17 +702,9 @@ def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None
         run_edge_instances(ctx, add, only=frozenset({"H016"}))
 
     if "H017" in wanted:
-        for i, line in enumerate(lines):
-            if not line.startswith("+") or not scopes.within(i, _INSTALL_HOOKS):
-                continue
-            if context.get(i) == "message" or i in printed_heredoc:
-                continue
-            body = _strip_comment(line)
-            if _network_fetch_url(body) or _HOOK_EXEC_RE.search(body):
-                add("H017", "Install Hook Fetches Or Executes", "HIGH", "installer",
-                    f"{scopes.label(i, _INSTALL_HOOKS)}() runs as root and contains: {body.strip()[:80]}",
-                    position=enclosing[i], body=body.strip()[:80])
-                break
+        from .persistence_engine import run_persistence_instances
+
+        run_persistence_instances(ctx, add, only=frozenset({"H017"}))
 
     if "H018" in wanted:
         from ..differ import urls_from_pkgbuild_text
