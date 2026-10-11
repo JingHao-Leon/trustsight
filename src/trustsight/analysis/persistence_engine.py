@@ -54,6 +54,8 @@ from .persistence import (
     _ES_RE,
     _HOME_PREFIX_RE,
     _INSTALL_SCRIPTLETS,
+    _INLINE_OPEN_WRITE_RE,
+    _INPLACE_EDIT_RE,
     _MKTEMP_RE,
     _PACMAN_HOOK_RE,
     _PLAIN_ABS_PATH_RE,
@@ -179,11 +181,32 @@ def emit_outside_staging(ctx: GraphContext, add: Callable) -> None:
             fn = "top level"
         if i in ctx.heredoc_body:
             continue
-        for target in _raw_targets(_strip_comment(line[1:])):
+        body = _strip_comment(line[1:])
+        for target in _raw_targets(body):
             path = target.strip().strip("\"'")
             if _is_staged(path) or _DEVICE_TARGET_RE.match(path):
                 continue
             if not _PLAIN_ABS_PATH_RE.match(path):
+                continue
+            add("H076", "Build Writes Outside Staging Root", "HIGH",
+                "persistence",
+                f"{fn}() writes to {path}, outside $pkgdir/$srcdir",
+                line=i + 1, position=fn, path=path)
+            return
+        # The shell target scan cannot see a write spelled inside an
+        # interpreter: `perl -pi ... /etc/x` and `open("/etc/x", "a")`.
+        for match in _INPLACE_EDIT_RE.finditer(body):
+            path = match.group(1).strip("\"'")
+            if _is_staged(path) or not _PLAIN_ABS_PATH_RE.match(path):
+                continue
+            add("H076", "Build Writes Outside Staging Root", "HIGH",
+                "persistence",
+                f"{fn}() edits {path} in place, outside $pkgdir/$srcdir",
+                line=i + 1, position=fn, path=path)
+            return
+        for match in _INLINE_OPEN_WRITE_RE.finditer(body):
+            path = match.group(1).strip("\"'")
+            if _is_staged(path) or not _PLAIN_ABS_PATH_RE.match(path):
                 continue
             add("H076", "Build Writes Outside Staging Root", "HIGH",
                 "persistence",
