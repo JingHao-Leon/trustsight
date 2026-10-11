@@ -85,3 +85,42 @@ def test_cofire_row_measures_the_shared_firings():
     assert distinct["both"] == 0
     assert not distinct["measured"]
     assert not distinct["meets_epsilon"]
+
+
+def _security_gates():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import security_gates
+
+    return security_gates
+
+
+def test_live_ceiling_is_the_frozen_set_minus_anchors():
+    from trustsight.rule_id_history import ANCHOR_RULE_IDS
+
+    sg = _security_gates()
+    assert sg._h_series_live_ceiling() == len(FROZEN_H_IDS) - len(ANCHOR_RULE_IDS)
+
+
+def test_intake_gate_fails_on_a_new_h_id(monkeypatch):
+    from trustsight import categories
+
+    sg = _security_gates()
+    monkeypatch.setitem(categories.RULE_CATEGORIES, "H999",
+                        categories.RULE_CATEGORIES["H001"])
+    gate = sg.gate_h_series_intake_is_frozen()
+    assert not gate.passed
+    assert any("H999" in str(p) for p in gate.detail)
+
+
+def test_residue_gate_fails_above_the_frozen_ceiling(monkeypatch):
+    from trustsight import categories
+
+    sg = _security_gates()
+    assert sg.gate_h_series_reduction_residue().passed
+    monkeypatch.setitem(categories.RULE_CATEGORIES, "H999",
+                        categories.RULE_CATEGORIES["H001"])
+    gate = sg.gate_h_series_reduction_residue()
+    assert not gate.passed
