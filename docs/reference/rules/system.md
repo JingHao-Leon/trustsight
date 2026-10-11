@@ -1537,7 +1537,7 @@ See [X031: Build Reads Non-Code Text](crossfire.md#x031).
 
 ### H056 {#h056}
 
-See [H056: Known Indicator of Compromise](corpus-behavioral.md#h056).
+See [H056: Known Indicator of Compromise](indicator.md#h056).
 
 
 ---

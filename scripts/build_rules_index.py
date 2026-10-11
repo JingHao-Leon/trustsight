@@ -51,6 +51,7 @@ SERIES_NAMES = {
     "T": "Temporal",
     "G": "Correlation",
     "A": "Artifact",
+    "I": "Indicator",
 }
 
 
