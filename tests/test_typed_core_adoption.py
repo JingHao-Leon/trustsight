@@ -21,7 +21,9 @@ _LOOP_RE = re.compile(r"for\s+\w+\s+in\s+split_lines\(")
 PINNED_LOOPS = {
     "full_aur/properties.py": 5,   # .SRCINFO/PKGBUILD recipe-text extraction
     "analysis/build.py": 1,        # rebuilds a whole-file text as context lines
-    "analysis/delivery.py": 2,     # payload file content, not a diff
+    "analysis/delivery.py": 1,     # payload file content, not a diff
+    # H093 reads a committed file's payload text, moved from delivery.
+    "analysis/persistence_engine.py": 1,
     "analysis/ioc.py": 1,          # whole-file text -> synthetic added lines
     "analysis/ioc_match.py": 1,    # same constructor
     "differ.py": 3,                # local_source_names/urls_from_pkgbuild_text/companions

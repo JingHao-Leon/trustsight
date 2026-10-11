@@ -18,7 +18,10 @@ from dataclasses import dataclass
 from typing import Callable
 
 from ..deps import _strip_comment
-from ..rules import _classify_line_context
+from ..diffdoc import parse_diff_lines
+from ..findings import stamp
+from ..rules import MAX_RULE_LINE_BYTES, _classify_line_context
+from ..tokenizer import split_lines
 from .build import (
     _HOOK_EXEC_RE,
     _INSTALL_HOOKS,
@@ -27,8 +30,21 @@ from .build import (
     _sudo_escalates,
 )
 from .delivery import (
+    _BOOT_ARTIFACT_RE,
+    _BUILD_FUNCTIONS,
+    _BUILD_ONLY_PATH_RE,
+    _COMMITTED_CARRIER_RE,
+    _CONTENT_WRITE_RE,
+    _DESCRIPTIVE_FIELD_RE,
+    _EXECSTART_RE,
+    _HEREDOC_OPEN_RE,
+    _PATH_ASSIGN_RE,
+    _PATH_BUILD_DIR_RE,
+    _PKGDIR_TARGET_RE,
     _SCOPE_FUNCTIONS,
     _collect_executions,
+    _find_line,
+    _installed_executables,
     _norm_path,
     _printed_heredoc_body_indices,
 )
@@ -208,6 +224,195 @@ def emit_install_hook(ctx: GraphContext, add: Callable) -> None:
             break
 
 
+def emit_service_binary(ctx: GraphContext, add: Callable) -> None:
+    """H084: a systemd service ExecStart targets an undeclared binary."""
+    source_basenames = ctx.source_basenames
+    manifest_basenames = (
+        None if ctx.tree_manifest is None
+        else {os.path.basename(name.rstrip("/")) for name, _ in ctx.tree_manifest}
+    )
+    installed = _installed_executables(ctx.diff_text, ctx.current_text)
+    if not installed:
+        return
+
+    service_texts: list[str] = []
+    if ctx.tree_manifest is not None:
+        for name, data in ctx.tree_manifest:
+            if name.endswith(".service"):
+                service_texts.append(data.decode("utf-8", errors="replace"))
+    current_service = False
+    body_lines: list[str] = []
+    for line in parse_diff_lines(split_lines(ctx.diff_text)).lines:
+        raw = line.raw
+        if raw.startswith("+++ "):
+            if current_service and body_lines:
+                service_texts.append("\n".join(body_lines))
+            current_service = raw[4:].strip().endswith(".service")
+            body_lines = []
+        elif current_service and line.side == "add" and not raw.startswith("+++"):
+            body_lines.append(line.content)
+    if current_service and body_lines:
+        service_texts.append("\n".join(body_lines))
+
+    exec_targets: set[str] = set()
+    for text in service_texts:
+        for m in _EXECSTART_RE.finditer(text):
+            target = m.group(1).split(None, 1)[0].strip("\"'")
+            if target.startswith("/"):
+                exec_targets.add(target)
+
+    for src_base, dst in installed:
+        if dst not in exec_targets:
+            continue
+        if src_base in source_basenames:
+            continue
+        if manifest_basenames is not None and src_base in manifest_basenames:
+            continue
+        add("H084", "Service ExecStart Targets Undeclared Binary", "HIGH", "persistence",
+            f"systemd service runs {dst}, installed from undeclared {src_base}",
+            line=_find_line(ctx.diff_text, dst.split("/")[-1]),
+            exec_target=dst, source_file=src_base)
+        return
+
+
+def emit_path_injection(ctx: GraphContext, add: Callable) -> None:
+    """H085: PATH is extended with an undeclared build-tree directory."""
+    source_basenames = ctx.source_basenames
+    manifest_basenames = (
+        None if ctx.tree_manifest is None
+        else {os.path.basename(name.rstrip("/")) for name, _ in ctx.tree_manifest}
+    )
+    for i, line in enumerate(ctx.lines):
+        fn = ctx.scopes.within(i, _BUILD_FUNCTIONS)
+        if not line.startswith("+") or fn is None:
+            continue
+        if i in ctx.heredoc_body:
+            continue
+        if len(line) > MAX_RULE_LINE_BYTES:
+            continue
+        body = _strip_comment(line[1:])
+        for m in _PATH_ASSIGN_RE.finditer(body):
+            rhs = m.group(1)
+            for dirm in _PATH_BUILD_DIR_RE.finditer(rhs):
+                subdir = dirm.group(1).strip('"\'').rstrip("/")
+                if not subdir or "/" in subdir:
+                    continue
+                if subdir in source_basenames:
+                    continue
+                if manifest_basenames is not None and subdir in manifest_basenames:
+                    continue
+                add("H085", "PATH Injection With Undeclared Directory", "HIGH", "build",
+                    f"{fn}() adds undeclared $srcdir/{subdir} to PATH",
+                    line=_find_line(ctx.diff_text, f"PATH={rhs.strip()[:40]}"),
+                    position=fn, directory=subdir)
+                return
+
+
+def _report_packaged_path(add: Callable, diff_text: str, index: int,
+                          body: str, target: str) -> None:
+    named = _BUILD_ONLY_PATH_RE.search(body)
+    add("H089", "Packaged File Names A Build-Only Path", "HIGH", "persistence",
+        f"a file staged into the package names {named.group(0)}, "
+        "a directory that exists only while the package is built",
+        line=_find_line(diff_text, body.strip()),
+        path=named.group(0),
+        body=body.strip()[:120])
+
+
+def emit_packaged_content(ctx: GraphContext, add: Callable) -> None:
+    """H089: content written into ``$pkgdir`` naming a build-only path."""
+    open_target = ""
+    delims: list[str] = []
+    for i, line in enumerate(ctx.lines):
+        if not line.startswith("+"):
+            continue
+        raw = line[1:]
+        stripped = raw.strip()
+        if delims and stripped == delims[-1]:
+            delims.pop()
+            if not delims:
+                open_target = ""
+            continue
+        if delims:
+            if open_target and _BUILD_ONLY_PATH_RE.search(raw):
+                _report_packaged_path(add, ctx.diff_text, i, raw, open_target)
+                return
+            continue
+        if ctx.scopes.within(i, _SCOPE_FUNCTIONS) is None:
+            continue
+        body = _strip_comment(raw)
+        opener = _HEREDOC_OPEN_RE.search(body)
+        if opener and opener.group(2):
+            delims.append(opener.group(2))
+            open_target = body if _PKGDIR_TARGET_RE.search(body) else ""
+            continue
+        cut = body.rfind(">")
+        if cut < 0:
+            continue
+        content, target = body[:cut], body[cut:]
+        if not _PKGDIR_TARGET_RE.search(target):
+            continue
+        if not _CONTENT_WRITE_RE.search(content):
+            continue
+        if _BUILD_ONLY_PATH_RE.search(content):
+            _report_packaged_path(add, ctx.diff_text, i, body, target)
+            return
+
+
+def emit_boot_artifact(ctx: GraphContext, add: Callable) -> None:
+    """H095: boot or image material built from the source tree."""
+    for i, line in enumerate(ctx.lines):
+        fn = ctx.scopes.within(i, _SCOPE_FUNCTIONS)
+        if not line.startswith("+") or fn is None or i in ctx.heredoc_body:
+            continue
+        body = _strip_comment(line[1:])
+        m = _BOOT_ARTIFACT_RE.search(body)
+        if not m:
+            continue
+        named = _BUILD_ONLY_PATH_RE.search(m.group(1))
+        if named is None:
+            continue
+        add("H095", "Boot Or Image Artifact Built From The Source Tree",
+            "HIGH", "persistence",
+            f"{fn}() builds boot or image material naming {named.group(0)}, "
+            "so content from the build tree runs before userspace",
+            line=_find_line(ctx.diff_text, body.strip()[:50]),
+            position=fn, body=body.strip()[:120])
+        return
+
+
+def emit_committed_build_path(name: str, head: bytes) -> dict | None:
+    """H093: a committed companion runs a build-only path (manifest scope)."""
+    if not _COMMITTED_CARRIER_RE.search(name.rstrip("/")):
+        return None
+    try:
+        text = head.decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    if name.lower().endswith((".patch", ".diff")):
+        text = "\n".join(
+            ln.content for ln in parse_diff_lines(split_lines(text)).lines
+            if ln.side == "add" and not ln.raw.startswith("+++")
+        )
+    for line in split_lines(text):
+        named = _BUILD_ONLY_PATH_RE.search(line)
+        if named is None:
+            continue
+        if _DESCRIPTIVE_FIELD_RE.search(line):
+            continue
+        return stamp({
+            "rule_id": "H093",
+            "name": "Committed Config Points At A Build-Only Path",
+            "severity": "HIGH", "category": "persistence",
+            "match": f"{name} runs {named.group(0)}, a directory that exists "
+                     "only while the package is built",
+            "file": name,
+            "params": {"path": name, "named": named.group(0),
+                       "body": line.strip()[:120]},
+        })
+    return None
+
+
 #: Dispatch order mirrors the historical emission order so finding order is
 #: preserved.  H042 (hidden drop) is intentionally absent here - it is the
 #: quietest rule and is registered in the edge engine.
@@ -237,6 +442,32 @@ PERSISTENCE_INSTANCES: tuple[PersistenceInstance, ...] = (
                         "install_hook", False, "HIGH",
                         "docs/reference/rules/install-and-persist.md",
                         ("tests/test_deps_rules.py",), emit_install_hook),
+    PersistenceInstance("H084", "Service ExecStart Targets Undeclared Binary",
+                        "execstart_declaration", True, "HIGH",
+                        "docs/reference/rules/install-and-persist.md",
+                        ("tests/regressions/test_followup_fixes.py",),
+                        emit_service_binary),
+    PersistenceInstance("H085", "PATH Injection With Undeclared Directory",
+                        "path_injection", True, "HIGH",
+                        "docs/reference/rules/staging-and-recon.md",
+                        ("tests/regressions/test_scope_closure.py",),
+                        emit_path_injection),
+    PersistenceInstance("H089", "Packaged File Names A Build-Only Path",
+                        "build_only_content", False, "HIGH",
+                        "docs/reference/rules/install-and-persist.md",
+                        ("tests/regressions/test_execution_surfaces.py",),
+                        emit_packaged_content),
+    PersistenceInstance("H095", "Boot Or Image Artifact Built From The Source Tree",
+                        "build_only_content", False, "HIGH",
+                        "docs/reference/rules/install-and-persist.md",
+                        ("tests/regressions/test_w_series.py",),
+                        emit_boot_artifact),
+    # H093 is manifest-scope: its emitter is `emit_committed_build_path`,
+    # called by `scan_tree_manifest`, so the table row has no graph emitter.
+    PersistenceInstance("H093", "Committed Config Points At A Build-Only Path",
+                        "build_only_content", True, "HIGH",
+                        "docs/reference/rules/install-and-persist.md",
+                        ("tests/regressions/test_w_series.py",), None),
 )
 
 

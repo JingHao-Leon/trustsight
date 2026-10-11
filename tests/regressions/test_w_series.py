@@ -396,7 +396,7 @@ def test_h093_does_not_depend_on_naming_the_directive(name, line):
     audit it cost twelve of them - a short list was not a smaller version
     of the problem, it was the same problem.
     """
-    from trustsight.analysis.delivery import _committed_build_path_finding
+    from trustsight.analysis.persistence_engine import emit_committed_build_path as _committed_build_path_finding
 
     assert _committed_build_path_finding(name, line) is not None, name
 
@@ -410,7 +410,7 @@ def test_a_field_that_only_describes_is_not_a_command(blob):
     """The inverted list is the bounded one: descriptive fields are few and
     stable. A `.desktop` whose `Comment=` mentions the build tree is
     untidy; an `Exec=` naming one is a command aimed at nothing."""
-    from trustsight.analysis.delivery import _committed_build_path_finding
+    from trustsight.analysis.persistence_engine import emit_committed_build_path as _committed_build_path_finding
 
     assert _committed_build_path_finding("x.desktop", blob) is None
 
@@ -421,7 +421,7 @@ def test_a_field_that_only_describes_is_not_a_command(blob):
 ])
 def test_an_ordinary_makefile_is_not_a_build_only_path(blob):
     """`make` spells its variables `$(srcdir)`, with parentheses."""
-    from trustsight.analysis.delivery import _committed_build_path_finding
+    from trustsight.analysis.persistence_engine import emit_committed_build_path as _committed_build_path_finding
 
     assert _committed_build_path_finding("Makefile", blob) is None
 
