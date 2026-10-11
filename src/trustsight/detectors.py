@@ -19,6 +19,7 @@ __all__ = [
     "SERIES_MECHANISM",
     "SERIES_EVIDENCE",
     "SERIES_DEPENDENCIES",
+    "RULE_METADATA_OVERRIDES",
     "DetectorMetadata",
     "detector_metadata",
     "series_of",
@@ -81,6 +82,22 @@ SERIES_DEPENDENCIES: dict[str, frozenset[str]] = {
 }
 
 
+#: Per-rule overrides.  A rule whose id prefix no longer matches its
+#: mechanism gets its metadata here rather than a renumber (rule ids are
+#: immutable): H056 is the *indicator* mechanism under an H id, so its
+#: mechanism, evidence and shared dependencies are the I-series facts, not
+#: the H-series ones.  Without this the registry would call an exact
+#: external-list match a "behavioral heuristic" and hide the indicator
+#: list and keyring it actually depends on.
+RULE_METADATA_OVERRIDES: dict[str, dict] = {
+    "H056": {
+        "mechanism": "external indicator membership",
+        "evidence": "signed indicator baselines",
+        "shared_dependencies": ["ioc_baseline", "keyring"],
+    },
+}
+
+
 def series_of(rule_id: str) -> str:
     return (rule_id[:1].upper() if rule_id else "")
 
@@ -93,9 +110,10 @@ def detector_metadata(rule_id: str) -> DetectorMetadata | None:
     """Mechanism, subject, evidence source and shared dependencies of a rule.
 
     ``subject`` is the rule's category (what it looks for); ``mechanism`` and
-    ``evidence`` are the series-level facts; ``shared_dependencies`` is the
-    infrastructure whose failure would blind every rule in the series.
-    ``None`` for an id this build does not ship.
+    ``evidence`` are the series-level facts, with a per-rule override for a
+    rule whose mechanism no longer matches its id series;
+    ``shared_dependencies`` is the infrastructure whose failure would blind
+    every rule in the series.  ``None`` for an id this build does not ship.
     """
     from .categories import category_of
 
@@ -103,11 +121,13 @@ def detector_metadata(rule_id: str) -> DetectorMetadata | None:
     if category is None:
         return None
     series = series_of(rule_id)
-    return DetectorMetadata({
+    metadata = {
         "rule_id": rule_id.upper(),
         "series": series,
         "subject": category.value,
         "mechanism": SERIES_MECHANISM.get(series, series),
         "evidence": SERIES_EVIDENCE.get(series, ""),
         "shared_dependencies": sorted(SERIES_DEPENDENCIES.get(series, ())),
-    })
+    }
+    metadata.update(RULE_METADATA_OVERRIDES.get(rule_id.upper(), {}))
+    return DetectorMetadata(metadata)
