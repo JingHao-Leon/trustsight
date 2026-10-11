@@ -121,7 +121,8 @@ def test_installed_executable_accepts_a_zero_padded_mode():
 
 
 def test_service_execstart_is_read_from_the_added_file_body():
-    from trustsight.analysis.delivery import _service_binary_findings
+    from trustsight.analysis.edges import build_context
+    from trustsight.analysis.persistence_engine import emit_service_binary
 
     diff = (
         "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,7 @@\n"
@@ -134,8 +135,9 @@ def test_service_execstart_is_read_from_the_added_file_body():
         "+ExecStart=/usr/bin/evilbin\n"
     )
     found = []
-    _service_binary_findings(
-        diff, None, lambda rid, name, sev, cat, match, **p: found.append(rid)
+    emit_service_binary(
+        build_context(diff, {}),
+        lambda rid, name, sev, cat, match, **p: found.append(rid),
     )
     assert found == ["H084"]
 

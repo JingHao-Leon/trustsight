@@ -2060,71 +2060,6 @@ def _installed_executables(diff_text: str, current_text=None) -> set[tuple[str, 
     return found
 
 
-def _service_binary_findings(diff_text, tree_manifest, add, current_text=None) -> None:
-    """A systemd service's ExecStart points at an undeclared binary (H084).
-
-    Service units are read from the tree manifest when one is supplied, and
-    from added diff lines otherwise.  If the ExecStart target is installed
-    from a file that is neither a declared source nor part of the repository
-    manifest, the binary is invisible to static review.
-    """
-    source_basenames = _declared_source_basenames(diff_text, current_text)
-    manifest_basenames = (
-        None if tree_manifest is None
-        else {os.path.basename(name.rstrip("/")) for name, _ in tree_manifest}
-    )
-    installed = _installed_executables(diff_text, current_text)
-    if not installed:
-        return
-
-    service_texts: list[str] = []
-    if tree_manifest is not None:
-        for name, data in tree_manifest:
-            if name.endswith(".service"):
-                # `errors="replace"` cannot raise, so the handler that used
-                # to sit here could only ever have hidden a bug.
-                service_texts.append(data.decode("utf-8", errors="replace"))
-    # Diff fallback: an added service file arrives as a `+++ b/x.service`
-    # header followed by its added body.  Collecting only lines that contain
-    # the string ".service" saw the header and none of the `ExecStart=` lines
-    # it introduces, so H084 was blind without a tree manifest.  Real service
-    # files are usually committed, so the manifest branch above is the normal
-    # case; this is the text-only one.
-    current_service = False
-    body_lines: list[str] = []
-    for line in parse_diff_lines(split_lines(diff_text)).lines:
-        raw = line.raw
-        if raw.startswith("+++ "):
-            if current_service and body_lines:
-                service_texts.append("\n".join(body_lines))
-            current_service = raw[4:].strip().endswith(".service")
-            body_lines = []
-        elif current_service and line.side == "add" and not raw.startswith("+++"):
-            body_lines.append(line.content)
-    if current_service and body_lines:
-        service_texts.append("\n".join(body_lines))
-
-    exec_targets: set[str] = set()
-    for text in service_texts:
-        for m in _EXECSTART_RE.finditer(text):
-            target = m.group(1).split(None, 1)[0].strip("\"'")
-            if target.startswith("/"):
-                exec_targets.add(target)
-
-    for src_base, dst in installed:
-        if dst not in exec_targets:
-            continue
-        if src_base in source_basenames:
-            continue
-        if manifest_basenames is not None and src_base in manifest_basenames:
-            continue
-        add("H084", "Service ExecStart Targets Undeclared Binary", "HIGH", "persistence",
-            f"systemd service runs {dst}, installed from undeclared {src_base}",
-            line=_find_line(diff_text, dst.split("/")[-1]),
-            exec_target=dst, source_file=src_base)
-        return
-
-
 # ---------------------------------------------------------------------------
 # H085 - PATH injection with an undeclared build-tree directory
 # ---------------------------------------------------------------------------
@@ -2140,52 +2075,6 @@ _PATH_BUILD_DIR_RE = re.compile(
     r"\$\{?(?:srcdir|pkgdir|startdir|BUILDDIR)\}?/([^:\s]+)",
     re.IGNORECASE,
 )
-
-
-def _path_injection_findings(diff_text, tree_manifest, add, current_text=None) -> None:
-    """PATH is extended with an undeclared build-tree directory (H085).
-
-    Only applies inside build/package/check/prepare functions.  Adding the
-    plain source root is common enough that it stays silent; adding a
-    subdirectory whose content cannot be attributed is the signal.
-    """
-    source_basenames = _declared_source_basenames(diff_text, current_text)
-    manifest_basenames = (
-        None if tree_manifest is None
-        else {os.path.basename(name.rstrip("/")) for name, _ in tree_manifest}
-    )
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    heredoc_body = _heredoc_body_indices(lines)
-
-    for i, line in enumerate(lines):
-        fn = scopes.within(i, _BUILD_FUNCTIONS)
-        if not line.startswith("+") or fn is None:
-            continue
-        if i in heredoc_body:
-            continue
-        # A line the rules engine clamps cannot be read by the pairing
-        # passes either; the run already declares `line_truncated`.
-        if len(line) > MAX_RULE_LINE_BYTES:
-            continue
-        body = _strip_comment(line[1:])
-        for m in _PATH_ASSIGN_RE.finditer(body):
-            rhs = m.group(1)
-            for dirm in _PATH_BUILD_DIR_RE.finditer(rhs):
-                subdir = dirm.group(1).strip('"\'').rstrip("/")
-                if not subdir or "/" in subdir:
-                    # Only single-level subdirectories are flagged; deeper
-                    # paths are more likely to be legitimate project layouts.
-                    continue
-                if subdir in source_basenames:
-                    continue
-                if manifest_basenames is not None and subdir in manifest_basenames:
-                    continue
-                add("H085", "PATH Injection With Undeclared Directory", "HIGH", "build",
-                    f"{fn}() adds undeclared $srcdir/{subdir} to PATH",
-                    line=_find_line(diff_text, f"PATH={rhs.strip()[:40]}"),
-                    position=fn, directory=subdir)
-                return
 
 
 # ---------------------------------------------------------------------------
@@ -2524,51 +2413,6 @@ _DESCRIPTIVE_FIELD_RE = re.compile(
 )
 
 
-def _committed_build_path_finding(name: str, head: bytes) -> dict | None:
-    """H093 for one committed companion, or ``None``.
-
-    The symmetric half of H089. That rule reads content the recipe
-    *generates* into `$pkgdir`; this one reads content the recipe
-    *committed* and then ships. The observable is identical and so is the
-    reasoning: `$srcdir`, `$startdir` and `$PWD` exist only while the
-    package is being built, so a shipped file naming one is either broken
-    on arrival or aimed at a directory whoever wrote it expects to control
-    when it is read.
-
-    The value has to sit in a directive that runs something. A `.desktop`
-    with a `Comment=` mentioning a build path is a cosmetic mistake; an
-    `Exec=` naming one is a command pointed at nothing.
-    """
-    if not _COMMITTED_CARRIER_RE.search(name.rstrip("/")):
-        return None
-    try:
-        text = head.decode("utf-8", errors="replace")
-    except Exception:
-        return None
-    if name.lower().endswith((".patch", ".diff")):
-        text = "\n".join(
-            ln.content for ln in parse_diff_lines(split_lines(text)).lines
-            if ln.side == "add" and not ln.raw.startswith("+++")
-        )
-    for line in split_lines(text):
-        named = _BUILD_ONLY_PATH_RE.search(line)
-        if named is None:
-            continue
-        if _DESCRIPTIVE_FIELD_RE.search(line):
-            continue
-        return stamp({
-            "rule_id": "H093",
-            "name": "Committed Config Points At A Build-Only Path",
-            "severity": "HIGH", "category": "persistence",
-            "match": f"{name} runs {named.group(0)}, a directory that exists "
-                     "only while the package is built",
-            "file": name,
-            "params": {"path": name, "named": named.group(0),
-                       "body": line.strip()[:120]},
-        })
-    return None
-
-
 def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]:
     """H066 and H090 findings for a repository file manifest.
 
@@ -2579,13 +2423,14 @@ def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]
     """
     source_basenames = {_source_basename(u) for u in source_urls if _source_basename(u)}
     from .edges import edge_committed_payload
+    from .persistence_engine import emit_committed_build_path
 
     findings: list[dict] = []
     for name, head in files:
         if _is_test_fixture(name, os.path.basename(name.rstrip("/"))):
             continue
         payload = (edge_committed_payload(name, head)
-                   or _committed_build_path_finding(name, head))
+                   or emit_committed_build_path(name, head))
         if payload is not None:
             # Every carrier, not just the first.  The early `break` let a
             # HIGH on an earlier file hide a CRITICAL on a later one - a
@@ -2653,68 +2498,6 @@ _CONTENT_WRITE_RE = re.compile(
 
 #: The write lands in the package root.
 _PKGDIR_TARGET_RE = re.compile(r"\$\{?pkgdir\}?")
-
-
-def _packaged_content_findings(diff_text, config, add, current_text=None) -> None:
-    """Content written into ``$pkgdir`` naming a build-only path (H089)."""
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-
-    # The heredoc regions are tracked here rather than taken from
-    # `_heredoc_body_indices`, which answers a different question: it says
-    # whether a body should be read as *commands*, and a body bound for
-    # `udev/rules.d` is deliberately read that way. This rule needs the
-    # region either way, because what it reads is the text being shipped.
-    open_target = ""
-    delims: list[str] = []
-    for i, line in enumerate(lines):
-        if not line.startswith("+"):
-            continue
-        raw = line[1:]
-        stripped = raw.strip()
-        if delims and stripped == delims[-1]:
-            delims.pop()
-            if not delims:
-                open_target = ""
-            continue
-        if delims:
-            if open_target and _BUILD_ONLY_PATH_RE.search(raw):
-                _report_packaged_path(add, diff_text, scopes, i, raw, open_target)
-                return
-            continue
-        if scopes.within(i, _SCOPE_FUNCTIONS) is None:
-            continue
-        body = _strip_comment(raw)
-        opener = _HEREDOC_OPEN_RE.search(body)
-        if opener and opener.group(2):
-            delims.append(opener.group(2))
-            open_target = body if _PKGDIR_TARGET_RE.search(body) else ""
-            continue
-        # The single-line form: everything left of the redirect is content,
-        # everything right of it is the destination. Splitting there is what
-        # keeps `install "$srcdir/x" "$pkgdir/…"` out of the rule - it has
-        # no redirect, so there is no content half to read.
-        cut = body.rfind(">")
-        if cut < 0:
-            continue
-        content, target = body[:cut], body[cut:]
-        if not _PKGDIR_TARGET_RE.search(target):
-            continue
-        if not _CONTENT_WRITE_RE.search(content):
-            continue
-        if _BUILD_ONLY_PATH_RE.search(content):
-            _report_packaged_path(add, diff_text, scopes, i, body, target)
-            return
-
-
-def _report_packaged_path(add, diff_text, scopes, index, body, target) -> None:
-    named = _BUILD_ONLY_PATH_RE.search(body)
-    add("H089", "Packaged File Names A Build-Only Path", "HIGH", "persistence",
-        f"a file staged into the package names {named.group(0)}, "
-        "a directory that exists only while the package is built",
-        line=_find_line(diff_text, body.strip()),
-        path=named.group(0),
-        body=body.strip()[:120])
 
 
 # ---------------------------------------------------------------------------
@@ -3034,32 +2817,6 @@ _BOOT_ARTIFACT_RE = re.compile(
 )
 
 
-def _boot_artifact_findings(diff_text, add, current_text=None) -> None:
-    """Boot or image material built from the source tree (H095)."""
-    lines = resolve_added_lines(diff_text)
-    scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    heredoc_body = _heredoc_body_indices(lines)
-
-    for i, line in enumerate(lines):
-        fn = scopes.within(i, _SCOPE_FUNCTIONS)
-        if not line.startswith("+") or fn is None or i in heredoc_body:
-            continue
-        body = _strip_comment(line[1:])
-        m = _BOOT_ARTIFACT_RE.search(body)
-        if not m:
-            continue
-        named = _BUILD_ONLY_PATH_RE.search(m.group(1))
-        if named is None:
-            continue
-        add("H095", "Boot Or Image Artifact Built From The Source Tree",
-            "HIGH", "persistence",
-            f"{fn}() builds boot or image material naming {named.group(0)}, "
-            "so content from the build tree runs before userspace",
-            line=_find_line(diff_text, body.strip()[:50]),
-            position=fn, body=body.strip()[:120])
-        return
-
-
 #: A redirect to a file descriptor, not a file. `>&2` is how a recipe
 #: writes a diagnostic, and two of this rule's three benign matches were
 #: exactly that - an error message that happens to mention `$srcdir`.
@@ -3222,6 +2979,7 @@ def _delivery_findings(
     it is built here only when the caller did not supply one.
     """
     from .edges import build_context, run_edge_instances
+    from .persistence_engine import run_persistence_instances
 
     if ctx is None:
         ctx = build_context(diff_text, config, current_text=current_text,
@@ -3231,13 +2989,13 @@ def _delivery_findings(
     run_edge_instances(ctx, add, only=frozenset({"H072"}))
     run_edge_instances(ctx, add, only=frozenset({"H082"}))
     run_edge_instances(ctx, add, only=frozenset({"H083"}))
-    _service_binary_findings(diff_text, tree_manifest, add, current_text=current_text)
-    _path_injection_findings(diff_text, tree_manifest, add, current_text=current_text)
+    run_persistence_instances(ctx, add, only=frozenset({"H084"}))
+    run_persistence_instances(ctx, add, only=frozenset({"H085"}))
     _committed_execution_findings(
         diff_text, tree_manifest, add, current_text=current_text,
     )
-    _packaged_content_findings(diff_text, config, add, current_text=current_text)
-    _boot_artifact_findings(diff_text, add, current_text=current_text)
+    run_persistence_instances(ctx, add, only=frozenset({"H089"}))
+    run_persistence_instances(ctx, add, only=frozenset({"H095"}))
     _unverifiable_findings(diff_text, config, add,
                            tree_manifest=tree_manifest,
                            current_text=current_text, ctx=ctx)
