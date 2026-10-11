@@ -3456,7 +3456,7 @@ def gate_docs_layer_mapping_matches_registry() -> Gate:
 
     from trustsight.layers import RULE_LAYER_OVERRIDES, SERIES_LAYER
 
-    doc = ROOT / "docs" / "assurance-layers" / "trajectory.md"
+    doc = ROOT / "docs" / "assurance-layers" / "evidence-categories.md"
     if not doc.exists():
         return Gate("docs layer mapping matches the registry", False, "missing")
     lines = ["| Series | Default category |", "|---|---|"]

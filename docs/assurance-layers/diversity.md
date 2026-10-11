@@ -83,6 +83,6 @@ statistic, ...) rather than another H id. See
 
 ## See Also
 
-- [Part 1: Evidence categories and rule mapping](trajectory.md)
+- [Part 1: Evidence categories and rule mapping](evidence-categories.md)
 - [Part 3: Reporting](reporting.md)
 - [Writing a rule](../contributing/writing-a-rule.md)

@@ -67,7 +67,7 @@ over findings (M), or an artifact inspection (A). `P` reports declared
 practices and `W` reports analysis boundaries; neither is a detection.
 
 **Evidence category (layer).** The kind of evidence a finding represents. The
-eight labels are listed in [Part 1](assurance-layers/trajectory.md). A finding
+eight labels are listed in [Part 1](assurance-layers/evidence-categories.md). A finding
 is labelled by *the check that produced it*, not by every other check it might
 complement.
 
@@ -102,7 +102,7 @@ unread category, and an unread category never hides a finding.
 
 ## Parts 1 to 4
 
-- **[Part 1: Evidence categories and rule mapping](assurance-layers/trajectory.md)** -
+- **[Part 1: Evidence categories and rule mapping](assurance-layers/evidence-categories.md)** -
   the eight categories, which rule families feed each, and how a rule maps.
 - **[Part 2: How to add a useful new detector](assurance-layers/diversity.md)** -
   the intake checklist, shared dependencies, and why complementary is not the
