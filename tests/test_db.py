@@ -878,3 +878,40 @@ def test_the_three_correlation_views_exist_and_serve(db):
     assert feed["pkg"]["added_literals"] == ["XYZ"]
     assert feed["pkg"]["maintainer"] == "m@x"
     assert feed["pkg"]["adoption_predicates"] == ["H086"]
+
+
+def test_wal_and_synchronous_default_to_normal(tmp_path, monkeypatch):
+    """WAL + `synchronous=NORMAL`: durable across an app crash without the
+    per-commit fsync `FULL` pays.  The DB is scratch and rebuilt per attempt
+    in the harness, so `NORMAL` is the right default."""
+    monkeypatch.delenv("TRUSTSIGHT_SQLITE_SYNCHRONOUS", raising=False)
+    from trustsight.db import _new_connection
+
+    conn = _new_connection(tmp_path / "sync.db")
+    try:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+        assert conn.execute("PRAGMA synchronous").fetchone()[0] == 1  # NORMAL
+    finally:
+        conn.close()
+
+
+def test_synchronous_mode_can_be_overridden(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRUSTSIGHT_SQLITE_SYNCHRONOUS", "FULL")
+    from trustsight.db import _new_connection
+
+    conn = _new_connection(tmp_path / "sync-full.db")
+    try:
+        assert conn.execute("PRAGMA synchronous").fetchone()[0] == 2  # FULL
+    finally:
+        conn.close()
+
+
+def test_an_unknown_synchronous_mode_falls_back_to_normal(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRUSTSIGHT_SQLITE_SYNCHRONOUS", "bogus")
+    from trustsight.db import _new_connection
+
+    conn = _new_connection(tmp_path / "sync-bogus.db")
+    try:
+        assert conn.execute("PRAGMA synchronous").fetchone()[0] == 1  # NORMAL
+    finally:
+        conn.close()
