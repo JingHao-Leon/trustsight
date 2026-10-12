@@ -440,7 +440,7 @@ HIGH. The shipped file is empty, and a miss is uninformative.
 
 ## Environment variables
 
-TrustSight reads six environment variables. Everything else that changes
+TrustSight reads seven environment variables. Everything else that changes
 behaviour is a config key or a command flag.
 
 | Variable | Values | Effect |
@@ -451,6 +451,7 @@ behaviour is a config key or a command flag.
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |
 | `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache (spec §4) stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
 | `XDG_CACHE_HOME` | A directory path | Base for the document cache when `TRUSTSIGHT_DOC_CACHE` is unset. |
+| `TRUSTSIGHT_SQLITE_SYNCHRONOUS` | `OFF`, `NORMAL`, `FULL`, `EXTRA` (case-insensitive); an unknown value falls back to `NORMAL` | SQLite commit durability. `NORMAL` (the default) keeps WAL's crash-safety without an fsync per commit; `FULL` is the old behaviour. |
 
 Rich output is the default only when the target stream is a terminal:
 renderers look at stdout, and progress bars look at stderr. A pipe, a

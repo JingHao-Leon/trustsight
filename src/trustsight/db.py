@@ -42,11 +42,31 @@ def get_db_path() -> Path:
 
 
 # Connections are cached per (thread, database path) rather than opened per
-# query.  Opening one costs ~0.35ms once the two PRAGMAs are counted, and the
+# query.  Opening one costs ~0.35ms once the PRAGMAs are counted, and the
 # hot paths issue thousands of small reads: H029 alone used to open 5001
 # connections for a single package.  Keying on the path keeps the tests
 # honest, since they monkeypatch DATA_DIR to a tmpdir between cases.
 _local = threading.local()
+
+#: Durability of a commit.  WAL plus `synchronous=NORMAL` is the online
+#: default: durable across an application crash, and it drops the per-commit
+#: fsync that `FULL` pays on every write.  TrustSight's database is analysis
+#: history, not a ledger, so the power-loss window `NORMAL` opens is the right
+#: trade; `TRUSTSIGHT_SQLITE_SYNCHRONOUS=FULL` restores the old behaviour for
+#: a caller that wants it.  Each statement is a literal selected by the mode,
+#: never an interpolated value, so the SQL stays static.
+_SYNC_MODES = frozenset({"OFF", "NORMAL", "FULL", "EXTRA"})
+_SYNC_SQL = {
+    "OFF": "PRAGMA synchronous=OFF",
+    "NORMAL": "PRAGMA synchronous=NORMAL",
+    "FULL": "PRAGMA synchronous=FULL",
+    "EXTRA": "PRAGMA synchronous=EXTRA",
+}
+
+
+def _synchronous_mode() -> str:
+    value = os.environ.get("TRUSTSIGHT_SQLITE_SYNCHRONOUS", "NORMAL").strip().upper()
+    return value if value in _SYNC_MODES else "NORMAL"
 
 
 def _new_connection(db_path: Path) -> sqlite3.Connection:
@@ -66,9 +86,10 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
             pass
     conn.row_factory = sqlite3.Row
     # journal_mode is a persistent property of the file, so this only does
-    # real work the first time a database is created; foreign_keys is
-    # per-connection and has to be set on every one.
+    # real work the first time a database is created; foreign_keys and
+    # synchronous are per-connection and have to be set on every one.
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(_SYNC_SQL[_synchronous_mode()])
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA busy_timeout=5000")
     return conn
