@@ -404,6 +404,35 @@ def emit_boot_artifact(ctx: GraphContext, add: Callable) -> None:
         return
 
 
+def emit_boot_mutation(ctx: GraphContext, add: Callable) -> None:
+    """C031: a build-time function runs a boot or system-image tool.
+
+    H095 covers the same tools when they name a path from the source tree.
+    A tool run against the live host (`mkinitcpio -P`, `grub-install
+    /dev/sda`, `update-initramfs -u`) names no build path and so walked past
+    it, yet a recipe that builds a package must never rewrite the builder's
+    boot configuration.  The install hooks are where these legitimately run,
+    so only the build-time functions are in scope; `post_upgrade() {
+    mkinitcpio -P; }` stays silent.
+    """
+    for i, line in enumerate(ctx.lines):
+        if not line.startswith("+") or i in ctx.heredoc_body:
+            continue
+        fn = ctx.scopes.within(i, _BUILD_TIME_FUNCTIONS)
+        if fn is None:
+            continue
+        body = _strip_comment(line[1:])
+        m = _BOOT_ARTIFACT_RE.search(body)
+        if not m:
+            continue
+        add("C031", "Boot Or System Image Tool Run During Build", "HIGH",
+            "persistence",
+            f"{fn}() runs {m.group(0).strip()[:40]}, rewriting the build "
+            "host's boot or image configuration",
+            line=i + 1, position=fn, body=body.strip()[:120])
+        return
+
+
 def emit_committed_build_path(name: str, head: bytes) -> dict | None:
     """H093: a committed companion runs a build-only path (manifest scope)."""
     if not _COMMITTED_CARRIER_RE.search(name.rstrip("/")):
@@ -485,6 +514,11 @@ PERSISTENCE_INSTANCES: tuple[PersistenceInstance, ...] = (
                         "docs/reference/rules/install-and-persist.md",
                         ("tests/regressions/test_w_series.py",),
                         emit_boot_artifact),
+    PersistenceInstance("C031", "Boot Or System Image Tool Run During Build",
+                        "boot_mutation", False, "HIGH",
+                        "docs/reference/rules/install-and-persist.md",
+                        ("tests/test_phase3.py",),
+                        emit_boot_mutation),
     # H093 is manifest-scope: its emitter is `emit_committed_build_path`,
     # called by `scan_tree_manifest`, so the table row has no graph emitter.
     PersistenceInstance("H093", "Committed Config Points At A Build-Only Path",

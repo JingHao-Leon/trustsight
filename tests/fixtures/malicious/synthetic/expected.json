@@ -17,6 +17,12 @@
       "C013"
     ]
   },
+  "C031-boot-tool-in-build.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "C031"
+    ]
+  },
   "H001-skip-git-justified.diff": {
     "min_score": 25,
     "must_fire": [

@@ -310,3 +310,4 @@ def _persistence_findings(diff_text, config, add, current_text=None, ctx=None) -
         ctx, add, only=frozenset({"H039", "H062", "H032", "H038"}))
     run_edge_instances(ctx, add, only=frozenset({"H042"}))
     run_persistence_instances(ctx, add, only=frozenset({"H076"}))
+    run_persistence_instances(ctx, add, only=frozenset({"C031"}))
