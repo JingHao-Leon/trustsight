@@ -37,8 +37,8 @@ validpgpkeys=('F759D6D49B0A395AB922414A5CC3B4C50D37E793')
 source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz"
         "$pkgname-$pkgver.tar.gz.sig::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz.sig")
 
-sha256sums=('222c10d92199eac2b647e076104eeba6da071e5adc5c7e69c8642317f932f392'
-            'be3fefcb93b6fdf733940950776cb882877b8e6dd23c285aa1ac904a48bec01c')
+sha256sums=('448f1f9549ac76f305f11dfb55b5fab77c8c28fc41eb95681ad9a8b263bfcbb9'
+            '292bfdfabc5325fdbe26fbf62ca3cd01f339c291e6ff6fca858d71c8c7f861f9')
 
 build() {
   cd "$pkgname-$pkgver"
