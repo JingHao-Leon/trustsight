@@ -249,6 +249,18 @@ python -c "import json; d=json.load(open('/tmp/baseline-check.json')); \
   print({s: v['rules'].get('R0XX') for s, v in d['strata'].items()})"
 ```
 
+!!! note "Scan the corpus in parallel, never in a serial loop"
+
+    To check a rule or a regex change across the whole corpus, use the
+    parallel paths: `uv run python scripts/scan_benign.py --rule R0XX` runs
+    the whole benign corpus in one pass over the calibration worker pool
+    with the shipped config, and `scripts/calibration_gates.py --jobs N`
+    runs the gate set the same way. Do **not** hand-roll a
+    `for path: analyze_diff(...)` / `scan_diff(...)` loop: it is serial,
+    reloads state per call, and turns a sub-minute pass into tens of
+    minutes. When checking many campaign copies, deduplicate by diff hash
+    first - the same diff recurs across copies of a campaign tree.
+
 ## Tests
 
 Add test cases in `tests/test_rules.py`. Each rule must have at least two tests:
