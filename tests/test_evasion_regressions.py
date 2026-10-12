@@ -540,19 +540,20 @@ def test_attempt10_foreign_declared_source_benign_name_executed():
     assert "H083" in _rule_ids(fact)
 
 
-def test_attempt10b_sibling_upstream_source_stays_silent():
-    """A configure that genuinely comes from the upstream is not foreign.
+def test_attempt10b_upstream_declared_build_script_still_fires():
+    """A declared build script fires H083 whatever its host.
 
-    The same execution shape with the build script hosted under the
-    package's own upstream domain must keep H083's ordinary benign-exec
-    exemption - the fix targets provenance, not the filename.
+    ``url=`` is attacker-declared, so a host that matches it is not
+    provenance: a downloaded ``configure`` is remote code execution like any
+    other declared script, including one hosted under the upstream's own
+    repository.
     """
     new = ATTEMPT10.replace(
         '"http://evil.example/configure"',
         '"https://github.com/example/fontconfig-tweaks/raw/main/configure"',
     )
     fact = _fact(new)
-    assert "H083" not in _rule_ids(fact)
+    assert "H083" in _rule_ids(fact)
 
 
 # ---------------------------------------------------------------------------
@@ -767,14 +768,14 @@ def test_attempt14_foreign_declared_build_script_is_executed(sources):
     assert "H083" in _rule_ids(fact)
 
 
-def test_attempt14b_upstream_owned_build_script_stays_silent():
-    """A configure inside the upstream's own repository is still ordinary."""
+def test_attempt14b_upstream_owned_build_script_still_fires():
+    """A declared build script inside the upstream's own repository fires."""
     new = _D14.replace(
         "@@SOURCES@@",
         '"https://github.com/example/fontconfig-tweaks/raw/main/configure"',
     ).replace("@@SUMS@@", _ZERO)
     fact = _fact(new)
-    assert "H083" not in _rule_ids(fact)
+    assert "H083" in _rule_ids(fact)
 
 
 # ---------------------------------------------------------------------------
