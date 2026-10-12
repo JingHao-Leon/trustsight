@@ -226,6 +226,17 @@ _RM_RF_RE = re.compile(
     + r"(?=[^\n;&|]*?(?:^|[ \t])" + _OPT_FORCE + _OPT_BOUND + r")",
     re.MULTILINE,
 )
+# `rm -r` deletes recursively whether or not `-f` is given, so the rule keys
+# on the recursive flag alone; the force set `_RM_RF_RE` above stays as the
+# FN3 helper.  Requiring both read `rm -r /etc/cron.d` as clean.
+_RM_RECURSIVE_RE = re.compile(
+    _CMD + r"rm\b"
+    + r"(?=[^\n;&|]*?(?:^|[ \t])" + _OPT_RECURSIVE + _OPT_BOUND + r")",
+    re.MULTILINE,
+)
+# `find` reaches the same recursive delete without `rm`.
+_FIND_DELETE_RE = re.compile(
+    _CMD + r"find\b[^\n;&|]*?(?:-delete\b|-exec\s+rm\b)", re.MULTILINE)
 _RM_TARGET_SYSTEM_RE = re.compile(
     # Unbounded for the same reason: 201 characters of flags between `rm`
     # and its target used to be enough to walk past this, and the target is
@@ -388,6 +399,23 @@ def _rm_targets_outside_the_build_tree(body: str) -> str | None:
     return None
 
 
+def _find_outside_the_build_tree(body: str) -> str | None:
+    """The path of a `find ... -delete`/`-exec rm` outside the build tree."""
+    for m in re.finditer(r"(?:\A|[;&|]|\$\()\s*find\b", body):
+        rest = re.split(r"[;&|]", body[m.end():], maxsplit=1)[0]
+        if not re.search(r"-delete\b|-exec\s+rm\b", rest):
+            continue
+        for arg in rest.split():
+            if arg.startswith("-"):
+                continue
+            if _SANDBOX_TARGET_RE.match(arg):
+                break
+            if _DANGEROUS_TARGET_RE.match(arg):
+                return arg
+            break
+    return None
+
+
 def _added_bodies(diff_text: str):
     """``(line_number, body)`` for each added line, comments stripped.
 
@@ -438,8 +466,11 @@ def _sabotage_findings(diff_text, config, add) -> None:
 
         # The sandbox check is what keeps this off the ordinary case: almost
         # every PKGBUILD clears $srcdir or prunes $pkgdir.
-        outside = (_rm_targets_outside_the_build_tree(body)
-                   if _RM_RF_RE.search(body) else None)
+        outside = None
+        if _RM_RECURSIVE_RE.search(body):
+            outside = _rm_targets_outside_the_build_tree(body)
+        if outside is None and _FIND_DELETE_RE.search(body):
+            outside = _find_outside_the_build_tree(body)
         if outside is not None:
             once("S002", "Recursive Deletion Outside The Build Tree", "CRITICAL",
                  f"recursive delete aimed outside the build tree: {quoted}",

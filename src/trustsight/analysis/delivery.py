@@ -920,21 +920,22 @@ def _foreign_declared_source_bases(
         dom = domains.get(name, "")
         if not dom:
             continue
-        if _is_upstream_owned(url, dom) and _shares_archive_channel(url, dom):
-            continue
-        if not upstream_dom:
-            # No reference host to diverge from.  A trusted channel (forge,
-            # official mirror, raw-content host) is accepted as the
-            # upstream's own; an arbitrary host is not, even when it is the
-            # recipe's only source.  The old `len(domains) == 1` shortcut
-            # accepted a lone attacker host, so deleting `url=` and declaring
-            # a single payload named `Makefile`/`configure` disabled the
-            # divergence check entirely - a bypass the adversarial harness
-            # found.  A benign lone source still passes when it is an archive
-            # (H083 only matches an executed *declared* file) or sits on a
-            # trusted bucket.
-            if classify_url(url)[0] in _TRUSTED_SOURCE_BUCKETS:
+        if classify_url(url)[0] in _TRUSTED_SOURCE_BUCKETS:
+            # A forge/official/raw host: the upstream's own file only when
+            # the repo matches, or when there is no `url=` to diverge from.
+            # `github.com/evil/configure` is not `github.com/example/proj`.
+            if not upstream_dom or _is_upstream_owned(url, dom):
                 continue
+            foreign.add(name)
+            continue
+        # An arbitrary host: `url=` is attacker-declared, so matching it is
+        # not enough.  A build script counts as the upstream's own only when
+        # a declared archive establishes the channel; otherwise
+        # `url="https://evil.example" source=("https://evil.example/configure")`
+        # made the payload look upstream-owned.
+        if (_is_upstream_owned(url, dom) and archive_doms
+                and _shares_archive_channel(url, dom)):
+            continue
         foreign.add(name)
     return frozenset(foreign)
 
