@@ -82,3 +82,23 @@ jobs:
 
       - name: Verify installation
         run: trustsight --version
+
+  container-install:
+    # The same build a user runs, automated as a pytest test so the release
+    # checklist's manual `makepkg -si` is not needed.  It has to be a job of
+    # its own: the `build` job already runs inside an Arch container, which
+    # cannot nest the Docker daemon this test drives, so this one runs on a
+    # plain runner with Docker available and builds a disposable Arch
+    # container from the working tree.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Build and install in a disposable Arch container
+        env:
+          TRUSTSIGHT_CONTAINER: "1"
+        run: uv run --extra dev pytest tests/test_container_install.py -q
