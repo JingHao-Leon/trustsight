@@ -24,6 +24,7 @@ severity weights and the reserved identifier ranges.
 |---|---|---|
 | [C017](#c017) | Install Hook Writes To A User-Writable Location | HIGH |
 | [C029](#c029) | Backup Array Gains Entries | INFO |
+| [C031](#c031) | Boot Or System Image Tool Run During Build | HIGH |
 | [H017](#h017) | Install Hook Fetches Or Executes | HIGH |
 | [H023](#h023) | Install Hook Present | INFO |
 | [H032](#h032) | Write To User Home Or RC | HIGH |
@@ -363,3 +364,20 @@ Measured on the locked benign corpus: 0/3,739.
 Annotation-tier by default: adding a backup entry is a deliberate,
 usually legitimate declaration, so it carries no score and is recorded
 for the reader rather than treated as suspicion.
+
+### C031: Boot Or System Image Tool Run During Build {#c031}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+- **Condition:** A build-time function (`prepare`/`build`/`check`/
+  `package`) runs `dracut`, `mkinitcpio`, `update-initramfs`,
+  `grub-mkconfig`, `grub-install`, `bootctl`, `guestfish`,
+  `virt-customize` or `virt-sysprep`.
+
+H095 covers the same tools when they name a path from the source tree;
+this covers the tool run against the live host (`mkinitcpio -P`,
+`grub-install /dev/sda`, `update-initramfs -u`), which names no build path.
+A package that builds must not rewrite the builder's boot configuration.
+Install hooks are where these legitimately run, so `post_upgrade() {
+mkinitcpio -P; }` stays silent; only the build-time functions are in scope.
+Measured on the locked benign corpus: 0/3,739.

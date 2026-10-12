@@ -21,7 +21,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 - R-series regex rules and H-series heuristics, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
 - H001/H002 checksum integrity rules (hard-coded, not TOML).
-- C001-C030 structural anomaly rules (checksum/source integrity heuristics).
+- C001-C031 structural anomaly rules (checksum/source integrity heuristics).
 - D001-D004 dependency-graph rules.
 
 ### Availability
@@ -40,7 +40,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 ### Benchmark
 
-CRITICAL recall: **100%**; every CRITICAL-class sample in the benchmark corpus (201 labelled fixtures) is detected.
+CRITICAL recall: **100%**; every CRITICAL-class sample in the benchmark corpus (202 labelled fixtures) is detected.
 
 ---
 
