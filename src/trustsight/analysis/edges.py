@@ -44,7 +44,6 @@ from .delivery import (
     _COMMITTED_PAYLOAD_RE,
     _declared_source_basenames,
     _declared_source_urls,
-    _foreign_declared_source_bases,
     _heredoc_body_indices,
     _printed_heredoc_body_indices,
     edge_fetch_then_execute,
@@ -77,8 +76,6 @@ class GraphContext:
     heredoc_body: set[int] = field(default_factory=set)
     #: Basenames that arrive via the declared ``source=()`` array.
     source_basenames: set[str] = field(default_factory=set)
-    #: Basenames of declared sources fetched from a foreign host.
-    foreign_declared_bases: frozenset[str] = field(default_factory=frozenset)
     #: Normalized URLs the declared ``source=()`` array carries.
     declared_urls: frozenset[str] = field(default_factory=frozenset)
     #: H016's declared set: the post-diff PKGBUILD where the caller has it,
@@ -120,7 +117,6 @@ def build_context(
         scopes=scopes,
         heredoc_body=_heredoc_body_indices(lines),
         source_basenames=_declared_source_basenames(diff_text, current_text),
-        foreign_declared_bases=_foreign_declared_source_bases(diff_text, current_text),
         declared_urls=_declared_source_urls(diff_text),
         declared_urls_full=frozenset(normalize_url(u) for u in declared_src),
         declared_hosts=frozenset(

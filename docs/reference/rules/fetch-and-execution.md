@@ -457,12 +457,13 @@ Detected by `_fetch_then_execute_findings()` in
 - **Category:** `execution`
 - **Condition:** An interpreter (`bash`/`sh`/`zsh`/`dash`/`ksh`/`python`/`perl`/`ruby`), `source`, `.` or `./` form executes a file whose basename is declared in the `source=()` array.
 
-Checksums protect integrity, not intent: a `source=(... .sh)` followed by
-`bash "$srcdir/that.sh"` is remote code execution just like `curl | bash`,
-only hidden behind the ordinary download path. Build-system scripts
-(`configure`, `make`, `meson`, `ninja`, `cmake`) are common declared-source
-executables and stay silent; the rule targets interpreted execution of a
-downloaded script. Detected by `_source_file_execution_findings()` in
+Checksums protect integrity, not intent: a `source=(... stage.sh)` followed by
+`bash "$srcdir/stage.sh"` is remote code execution just like `curl | bash`,
+only hidden behind the ordinary download path. The name does not matter: a
+downloaded `configure`, `make` or `Makefile` executed as a script fires too.
+`url=` is attacker-declared, so a host that matches it is not provenance, and
+a `name::url` rename that ships a payload under a benign name fires for the
+same reason. Detected by `edge_source_file_execution()` in
 `src/trustsight/analysis/delivery.py`.
 
 ### H090: Committed Companion Carries A Fetch-Execute Payload {#h090}
