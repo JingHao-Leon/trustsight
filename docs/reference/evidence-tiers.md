@@ -40,7 +40,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 ### Benchmark
 
-CRITICAL recall: **100%**; every CRITICAL-class sample in the benchmark corpus (202 labelled fixtures) is detected.
+CRITICAL recall: **100%**; every CRITICAL-class sample in the benchmark corpus (204 labelled fixtures) is detected.
 
 ---
 
