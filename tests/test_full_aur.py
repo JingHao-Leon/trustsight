@@ -602,6 +602,38 @@ def test_since_joins_the_live_stream_when_caught_up(monkeypatch):
         _clear_cursor()
 
 
+def test_a_caught_up_replay_does_not_restart_on_the_next_cycle(monkeypatch):
+    """Catching up must join the live stream for good.  The --since is
+    re-passed every cycle, so clearing the origin sentinel made the next
+    cycle start the whole backfill over: the watcher replayed five months
+    of history every few hours instead of staying live."""
+    from types import SimpleNamespace
+
+    import time as _time
+    import trustsight.full_aur.pipeline as pipeline
+
+    now = int(_time.time())
+    monkeypatch.setattr(
+        pipeline,
+        "time",
+        SimpleNamespace(
+            time=lambda: now, strftime=_time.strftime, gmtime=_time.gmtime
+        ),
+    )
+    _stub_since_cycle(monkeypatch, pipeline, {"fresh-pkg": (now - 100, 5)})
+    monkeypatch.setattr(pipeline, "save_metadata", lambda *a, **k: None)
+
+    try:
+        first = pipeline.run_baseline_build(since=now - _DAY)
+        assert not first.backfilling
+        # The watch loop passes the same --since again: it must not start
+        # the replay over.
+        second = pipeline.run_baseline_build(since=now - _DAY)
+        assert not second.backfilling
+    finally:
+        _clear_cursor()
+
+
 def test_since_resumes_the_cursor_across_a_restart(monkeypatch):
     """Re-passing the same --since on a service restart must resume the
     replay, not start it over: the flag names the origin, the cursor

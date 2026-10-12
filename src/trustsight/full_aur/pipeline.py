@@ -569,10 +569,12 @@ def _run_baseline_build(
     if not to_process:
         if result.backfilling:
             # The bucket was empty at the head of history: the replay has
-            # caught up with the AUR.  Join the live delta path.
+            # caught up with the AUR.  Join the live delta path.  The origin
+            # sentinel is kept, not cleared: --since is re-passed on every
+            # cycle, so clearing it would make the next cycle look like a
+            # different replay and restart the whole backfill.
             save_metadata(new_meta, _meta_snapshot_path())
             _set_since_cursor(None)
-            set_metadata(_SINCE_ORIGIN_KEY, "")
             clear_resume_state()
             result.backfilling = False
             _log("Backfill caught up; joining the live delta stream")
@@ -781,9 +783,11 @@ def _run_baseline_build(
         # set belongs to the day just finished, so it is cleared either way.
         clear_resume_state()
         if backfill_day_end >= now:
+            # Caught up: join the live delta path.  The origin sentinel is
+            # kept, not cleared, so the --since re-passed next cycle is not
+            # mistaken for a new replay (see the guard above the day walk).
             save_metadata(new_meta, _meta_snapshot_path())
             _set_since_cursor(None)
-            set_metadata(_SINCE_ORIGIN_KEY, "")
             result.backfilling = False
             _log("Backfill caught up; joining the live delta stream")
         else:
