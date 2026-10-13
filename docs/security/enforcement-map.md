@@ -46,6 +46,8 @@ python scripts/security_gates.py
 | `expansion is bounded and never indirect` | A6 | `tokenizer.py` |
 | `tokenizer hostile-input smoke is deterministic` | A6, A14 | `tokenizer.py` and fixed hostile-input smoke cases |
 | `tokenizer module is isolated` | A6 | no `src/` module imports `_tokenizer_engine` except `sandbox/expand_worker.py` |
+| `tokenizer worker startup is isolated` | A6 | the worker launches `-I` with no `PYTHON*` environment, so no `sitecustomize` runs at startup |
+| `every child process gets an explicit environment` | A6 | every `subprocess` call in `src/` passes `env=minimal_env()`, so no inherited startup-hook or loader-injection variable (`PYTHONPATH`, `LD_PRELOAD`, ...) reaches a child |
 | `tokenizer pool waits are bounded` | A6, A14 | `sandbox/client.py` refuses a saturated pool at a finite deadline rather than blocking forever |
 | `a dead tokenizer child fails the package` | A6, B2 | `sandbox/client.py` raises `TokenizerUnavailable`; the batch runner reports the package as NOT vetted |
 | `regex patterns pass adversarial audit` | A5, A14 | configured and source regex patterns |
@@ -102,6 +104,13 @@ python scripts/security_gates.py
 | `run diff assembly is bounded` | A14, B2 | `fetcher.MAX_RUN_DIFF_BYTES` charged across results |
 | `a truncated history walk is a declared gap` | B2 | `coverage.HISTORY_TRUNCATED` set on every early stop |
 | `every history diff is scored independently` | B1 | no aggregate score reachable from the `--last` path |
+| `manifest parses are bounded and refusing` | A4b/A5 | hostile TOML/JSON/line fixtures return a refusal, never a hang |
+| `manifest table is configuration` | A6 | the manifest filename table is written to `patterns.toml` |
+| `U003 joins the host view` | B11 | a manifest-introduced git host appears in `hosts_gained` |
+| `manifest ledger stays weight 0` | B10 | U001/U002/U005/U006 are INFO; only U003/U004 score |
+| `archive listing adds no extraction` | A8 | the manifest layer reads committed files only |
+| `yaml is only ever safe_load` | A5 | package-controlled YAML is parsed with `yaml.safe_load` only |
+| `libgit2 is not the vulnerable version` | A14 | the pygit2 pin bundles libgit2 >= 1.9.5 (delta result-size allocation fix, CVE-2026-53585), read from the runtime version |
 
 How each gate is scoped, and the recurring mistake that lets one pass while its invariant is broken, is set out in [reviewing a security control](../contributing/security-review.md). Read it before adding an invariant or a gate.
 
