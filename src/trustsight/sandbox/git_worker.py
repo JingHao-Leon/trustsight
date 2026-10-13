@@ -37,6 +37,7 @@ import pygit2
 
 from trustsight.sandbox import protocol
 from trustsight.sandbox.git_bounds import (
+    GIT_COMMIT_META_MAX_OIDS,
     GIT_DIFF_MAX_CONTEXT_LINES,
     GIT_PACK_MAX_OBJECTS,
     GIT_TREE_MAX_ENTRIES,
@@ -421,6 +422,58 @@ def _binary_meta(payload: dict) -> dict:
     return {"paths": binary_metadata_paths(repo, old, new)}
 
 
+def _commit_record(commit) -> dict:
+    return {
+        "id": str(commit.id),
+        "commit_time": int(commit.commit_time),
+        "parents": [str(parent) for parent in commit.parents],
+    }
+
+
+def _walk(payload: dict) -> dict:
+    """Commits under *head*, newest first, as lightweight records.
+
+    Reuses ``fetcher.walk_bounded`` so the same commit ceiling applies in the
+    worker; only ``id``, ``commit_time`` and ``parents`` cross the boundary,
+    never a libgit2 handle.
+    """
+    from trustsight.fetcher import MAX_HISTORY_COMMITS, walk_bounded
+
+    head = _require_oid(payload.get("head"), "commit id")
+    limit = payload.get("limit")
+    try:
+        limit = int(limit) if limit is not None else None
+    except (TypeError, ValueError):
+        limit = None
+    if limit is not None:
+        limit = max(0, min(limit, MAX_HISTORY_COMMITS))
+    if not head:
+        return {"commits": []}
+    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
+    repo = pygit2.Repository(str(path))
+    try:
+        commits = [_commit_record(c) for c in walk_bounded(repo, head, limit=limit)]
+    except pygit2.GitError:
+        return {"commits": []}
+    return {"commits": commits}
+
+
+def _commit_meta(payload: dict) -> dict:
+    """Time and parents for a bounded list of commit ids."""
+    oids = payload.get("oids") or []
+    if not isinstance(oids, list) or len(oids) > GIT_COMMIT_META_MAX_OIDS:
+        raise _OpError("too many or malformed commit ids")
+    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
+    repo = pygit2.Repository(str(path))
+    out = []
+    for raw in oids:
+        oid = _require_oid(raw, "commit id")
+        commit = repo.get(oid) if oid else None
+        if commit is not None:
+            out.append(_commit_record(commit))
+    return {"commits": out}
+
+
 _DISPATCH = {
     "open_fetch": _open_fetch,
     "head": _head,
@@ -430,6 +483,8 @@ _DISPATCH = {
     "companion_hunks": _companion_hunks,
     "opaque_changed": _opaque_changed,
     "binary_meta": _binary_meta,
+    "walk": _walk,
+    "commit_meta": _commit_meta,
 }
 
 

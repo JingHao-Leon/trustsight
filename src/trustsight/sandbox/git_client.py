@@ -170,6 +170,18 @@ class GitSession:
             "pkg": pkg, "cache_dir": cache_dir, "old": old, "new": new,
         })["paths"]
 
+    def walk(self, pkg: str, cache_dir: str, head: str,
+             limit: int | None = None) -> list[dict]:
+        """Commits under *head*, newest first: ``{id, commit_time, parents}``."""
+        return self.request("walk", {
+            "pkg": pkg, "cache_dir": cache_dir, "head": head, "limit": limit,
+        })["commits"]
+
+    def commit_meta(self, pkg: str, cache_dir: str, oids) -> list[dict]:
+        return self.request("commit_meta", {
+            "pkg": pkg, "cache_dir": cache_dir, "oids": list(oids),
+        })["commits"]
+
     def close(self) -> None:
         if self._closed:
             return

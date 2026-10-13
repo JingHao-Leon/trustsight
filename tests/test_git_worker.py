@@ -270,3 +270,25 @@ def test_tree_files_reports_incomplete_when_capped(cache, monkeypatch):
     result = gw._tree_files({"pkg": "many", "cache_dir": str(cache), "oid": oid})
     assert result["complete"] is False
     assert len(result["files"]) == 2
+
+
+def test_walk_and_commit_meta(cache):
+    repo = pygit2.init_repository(str(cache / "hist"))
+    c1 = _commit_files(repo, {"PKGBUILD": b"v1\n"}, [])
+    c2 = _commit_files(repo, {"PKGBUILD": b"v2\n"}, [pygit2.Oid(hex=c1)])
+    c3 = _commit_files(repo, {"PKGBUILD": b"v3\n"}, [pygit2.Oid(hex=c2)])
+
+    commits = gw._walk({"pkg": "hist", "cache_dir": str(cache), "head": c3,
+                        "limit": None})["commits"]
+    assert {c["id"] for c in commits} == {c1, c2, c3}
+    assert next(c for c in commits if c["id"] == c1)["parents"] == []
+
+    meta = gw._commit_meta({"pkg": "hist", "cache_dir": str(cache),
+                            "oids": [c1, c3]})["commits"]
+    assert {m["id"] for m in meta} == {c1, c3}
+
+
+def test_commit_meta_refuses_too_many_ids(cache):
+    with pytest.raises(gw._OpError, match="too many"):
+        gw._commit_meta({"pkg": "hist", "cache_dir": str(cache),
+                         "oids": ["0" * 40] * 65})

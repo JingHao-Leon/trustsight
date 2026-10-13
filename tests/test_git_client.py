@@ -115,3 +115,26 @@ def test_tree_files_round_trip(cache):
         session.close()
     assert complete is True
     assert dict(files)["PKGBUILD"] == b"pkgver=1.0\n"
+
+
+def test_walk_round_trip(cache):
+    repo = pygit2.init_repository(str(cache / "h"))
+    author = pygit2.Signature("Tester", "tester@example.com")
+
+    def commit(text, parents):
+        blob = repo.create_blob(text)
+        builder = repo.TreeBuilder()
+        builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
+        return str(repo.create_commit("HEAD", author, author, "c",
+                                      builder.write(), parents))
+
+    c1 = commit(b"v1\n", [])
+    c2 = commit(b"v2\n", [pygit2.Oid(hex=c1)])
+    session = git_client.GitSession()
+    try:
+        commits = session.walk("h", str(cache), c2)
+        meta = session.commit_meta("h", str(cache), [c1, c2])
+    finally:
+        session.close()
+    assert {c["id"] for c in commits} == {c1, c2}
+    assert {m["id"] for m in meta} == {c1, c2}

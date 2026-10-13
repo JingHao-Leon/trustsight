@@ -60,3 +60,6 @@ GIT_DIFF_MAX_CONTEXT_LINES = 200
 #: incomplete rather than building an unbounded list (the byte budget does
 #: not bound the entry count).
 GIT_TREE_MAX_ENTRIES = 100_000
+
+#: Commit ids one ``commit_meta`` request may name.
+GIT_COMMIT_META_MAX_OIDS = 64
