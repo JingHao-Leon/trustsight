@@ -39,14 +39,15 @@ python scripts/security_gates.py
 | `the indicator tier mirrors ioc_matches` | Addendum 5 §6.4, B1 | `reporting.report_body`, `PackageFact.ioc_matches` |
 | `the layer profile is gap-precise and additive` | Addendum 5 §3 | `trustsight.layers.layer_profile` |
 | `differ hostile input is bounded` | A4b | `differ` parser limits and hostile extraction gate |
-| `generated diff is bounded before assembly` | A4b, B2 | `differ.generate_diff_bounded`, `MAX_DIFF_PATCHES`, `MAX_PATCH_BYTES` |
-| `companion reads are bounded before data` | A4b | `differ.companion_source_hunks`, `MAX_PKG_BUILD_BYTES`, `MAX_COMPANION_TREE_ENTRIES` |
+| `generated diff is bounded before assembly` | A4b, B2 | `sandbox/git_project.generate_diff_bounded`, `MAX_DIFF_PATCHES`, `MAX_PATCH_BYTES` |
+| `companion reads are bounded before data` | A4b | `sandbox/git_project.companion_source_hunks`, `MAX_PKG_BUILD_BYTES`, `MAX_COMPANION_TREE_ENTRIES` |
 | `differ output is deterministic` | Guarantees | sorted differ summaries and URL extraction |
 | `API inputs are bounded before initialization` | A4c | `trustsight.api` input validators |
 | `expansion is bounded and never indirect` | A6 | `tokenizer.py` |
 | `tokenizer hostile-input smoke is deterministic` | A6, A14 | `tokenizer.py` and fixed hostile-input smoke cases |
 | `tokenizer module is isolated` | A6 | no `src/` module imports `_tokenizer_engine` except `sandbox/expand_worker.py` |
 | `tokenizer worker startup is isolated` | A6 | the worker launches `-I` with no `PYTHON*` environment, so no `sitecustomize` runs at startup |
+| `git worker startup is isolated` | A16 | the git worker launches `-I` with a minimal environment, so no `sitecustomize` runs at startup |
 | `every child process gets an explicit environment` | A6 | every `subprocess` call in `src/` passes `env=minimal_env()`, so no inherited startup-hook or loader-injection variable (`PYTHONPATH`, `LD_PRELOAD`, ...) reaches a child |
 | `tokenizer pool waits are bounded` | A6, A14 | `sandbox/client.py` refuses a saturated pool at a finite deadline rather than blocking forever |
 | `a dead tokenizer child fails the package` | A6, B2 | `sandbox/client.py` raises `TokenizerUnavailable`; the batch runner reports the package as NOT vetted |
@@ -58,7 +59,7 @@ python scripts/security_gates.py
 | `release artifacts and tags use the verified commit` | release consistency | `.github/workflows/publishing.yml` builds from the checked-out target and refuses a tag that points elsewhere; `scripts/verify_release.py` rebuilds `HEAD` |
 | `SQL is parameterised` | A9 | `db.py` |
 | `terminal output is inert` | A10 | `safe_text.py`, `cli/` |
-| `freshness uses local marker` | A11 | `fetcher._is_current`, `fetcher.last_fetch_time` |
+| `freshness uses local marker` | A11 | `sandbox/git_project._is_current`, `sandbox/git_project.last_fetch_time` |
 | `a seed cannot rewrite the database` | A12 | `db.import_seed` |
 | `hashed maintainers protect privacy` | P1 | `db.maintainers_hashed`, `seed_meta.salt` |
 | `the seed hash is deterministic` | P1 | `seed_build._hash_value` |
@@ -96,12 +97,12 @@ python scripts/security_gates.py
 | `every input bound is a source constant` | A14 | bound constants are module-level literals |
 | `every result render ends with a direction to review` | B9 | `verdict.DIRECTIONS`, structural |
 | `no git filters or hooks are configured` | A3 | clone configuration |
-| `libgit2 stays behind the git sandbox` | A16 | only `sandbox/git_project.py`, `sandbox/git_worker.py` and the not-yet-cutover modules import `pygit2`; the list is a ratchet |
+| `libgit2 stays behind the git sandbox` | A16 | only `sandbox/git_project.py` and `sandbox/git_worker.py` import `pygit2`; the parent reaches every git operation through the isolated worker |
 | `docs/security.md matches the gates` | this page | the table above |
 | `CI installs from the lock` | the CI assumption | `uv sync --locked` in every workflow, `uv.lock` |
 | `critical paths are synchronised` | `CODEOWNERS`, signature workflow and contributor policy | canonical `scripts/critical_paths.py` |
 | `an audit does not write history` | A15 | connection opened `mode=ro` when `--record` is absent; behavioural, asserted by running the path against a fixture DB and diffing it |
-| `the history walk is bounded` | A14 | `fetcher.walk_bounded` is the only walker; `fetcher.MAX_HISTORY_COMMITS`, `fetcher.MAX_HISTORY_DIFFS` |
+| `the history walk is bounded` | A14 | `sandbox/git_project.walk_bounded` is the only walker; `differ.MAX_HISTORY_COMMITS`, `fetcher.MAX_HISTORY_DIFFS` |
 | `run diff assembly is bounded` | A14, B2 | `fetcher.MAX_RUN_DIFF_BYTES` charged across results |
 | `a truncated history walk is a declared gap` | B2 | `coverage.HISTORY_TRUNCATED` set on every early stop |
 | `every history diff is scored independently` | B1 | no aggregate score reachable from the `--last` path |

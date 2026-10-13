@@ -1,11 +1,9 @@
 import time
 
-import pygit2
-
 from ..coverage import note_stage_failure
 from ..db import get_package
-from ..fetcher import walk_bounded
 from ..findings import stamp
+from ..sandbox.git_client import GitOpError, GitSandboxUnavailable
 
 
 def _t_thresholds(config, name: str, key: str, default: int) -> int:
@@ -100,14 +98,14 @@ def t_domain_findings(maintainer: str, config) -> list[dict]:
     return []
 
 
-def _recent_update(repo, head_commit):
+def _recent_update(project, head_commit):
     if not head_commit:
         return None
     try:
-        commit = repo.get(head_commit)
-        if commit is None:
+        records = project.commit_meta([head_commit])
+        if not records:
             return None
-        hours_ago = (time.time() - commit.commit_time) / 3600
+        hours_ago = (time.time() - records[0].commit_time) / 3600
         if hours_ago < 72:
             return stamp({
                 "rule_id": "H020",
@@ -117,12 +115,12 @@ def _recent_update(repo, head_commit):
                 "match": f"updated {int(hours_ago)}h ago (< 72h)",
                 "params": {"detail": f"updated {int(hours_ago)}h ago (< 72h)"},
             })
-    except (AttributeError, pygit2.GitError):
+    except (GitSandboxUnavailable, GitOpError):
         note_stage_failure("temporal")
     return None
 
 
-def _package_is_new(repo, head_commit, pkg_name=None):
+def _package_is_new(project, head_commit, pkg_name=None):
     if not head_commit:
         return None
     try:
@@ -133,7 +131,7 @@ def _package_is_new(repo, head_commit, pkg_name=None):
         # commit is recent, and a package with more history than that is
         # not new by any reading.
         root_age = None
-        for c in walk_bounded(repo, head_commit, limit=100):
+        for c in project.walk(head_commit, 100):
             if not c.parents:
                 root_age = (time.time() - c.commit_time) / 86400
                 break
@@ -146,17 +144,18 @@ def _package_is_new(repo, head_commit, pkg_name=None):
                 "match": f"first AUR commit {int(root_age)} days ago (< 30)",
                 "params": {"detail": f"first AUR commit {int(root_age)} days ago (< 30)"},
             })
-    except (AttributeError, pygit2.GitError):
+    except (GitSandboxUnavailable, GitOpError):
         note_stage_failure("temporal")
     return None
 
 
-def _stale_revival(repo, old_commit, head_commit):
+def _stale_revival(project, old_commit, head_commit):
     if not old_commit or not head_commit:
         return None
     try:
-        old = repo.get(old_commit)
-        head = repo.get(head_commit)
+        records = {r.id: r for r in project.commit_meta([old_commit, head_commit])}
+        old = records.get(old_commit)
+        head = records.get(head_commit)
         if old is None or head is None:
             return None
         gap_days = (head.commit_time - old.commit_time) / 86400
@@ -169,6 +168,6 @@ def _stale_revival(repo, old_commit, head_commit):
                 "match": f"dormant {int(gap_days)} days, now has a new update (> 1 year)",
                 "params": {"detail": f"dormant {int(gap_days)} days, now has a new update (> 1 year)"},
             })
-    except (AttributeError, pygit2.GitError):
+    except (GitSandboxUnavailable, GitOpError):
         note_stage_failure("temporal")
     return None

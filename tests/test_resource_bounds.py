@@ -21,8 +21,9 @@ import tracemalloc
 
 import pytest
 
-from trustsight import fetcher, ioc_baseline
+from trustsight import differ, fetcher, ioc_baseline
 from trustsight.full_aur import metadata
+from trustsight.sandbox import git_bounds, git_project, git_worker
 
 
 # ---------------------------------------------------------------------------
@@ -102,11 +103,12 @@ def _fresh_budget():
 
 
 def test_one_transfer_cannot_exceed_its_byte_ceiling():
-    callbacks = fetcher._DeadlineCallbacks(120)
+    """The per-transfer ceiling is enforced in the child, where bytes arrive."""
+    callbacks = git_worker._Callbacks(120)
     callbacks.transfer_progress(_Stats(1024))  # well inside: no raise
 
-    with pytest.raises(fetcher._TimeoutError):
-        callbacks.transfer_progress(_Stats(fetcher.MAX_TRANSFER_BYTES + 1))
+    with pytest.raises(git_worker._OpError):
+        callbacks.transfer_progress(_Stats(git_bounds.MAX_TRANSFER_BYTES + 1))
 
 
 def test_many_transfers_cannot_exceed_the_run_budget():
@@ -114,26 +116,26 @@ def test_many_transfers_cannot_exceed_the_run_budget():
 
     A dependency walk visits up to `MAX_DEPTH_NODES` repositories. Each one
     staying under its own ceiling says nothing about the total, and the
-    total is what lands on the disk.
+    total is what lands on the disk.  The child enforces the per-transfer
+    cap; the parent charges this run budget across packages.
     """
-    per_call = fetcher.MAX_TRANSFER_BYTES
-    allowed = fetcher.MAX_TOTAL_TRANSFER_BYTES // per_call
+    per_call = git_bounds.MAX_TRANSFER_BYTES
+    allowed = git_bounds.MAX_TOTAL_TRANSFER_BYTES // per_call
 
     with pytest.raises(fetcher._TimeoutError):
         for _ in range(allowed + 2):
-            callbacks = fetcher._DeadlineCallbacks(120)
-            callbacks.transfer_progress(_Stats(per_call))
+            fetcher._charge_transfer(per_call, 0)
 
 
 def test_the_run_budget_is_not_multiplied_by_the_depth_cap():
     """The two caps compose to a number, and that number is not 50 GiB."""
     from trustsight import depth
 
-    naive = depth.MAX_DEPTH_NODES * fetcher.MAX_TRANSFER_BYTES
-    assert fetcher.MAX_TOTAL_TRANSFER_BYTES < naive, (
+    naive = depth.MAX_DEPTH_NODES * git_bounds.MAX_TRANSFER_BYTES
+    assert git_bounds.MAX_TOTAL_TRANSFER_BYTES < naive, (
         "the run budget does not constrain a full-depth walk at all"
     )
-    assert fetcher.MAX_TOTAL_TRANSFER_BYTES <= 4 * 1024**3
+    assert git_bounds.MAX_TOTAL_TRANSFER_BYTES <= 4 * 1024**3
 
 
 def test_an_oversized_transfer_is_reported_as_an_incomplete_fetch():
@@ -144,9 +146,8 @@ def test_an_oversized_transfer_is_reported_as_an_incomplete_fetch():
 def test_progress_is_charged_as_a_delta_not_a_running_total():
     """`received_bytes` is cumulative per transfer, so charging it whole
     would bill a single 10 MiB clone for the sum of its progress reports."""
-    callbacks = fetcher._DeadlineCallbacks(120)
-    for received in (1_000_000, 2_000_000, 3_000_000):
-        callbacks.transfer_progress(_Stats(received))
+    fetcher._charge_transfer(1_000_000, 0)
+    fetcher._charge_transfer(3_000_000, 1_000_000)
     assert fetcher._transferred_bytes == 3_000_000
 
 
@@ -178,9 +179,9 @@ class _WalkRepo:
 
 def test_a_history_walk_terminates_on_an_endless_history():
     repo = _WalkRepo()
-    commits = list(fetcher.walk_bounded(repo, "head"))
-    assert len(commits) == fetcher.MAX_HISTORY_COMMITS
-    assert repo.visited <= fetcher.MAX_HISTORY_COMMITS
+    commits = list(git_project.walk_bounded(repo, "head"))
+    assert len(commits) == differ.MAX_HISTORY_COMMITS
+    assert repo.visited <= differ.MAX_HISTORY_COMMITS
 
 
 def test_a_short_history_is_walked_whole():
@@ -193,7 +194,7 @@ def test_a_short_history_is_walked_whole():
                 yield _Commit(index)
 
     repo = _Short()
-    assert len(list(fetcher.walk_bounded(repo, "head"))) == 12
+    assert len(list(git_project.walk_bounded(repo, "head"))) == 12
 
 
 def test_the_walk_yields_newest_first_so_the_bound_keeps_the_signal():
@@ -204,7 +205,7 @@ def test_the_walk_yields_newest_first_so_the_bound_keeps_the_signal():
     changing answers rather than bounding work.
     """
     repo = _WalkRepo()
-    commits = list(fetcher.walk_bounded(repo, "head", limit=3))
+    commits = list(git_project.walk_bounded(repo, "head", limit=3))
     assert [c.id for c in commits] == [0, 1, 2]
 
 
@@ -223,7 +224,7 @@ def test_every_history_walk_in_the_tree_goes_through_the_bounded_helper():
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
             if re.search(r"\brepo\.walk\(", line) and "def walk_bounded" not in line:
                 # The helper itself is the one legitimate raw call.
-                if path.name == "fetcher.py":
+                if path.name == "git_project.py":
                     continue
                 offenders.append(f"{path.name}:{lineno} {line.strip()}")
     assert not offenders, "unbounded history walks: " + "; ".join(offenders)

@@ -18,6 +18,8 @@ __all__ = [
     "GIT_PACK_MAX_OBJECTS",
     "GIT_FETCH_TIMEOUT_SECONDS",
     "GIT_OP_TIMEOUT_SECONDS",
+    "MAX_TRANSFER_BYTES",
+    "MAX_TOTAL_TRANSFER_BYTES",
 ]
 
 #: Address-space ceiling for one git worker.  AUR repositories are recipe
@@ -43,6 +45,20 @@ GIT_WORKER_NOFILE = 64
 #: Objects one pack may declare.  Bounds the object inventory the way
 #: ``fetcher.MAX_HISTORY_COMMITS`` bounds the commit walk.
 GIT_PACK_MAX_OBJECTS = 1_000_000
+
+#: Bytes one clone or fetch may pull.  The deadline bounds how *long* a
+#: transfer runs, which on a fast link is not a bound on how much arrives:
+#: 120 seconds is gigabytes, written straight to the cache directory.  An AUR
+#: repository holds a recipe and occasionally a patch, so a few MiB is the
+#: honest size and this is two orders of magnitude above it.  Enforced in the
+#: child's transfer callback, where the bytes actually arrive.
+MAX_TRANSFER_BYTES = 256 * 1024 * 1024
+
+#: Bytes every transfer in one analysis may pull between them.  The per-repo
+#: cap alone is not a disk bound, because the dependency walk multiplies it by
+#: ``depth.MAX_DEPTH_NODES`` (200).  The child enforces the per-transfer cap;
+#: the parent charges this run budget across packages.
+MAX_TOTAL_TRANSFER_BYTES = 2 * 1024 * 1024 * 1024
 
 #: Wall-clock ceiling for the clone/fetch request, matching the existing
 #: 120-second deadline plus startup and index time.

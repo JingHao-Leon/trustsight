@@ -221,15 +221,11 @@ def test_print_colored_falls_back_to_plain_print_without_rich(monkeypatch, capsy
 
 
 def test_analyze_package_tolerates_a_repo_with_no_head(isolated, monkeypatch):
-    import pygit2
 
     import trustsight.analysis.pipeline as pipeline
 
     monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: object())
-    monkeypatch.setattr(
-        pipeline, "get_head_commit",
-        lambda repo: (_ for _ in ()).throw(pygit2.GitError("could not resolve HEAD")),
-    )
+    monkeypatch.setattr(pipeline, "get_head_commit", lambda repo: "")
     monkeypatch.setattr(pipeline, "get_pkgver_from_head", lambda repo: "1.1")
     monkeypatch.setattr(pipeline, "_recent_update", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
@@ -266,19 +262,19 @@ def test_a_first_analysis_reports_what_it_found(isolated, monkeypatch):
         "rule_id": "H020", "name": "Very Recent Update", "severity": "MEDIUM",
         "category": "temporal", "reason": "updated 2h ago", "weight": 10})
     monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
-    monkeypatch.setattr(
-        pipeline, "_collect_tree_files",
-        lambda repo, commit: (
-            [("payload.bin", b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 56)], True),
-    )
     monkeypatch.setattr(pipeline, "build_novelty_context", lambda *a, **k: NoveltyContext())
     monkeypatch.setattr(pipeline, "insert_analysis", lambda **kw: kw)
     monkeypatch.setattr(pipeline, "update_package_version", lambda *a, **k: None)
     monkeypatch.setattr(
         pipeline, "get_maintainer_from_commit", lambda repo, commit: "M <m@example.org>")
 
+    class _Project:
+        def tree_files(self, commit):
+            return ([("payload.bin", b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 56)],
+                    True)
+
     fact = pipeline._make_fresh_analysis(
-        "demo", "1.0", "abc123", 1, object(), load_config(),
+        "demo", "1.0", "abc123", 1, _Project(), load_config(),
         installed_version="0.9", head_pkgbuild="pkgver=1.0\n",
     )
 
@@ -302,17 +298,13 @@ def test_a_first_analysis_decides_the_version_comparison(isolated, monkeypatch):
     added to the incremental path only, so whether a downgrade was drawn as
     an update depended on how many times the package had been inspected.
     """
-    import pygit2
 
     import trustsight.analysis.pipeline as pipeline
     from trustsight.analysis.version import COMPARISON_INCONCLUSIVE
     from trustsight.verdict import version_transition
 
     monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: object())
-    monkeypatch.setattr(
-        pipeline, "get_head_commit",
-        lambda repo: (_ for _ in ()).throw(pygit2.GitError("could not resolve HEAD")),
-    )
+    monkeypatch.setattr(pipeline, "get_head_commit", lambda repo: "")
     monkeypatch.setattr(
         pipeline, "get_pkgver_from_head", lambda repo: "1.93.1.r7966.7ccbff5e",
     )

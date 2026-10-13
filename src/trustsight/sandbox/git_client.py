@@ -24,7 +24,11 @@ import select
 import signal
 import threading
 import time
+import weakref
+from collections import namedtuple
+from pathlib import Path
 
+from ..schema import DiffSummary
 from . import protocol
 from ._spawn import spawn_isolated
 from .git_bounds import GIT_FETCH_TIMEOUT_SECONDS, GIT_OP_TIMEOUT_SECONDS
@@ -216,6 +220,117 @@ class GitSession:
             _live.discard(self)
 
     def __enter__(self) -> "GitSession":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+
+_Commit = namedtuple("Commit", "id commit_time parents message")
+
+#: The fetch marker filename.  Repeated here rather than imported from
+#: ``git_project`` so the parent never pulls libgit2 into the process.
+_FETCH_MARKER = "trustsight-last-fetch"
+
+
+class GitProject:
+    """A ``GitSession`` bound to one package: the parent's read handle.
+
+    The parent holds this instead of a ``pygit2.Repository`` and asks it for
+    bounded projections.  Nothing here imports libgit2; each call is a framed
+    request to the isolated child.
+    """
+
+    def __init__(self, session: "GitSession", pkg: str, cache_dir: str) -> None:
+        self._session = session
+        self.pkg = pkg
+        self.cache_dir = cache_dir
+        # Retire the worker when this handle is collected, so a caller that
+        # forgets ``close()`` cannot accumulate children over a long walk.
+        self._finalizer = weakref.finalize(self, session.close)
+
+    @property
+    def path(self) -> str:
+        return str(Path(self.cache_dir) / self.pkg)
+
+    def _commit(self, record: dict) -> "_Commit":
+        return _Commit(
+            id=record.get("id", ""),
+            commit_time=record.get("commit_time", 0),
+            parents=list(record.get("parents", ())),
+            message=record.get("message", ""),
+        )
+
+    def head_commit(self) -> str:
+        return self._session.head(self.pkg, self.cache_dir)
+
+    def file_at(self, oid: str, name: str, max_bytes: int | None = None) -> str:
+        from .git_bounds import GIT_FILE_AT_MAX_BYTES
+
+        if not oid:
+            return ""
+        cap = GIT_FILE_AT_MAX_BYTES if max_bytes is None else max_bytes
+        try:
+            return self._session.file_at(self.pkg, self.cache_dir, oid, name, cap)
+        except GitOpError:
+            return ""
+
+    def walk(self, head: str, limit: int | None = None) -> list["_Commit"]:
+        return [self._commit(r)
+                for r in self._session.walk(self.pkg, self.cache_dir, head, limit)]
+
+    def commit_meta(self, oids) -> list["_Commit"]:
+        return [self._commit(r)
+                for r in self._session.commit_meta(self.pkg, self.cache_dir, oids)]
+
+    def parent_commit(self, head: str) -> str:
+        if not head:
+            return ""
+        try:
+            records = self.commit_meta([head])
+        except (GitSandboxUnavailable, GitOpError):
+            return ""
+        if not records or not records[0].parents:
+            return ""
+        return records[0].parents[0]
+
+    def diff_bounded(self, old: str, new: str, context_lines: int = 3,
+                     max_bytes: int | None = None):
+        result = self._session.diff(
+            self.pkg, self.cache_dir, old, new, context_lines, max_bytes)
+        summary = result["summary"]
+        diff_summary = DiffSummary(
+            lines_added=summary["lines_added"],
+            lines_removed=summary["lines_removed"],
+            files_changed=list(summary["files_changed"]),
+            file_changes=[dict(entry) for entry in summary["file_changes"]],
+        )
+        return result["unified"], diff_summary, bool(result["truncated"])
+
+    def tree_files(self, oid: str):
+        return self._session.tree_files(self.pkg, self.cache_dir, oid)
+
+    def companion_hunks(self, oid: str, max_bytes: int | None = None):
+        result = self._session.companion_hunks(
+            self.pkg, self.cache_dir, oid, max_bytes)
+        return result["text"], result["truncated"]
+
+    def opaque_changed(self, old: str, new: str) -> list[str]:
+        return self._session.opaque_changed(self.pkg, self.cache_dir, old, new)
+
+    def binary_meta(self, old: str, new: str) -> list[str]:
+        return self._session.binary_meta(self.pkg, self.cache_dir, old, new)
+
+    def last_fetch_time(self):
+        try:
+            return int((Path(self.path) / _FETCH_MARKER).read_text().strip())
+        except (OSError, ValueError):
+            return None
+
+    def close(self) -> None:
+        self._session.close()
+
+    def __enter__(self) -> "GitProject":
         return self
 
     def __exit__(self, *exc) -> None:

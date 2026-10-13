@@ -46,6 +46,7 @@ from trustsight.sandbox.git_bounds import (
     GIT_WORKER_FSIZE_BYTES,
     GIT_WORKER_MEMORY_BYTES,
     GIT_WORKER_NOFILE,
+    MAX_TRANSFER_BYTES,
 )
 
 _PR_SET_NO_NEW_PRIVS = 38
@@ -220,11 +221,19 @@ def _advance_to_fetched_head(repo) -> None:
 
 
 class _Callbacks(pygit2.RemoteCallbacks):
-    """Abort a transfer that runs past a deadline without any progress."""
+    """Abort a transfer that runs past its deadline or its byte ceiling.
+
+    libgit2 invokes these as data arrives, so raising from one cancels the
+    operation mid-transfer.  The byte ceiling is the bound the deadline does
+    not give: a fast link moves gigabytes inside a 120-second window.
+    ``received_bytes`` is cumulative for the transfer, so the last value is
+    what the parent charges to the run budget.
+    """
 
     def __init__(self, seconds: int):
         super().__init__()
         self._deadline = time.monotonic() + seconds
+        self.received_bytes = 0
 
     def _check(self):
         if time.monotonic() > self._deadline:
@@ -232,6 +241,12 @@ class _Callbacks(pygit2.RemoteCallbacks):
 
     def transfer_progress(self, stats):
         self._check()
+        received = getattr(stats, "received_bytes", 0) or 0
+        if received > MAX_TRANSFER_BYTES:
+            raise _OpError(
+                f"transfer exceeded {MAX_TRANSFER_BYTES} bytes"
+            )
+        self.received_bytes = max(self.received_bytes, received)
 
     def sideband_progress(self, string):
         self._check()
@@ -264,14 +279,18 @@ def _open_fetch(payload: dict) -> dict:
         if cached is not None:
             if upstream_mtime is not None and _is_current(cached, upstream_mtime):
                 return {"path": str(path), "head": _head_commit_id(cached),
-                        "fetched": False, "marker_time": _last_fetch_time(cached)}
+                        "fetched": False, "marker_time": _last_fetch_time(cached),
+                        "received_bytes": 0}
             if offline:
                 return {"path": str(path), "head": _head_commit_id(cached),
-                        "fetched": False, "marker_time": _last_fetch_time(cached)}
-            cached.remotes["origin"].fetch(callbacks=_Callbacks(120))
+                        "fetched": False, "marker_time": _last_fetch_time(cached),
+                        "received_bytes": 0}
+            callbacks = _Callbacks(120)
+            cached.remotes["origin"].fetch(callbacks=callbacks)
             _advance_to_fetched_head(cached)
             return {"path": str(path), "head": _head_commit_id(cached),
-                    "fetched": True, "marker_time": _record_fetch(cached)}
+                    "fetched": True, "marker_time": _record_fetch(cached),
+                    "received_bytes": callbacks.received_bytes}
 
     if offline:
         raise _OpError(
@@ -280,10 +299,12 @@ def _open_fetch(payload: dict) -> dict:
         )
     os.makedirs(path.parent, exist_ok=True)
     url = f"{_AUR_HOST}/{pkg}.git"
+    callbacks = _Callbacks(120)
     repo = pygit2.clone_repository(url, str(path), bare=True,
-                                   callbacks=_Callbacks(120))
+                                   callbacks=callbacks)
     return {"path": str(path), "head": _head_commit_id(repo),
-            "fetched": True, "marker_time": _record_fetch(repo)}
+            "fetched": True, "marker_time": _record_fetch(repo),
+            "received_bytes": callbacks.received_bytes}
 
 
 def _head(payload: dict) -> dict:
@@ -385,14 +406,14 @@ def _open_repo(cache_dir: str, pkg: str):
 def _tree_files(payload: dict) -> dict:
     """The committed tree's file heads, as ``(path, base64 bytes)`` pairs.
 
-    Reuses ``pipeline._collect_tree_files`` so the isolated read applies the
+    Reuses ``git_project.collect_tree_files`` so the isolated read applies the
     same per-file and total caps as the in-process one.
     """
-    from trustsight.analysis.pipeline import _collect_tree_files
+    from trustsight.sandbox.git_project import collect_tree_files
 
     oid = _require_oid(payload.get("oid"), "commit id")
     repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    files, complete = _collect_tree_files(repo, oid)
+    files, complete = collect_tree_files(repo, oid)
     if len(files) > GIT_TREE_MAX_ENTRIES:
         # The byte budget bounds companion *content*, not the entry count, so
         # a repository of millions of tiny files would build an unbounded
@@ -438,21 +459,26 @@ def _binary_meta(payload: dict) -> dict:
 
 
 def _commit_record(commit) -> dict:
+    try:
+        message = commit.message or ""
+    except (AttributeError, UnicodeDecodeError):
+        message = ""
     return {
         "id": str(commit.id),
         "commit_time": int(commit.commit_time),
         "parents": [str(parent.id) for parent in commit.parents],
+        "message": message,
     }
 
 
 def _walk(payload: dict) -> dict:
     """Commits under *head*, newest first, as lightweight records.
 
-    Reuses ``fetcher.walk_bounded`` so the same commit ceiling applies in the
-    worker; only ``id``, ``commit_time`` and ``parents`` cross the boundary,
-    never a libgit2 handle.
+    Reuses ``git_project.walk_bounded`` so the same commit ceiling applies in
+    the worker; only ``id``, ``commit_time`` and ``parents`` cross the
+    boundary, never a libgit2 handle.
     """
-    from trustsight.fetcher import MAX_HISTORY_COMMITS, walk_bounded
+    from trustsight.sandbox.git_project import MAX_HISTORY_COMMITS, walk_bounded
 
     head = _require_oid(payload.get("head"), "commit id")
     raw_limit = payload.get("limit")

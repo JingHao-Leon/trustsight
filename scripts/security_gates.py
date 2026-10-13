@@ -545,12 +545,12 @@ def gate_terminal_output_is_inert() -> Gate:
 def gate_freshness_uses_local_marker() -> Gate:
     """A11: a package-supplied timestamp cannot override a local freshness marker.
 
-    ``_is_current`` in ``fetcher.py`` must read the local marker
+    ``_is_current`` in ``sandbox/git_project.py`` must read the local marker
     (``last_fetch_time``) before consulting the HEAD commit time.
     The commit-time path is a fallback for clones that predate the marker
     and must only execute when the marker is absent.
     """
-    fetcher = SRC / "fetcher.py"
+    fetcher = SRC / "sandbox" / "git_project.py"
     tree = ast.parse(fetcher.read_text(encoding="utf-8"))
     problems: list[str] = []
 
@@ -562,7 +562,7 @@ def gate_freshness_uses_local_marker() -> Gate:
             break
     if is_current is None:
         return Gate("freshness uses local marker", False,
-                    "_is_current not found in fetcher.py")
+                    "_is_current not found in git_project.py")
 
     # The function body must reference last_fetch_time.
     has_marker = False
@@ -865,6 +865,35 @@ def gate_tokenizer_worker_startup_is_isolated() -> Gate:
         problems.append(f"worker environment carries PYTHON* vars: {leaked}")
     return Gate("tokenizer worker startup is isolated", not problems,
                 problems or "isolated (-I), no PYTHON* env")
+
+
+def gate_git_worker_startup_is_isolated() -> Gate:
+    """A16: the git worker's own startup cannot import an attacker's code.
+
+    Same launch rule as the tokenizer worker, through the shared spawn helper:
+    an isolated interpreter (``-I``) and a minimal environment, so a writable
+    directory on ``PYTHONPATH`` cannot run a ``sitecustomize.py`` before the
+    worker applies its limits.  The worker module itself is fixed here rather
+    than taken from the caller.
+    """
+    import inspect
+
+    from trustsight.sandbox import _spawn, git_client
+    from trustsight.subproc import minimal_env
+
+    problems: list[str] = []
+    args = _spawn.launch_args(git_client._WORKER_MODULE)
+    if "-I" not in args:
+        problems.append("the git worker is not launched isolated (-I)")
+    if git_client._WORKER_MODULE != "trustsight.sandbox.git_worker":
+        problems.append("the git worker module name changed")
+    leaked = sorted(k for k in minimal_env() if k.startswith("PYTHON"))
+    if leaked:
+        problems.append(f"the git worker environment carries PYTHON* vars: {leaked}")
+    if "env=minimal_env()" not in inspect.getsource(_spawn.spawn_isolated):
+        problems.append("the git worker does not get a minimal environment")
+    return Gate("git worker startup is isolated", not problems,
+                problems or "isolated (-I), minimal env")
 
 
 def gate_tokenizer_pool_wait_is_bounded() -> Gate:
@@ -1853,13 +1882,9 @@ _ANALYSIS_FETCH_ALLOWED = {
     # for the H092 metadata/recipe comparison on the review path.
     "get_srcinfo_at_commit",
     "get_pkgver_from_head",
-    "last_fetch_time",
     # Local only, despite living in discovery.py next to the RPC: compares
     # two version strings via pacman's vercmp or pyalpm and opens no socket.
     "_vercmp",
-    # Local only: iterates an already-cloned repository from a commit id.
-    # Takes a repo and an OID, never a URL, so it opens no socket either.
-    "walk_bounded",
 }
 
 
@@ -2381,7 +2406,8 @@ _BOUND_CONSTANTS = {
                   "MAX_DIFF_SUMMARY_FILES", "MAX_PATCH_BYTES", "MAX_PATCH_SOURCE_BYTES",
                   "MAX_PKG_BUILD_BYTES", "MAX_COMPANION_TREE_ENTRIES",
                   "MAX_COMPANION_NAME_BYTES", "MAX_COMPANION_BYTES",
-                  "MAX_COMPANION_FILES", "MAX_DIFF_PATH_BYTES"],
+                  "MAX_COMPANION_FILES", "MAX_DIFF_PATH_BYTES",
+                  "MAX_HISTORY_COMMITS"],
     "full_aur/fetch.py": ["MAX_RESPONSE_BYTES", "MAX_TAR_MEMBERS",
                           "MAX_TAR_MEMBER_BYTES", "_HTTP_TIMEOUT"],
     "full_aur/metadata.py": ["MAX_DECOMPRESSED_BYTES", "MAX_RESPONSE_BYTES",
@@ -2394,8 +2420,7 @@ _BOUND_CONSTANTS = {
     "srcinfo.py": ["MAX_SRCINFO_BYTES", "MAX_SRCINFO_LINES",
                    "MAX_SRCINFO_VALUES_PER_KEY"],
     "depth.py": ["MAX_DEPTH_LEVELS", "MAX_DEPTH_NODES"],
-    "fetcher.py": ["MAX_TRANSFER_BYTES", "MAX_TOTAL_TRANSFER_BYTES",
-                   "MAX_HISTORY_COMMITS"],
+    "sandbox/git_bounds.py": ["MAX_TRANSFER_BYTES", "MAX_TOTAL_TRANSFER_BYTES"],
 }
 
 
@@ -2916,9 +2941,6 @@ def gate_every_render_reports_the_same_information() -> Gate:
 _GIT_ALLOWED_IMPORTS = frozenset({
     "sandbox/git_project.py",
     "sandbox/git_worker.py",
-    "analysis/pipeline.py",
-    "analysis/temporal.py",
-    "fetcher.py",
 })
 
 
@@ -3030,8 +3052,10 @@ def gate_generated_diff_is_bounded_before_assembly() -> Gate:
             problems.append("skipping an oversized delta set no truncation flag")
 
     # The pipeline must consume the flag rather than re-deriving truncation.
+    # The parent calls ``GitProject.diff_bounded``, which reaches the same
+    # ``generate_diff_bounded`` through the isolated worker.
     git_path = inspect.getsource(pipeline.analyze_package)
-    if "generate_diff_bounded" not in git_path:
+    if "diff_bounded" not in git_path:
         problems.append("the git path does not use the bounded generator")
     if "generated_truncated" not in git_path:
         problems.append("the git path drops the generator's truncation flag")
@@ -3451,12 +3475,14 @@ def gate_an_audit_does_not_write_history() -> Gate:
 
 def gate_the_history_walk_is_bounded() -> Gate:
     """A14: the history walk and the --last ceiling are source constants."""
-    fetcher = SRC / "fetcher.py"
-    text = fetcher.read_text(encoding="utf-8")
     problems: list[str] = []
-    for const in ("MAX_HISTORY_COMMITS", "MAX_HISTORY_DIFFS"):
-        if f"{const} =" not in text:
-            problems.append(f"{const} not defined in fetcher.py")
+    locations = {
+        "MAX_HISTORY_COMMITS": SRC / "differ.py",
+        "MAX_HISTORY_DIFFS": SRC / "fetcher.py",
+    }
+    for const, path in locations.items():
+        if f"{const} =" not in path.read_text(encoding="utf-8"):
+            problems.append(f"{const} not defined in {path.name}")
     return Gate("the history walk is bounded", not problems,
                 problems or ["MAX_HISTORY_COMMITS", "MAX_HISTORY_DIFFS"])
 
@@ -4059,6 +4085,7 @@ def run_gates() -> list[Gate]:
         gate_tokenizer_smoke_is_deterministic(),
         gate_tokenizer_module_is_isolated(),
         gate_tokenizer_worker_startup_is_isolated(),
+        gate_git_worker_startup_is_isolated(),
         gate_tokenizer_pool_wait_is_bounded(),
         gate_dead_tokenizer_child_fails_the_package(),
         gate_release_artifacts_share_commit(),

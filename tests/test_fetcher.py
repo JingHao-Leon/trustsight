@@ -1,9 +1,10 @@
-"""Fetcher cache-freshness helpers and the git-sandbox seam.
+"""Fetcher: the git-sandbox seam and the network-timeout configuration.
 
 The clone/fetch *behaviour* now lives in the isolated worker and is tested in
-``test_git_worker.py``; the subprocess transport is in ``test_git_client.py``.
-What remains here is the parent-side freshness state (the marker and
-``_is_current``), the client seam, and the network-timeout configuration.
+``test_git_worker.py``; the subprocess transport is in ``test_git_client.py``;
+the freshness marker is in ``sandbox/git_project.py``.  What remains here is
+the parent seam: ``clone_or_fetch`` returns a bound handle, and the configured
+timeouts reach the worker.
 """
 
 import time
@@ -12,13 +13,8 @@ import pygit2
 import pytest
 
 from trustsight import fetcher
-from trustsight.fetcher import (
-    _apply_network_timeouts,
-    _is_current,
-    _record_fetch,
-    clone_or_fetch,
-    last_fetch_time,
-)
+from trustsight.fetcher import clone_or_fetch
+from trustsight.sandbox import git_project
 
 
 @pytest.fixture(autouse=True)
@@ -28,12 +24,9 @@ def _online(monkeypatch):
 
 
 @pytest.fixture
-def repo(tmp_path, monkeypatch):
+def repo(tmp_path):
     """A real git repository standing in for a cached AUR clone."""
-    cache = tmp_path / "repos"
-    cache.mkdir()
-    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
-    path = cache / "demo"
+    path = tmp_path / "demo"
     created = pygit2.init_repository(str(path))
     author = pygit2.Signature("Tester", "tester@example.com")
     blob = created.create_blob(b"pkgver=1.0\n")
@@ -46,22 +39,25 @@ def repo(tmp_path, monkeypatch):
     return created
 
 
+# --- the freshness marker (now owned by git_project) -------------------------
+
+
 def test_is_current_when_fetched_at_or_after_upstream(repo):
-    fetched = _record_fetch(repo)
-    assert _is_current(repo, fetched) is True
-    assert _is_current(repo, fetched - 60) is True
+    fetched = git_project.record_fetch(repo)
+    assert git_project._is_current(repo, fetched) is True
+    assert git_project._is_current(repo, fetched - 60) is True
 
 
 def test_is_not_current_when_upstream_is_newer_than_our_fetch(repo):
-    fetched = _record_fetch(repo)
-    assert _is_current(repo, fetched + 60) is False
+    fetched = git_project.record_fetch(repo)
+    assert git_project._is_current(repo, fetched + 60) is False
 
 
 def test_is_not_current_without_a_marker(repo):
     """A clone with no marker falls back to HEAD's commit time."""
-    assert last_fetch_time(repo) is None
-    assert _is_current(repo, int(time.time()) + 3600) is False
-    assert _is_current(repo, int(time.time()) - 3600) is True
+    assert git_project.last_fetch_time(repo) is None
+    assert git_project._is_current(repo, int(time.time()) + 3600) is False
+    assert git_project._is_current(repo, int(time.time()) - 3600) is True
 
 
 # --- the git-sandbox seam ---------------------------------------------------
@@ -82,18 +78,11 @@ class _FakeSession:
             "upstream_mtime": upstream_mtime, "offline": offline,
             "connect": connect, "transfer": transfer,
         })
-        # Materialise a repo so the parent's reopen succeeds, as a real clone
-        # would have left one.
-        pygit2.init_repository(str(repo_path(pkg)), bare=True)
-        return {"path": str(repo_path(pkg)), "head": "", "fetched": True,
-                "marker_time": None}
+        return {"path": str(cache_dir), "head": "", "fetched": True,
+                "marker_time": None, "received_bytes": 0}
 
     def close(self):
         self.closed = True
-
-
-def repo_path(pkg):
-    return fetcher.repo_path(pkg)
 
 
 def test_clone_or_fetch_delegates_to_the_isolated_worker(tmp_path, monkeypatch):
@@ -103,7 +92,7 @@ def test_clone_or_fetch_delegates_to_the_isolated_worker(tmp_path, monkeypatch):
     _FakeSession.instances = []
     monkeypatch.setattr("trustsight.sandbox.git_client.GitSession", _FakeSession)
 
-    clone_or_fetch("demo", 1234)
+    project = clone_or_fetch("demo", 1234)
 
     session = _FakeSession.instances[-1]
     assert session.calls == [{
@@ -112,6 +101,7 @@ def test_clone_or_fetch_delegates_to_the_isolated_worker(tmp_path, monkeypatch):
         "connect": fetcher.DEFAULT_CONNECT_TIMEOUT,
         "transfer": fetcher.DEFAULT_TRANSFER_TIMEOUT,
     }]
+    project.close()
     assert session.closed, "the worker session was not closed"
 
 
@@ -140,35 +130,19 @@ def test_clone_or_fetch_reports_a_dead_worker_as_a_fetch_failure(tmp_path, monke
 # --- network timeout configuration ------------------------------------------
 
 
-@pytest.fixture
-def unapplied_timeouts(monkeypatch):
-    """Reset the once-per-process guard and restore libgit2's settings."""
-    before = (
-        pygit2.settings.server_connect_timeout,
-        pygit2.settings.server_timeout,
-    )
-    monkeypatch.setattr(fetcher, "_NETWORK_TIMEOUTS_APPLIED", False)
-    yield
-    pygit2.settings.server_connect_timeout = before[0]
-    pygit2.settings.server_timeout = before[1]
-    fetcher._NETWORK_TIMEOUTS_APPLIED = False
-
-
-def test_network_timeouts_reach_libgit2(unapplied_timeouts, monkeypatch):
+def test_network_timeouts_reach_the_worker(monkeypatch):
     monkeypatch.setattr(
         "trustsight.config.load_config",
         lambda: {"limits": {"network_connect_timeout": 4, "network_transfer_timeout": 9}},
     )
-    _apply_network_timeouts()
-    assert pygit2.settings.server_connect_timeout == 4000
-    assert pygit2.settings.server_timeout == 9000
+    assert fetcher._network_timeout_values() == (4, 9)
 
 
-def test_network_timeouts_fall_back_when_unconfigured(unapplied_timeouts, monkeypatch):
+def test_network_timeouts_fall_back_when_unconfigured(monkeypatch):
     monkeypatch.setattr(
         "trustsight.config.load_config",
         lambda: {"limits": {"network_connect_timeout": 0}},
     )
-    _apply_network_timeouts()
-    assert pygit2.settings.server_connect_timeout == fetcher.DEFAULT_CONNECT_TIMEOUT * 1000
-    assert pygit2.settings.server_timeout == fetcher.DEFAULT_TRANSFER_TIMEOUT * 1000
+    assert fetcher._network_timeout_values() == (
+        fetcher.DEFAULT_CONNECT_TIMEOUT, fetcher.DEFAULT_TRANSFER_TIMEOUT,
+    )

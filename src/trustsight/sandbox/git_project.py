@@ -14,6 +14,8 @@ copy of each.
 from __future__ import annotations
 
 import re
+import time
+from pathlib import Path
 
 import pygit2
 from pygit2 import (
@@ -23,12 +25,14 @@ from pygit2 import (
     GIT_DELTA_RENAMED,
 )
 
+from ..coverage import note_stage_failure
 from ..differ import (
     MAX_COMPANION_BYTES,
     MAX_COMPANION_FILES,
     MAX_DIFF_PATCHES,
     MAX_DIFF_SUMMARY_FILES,
     MAX_GENERATED_DIFF_BYTES,
+    MAX_HISTORY_COMMITS,
     MAX_PATCH_BYTES,
     MAX_PATCH_SOURCE_BYTES,
     MAX_PKG_BUILD_BYTES,
@@ -45,13 +49,40 @@ from ..schema import DiffSummary
 from ..tokenizer import split_lines
 
 __all__ = [
+    "MAX_HISTORY_COMMITS",
     "generate_diff_bounded",
     "generate_diff",
     "changed_opaque_members",
     "binary_metadata_paths",
     "companion_source_hunks",
     "read_blob_head",
+    "collect_tree_files",
+    "walk_bounded",
+    "head_commit_id",
+    "parent_commit_id",
+    "marker_path",
+    "record_fetch",
+    "last_fetch_time",
 ]
+
+#: When the last successful fetch happened, recorded next to the repository.
+#: Deliberately not derived from the HEAD commit's timestamp: a commit's date
+#: is chosen by whoever authored it, so a maintainer who dates a commit in the
+#: future would make the clone look permanently current.
+_FETCH_MARKER = "trustsight-last-fetch"
+
+#: Committed files whose *content* is worth more than their magic bytes (see
+#: ``collect_tree_files``).
+_COMPANION_CONTENT_RE = re.compile(
+    r"(?:\.(?:service|socket|timer|path|mount|automount|target|desktop"
+    r"|rules|conf|cfg|ini|install|hook|patch|diff|sh|bash|zsh|py|pl|rb)\Z"
+    r"|(?:\A|/)(?:\.?[A-Za-z0-9_.-]+\.d/|PKGBUILD\Z|\.SRCINFO\Z))",
+    re.IGNORECASE,
+)
+
+#: Per-file and whole-tree ceilings on the selective read.
+_COMPANION_HEAD_BYTES = 16 * 1024
+_COMPANION_TOTAL_BYTES = 512 * 1024
 
 _DELTA_STATUS_MAP = {
     GIT_DELTA_ADDED: "added",
@@ -448,3 +479,188 @@ def companion_source_hunks(
             + "\n".join("+" + ln for ln in lines)
         )
     return "\n".join(hunks), truncated
+
+
+def head_commit_id(repo) -> str:
+    """Resolve HEAD to a commit OID, handling empty and unborn repos."""
+    try:
+        return str(repo.head.peel().id)
+    except pygit2.GitError:
+        pass
+    if repo.head_is_unborn or repo.is_empty:
+        return ""
+    for name in ("main", "master"):
+        try:
+            return str(repo.branches[name].peel().id)
+        except (KeyError, pygit2.GitError):
+            pass
+    for ref_name in repo.references:
+        try:
+            return str(repo.references[ref_name].peel().id)
+        except (TypeError, pygit2.GitError):
+            pass
+    raise pygit2.GitError("cannot resolve HEAD to a commit")
+
+
+def parent_commit_id(repo, head_commit: str) -> str:
+    """The first parent of *head_commit*, or ``""`` when there is none."""
+    if not head_commit:
+        return ""
+    try:
+        commit = repo[head_commit]
+        parents = commit.parents
+    except (KeyError, IndexError, AttributeError, pygit2.GitError, TypeError):
+        return ""
+    return str(parents[0].id) if parents else ""
+
+
+def walk_bounded(repo, head, *, sort=None, limit=None):
+    """Yield at most *limit* commits from *head*, newest first.
+
+    One implementation rather than a counter at each call site: the review
+    notes name "a control applied at one of several equivalent call sites" as
+    the recurring failure here, and unbounded walks were spread across three
+    modules.
+    """
+    cap = MAX_HISTORY_COMMITS if limit is None else limit
+    walker = repo.walk(head) if sort is None else repo.walk(head, sort)
+    for seen, commit in enumerate(walker, start=1):
+        yield commit
+        if seen >= cap:
+            return
+
+
+def collect_tree_files(
+    repo,
+    commit_oid: str,
+    max_file_bytes: int = 512 * 1024,
+    head_bytes: int = 64,
+    max_stream_bytes: int = 64 * 1024 * 1024,
+) -> tuple[list[tuple[str, bytes]], bool]:
+    """Walk a commit tree, returning ``([(path, first_bytes)], complete)``.
+
+    ``complete`` is False when any member could not be read, so the caller can
+    say the tree was not fully examined instead of implying it was.  A blob
+    larger than *max_file_bytes* is streamed for its head rather than skipped
+    (a committed payload is far more likely to be large than small), and an
+    incomplete read reports as incomplete ([B2](../../docs/security.md)).
+    """
+    files: list[tuple[str, bytes]] = []
+    complete = True
+    budget = _COMPANION_TOTAL_BYTES
+
+    def head_of(blob, want: int) -> bytes | None:
+        """The first *want* bytes of *blob*, or None if it was not read."""
+        if blob.size <= max_file_bytes:
+            try:
+                return blob.data[:want]
+            except (KeyError, TypeError, ValueError):
+                note_stage_failure("tree-blob-read")
+                return None
+        if blob.size > max_stream_bytes:
+            return None
+        try:
+            stream = pygit2.BlobIO(blob)
+        except Exception:
+            note_stage_failure("tree-blob-read")
+            return None
+        try:
+            head = stream.read(want)
+            # Drain, or close() blocks on the writer thread.
+            while stream.read(_DRAIN_CHUNK_BYTES):
+                pass
+            return head
+        except Exception:
+            note_stage_failure("tree-blob-read")
+            return None
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
+
+    # Iterative walk on an explicit stack: the tree's depth is the attacker's
+    # choice, and a recursive walk raised RecursionError past the interpreter
+    # limit - escaping analysis entirely instead of degrading to the gap.
+    def walk(tree, prefix: str) -> None:
+        nonlocal complete, budget
+        stack = [(tree, prefix)]
+        while stack:
+            cur_tree, cur_prefix = stack.pop()
+            for entry in cur_tree:
+                if entry.type_str == "tree":
+                    try:
+                        stack.append((repo[entry.id], cur_prefix + entry.name + "/"))
+                    except (KeyError, TypeError, ValueError):
+                        complete = False
+                elif entry.type_str == "blob":
+                    try:
+                        blob = repo[entry.id]
+                    except (KeyError, TypeError, ValueError):
+                        complete = False
+                        continue
+                    path = cur_prefix + entry.name
+                    want = head_bytes
+                    if budget > 0 and _COMPANION_CONTENT_RE.search(path):
+                        want = max(head_bytes, min(_COMPANION_HEAD_BYTES, budget))
+                    data = head_of(blob, want)
+                    if data is None:
+                        complete = False
+                        continue
+                    if want > head_bytes:
+                        budget -= len(data)
+                        if blob.size > len(data):
+                            complete = False
+                    files.append((path, data))
+
+    try:
+        commit = repo.get(commit_oid)
+        if commit is not None:
+            walk(commit.tree, "")
+        else:
+            complete = False
+    except (KeyError, AttributeError, TypeError, ValueError):
+        complete = False
+    return files, complete
+
+
+def marker_path(repo) -> Path:
+    """Location of the last-fetch marker for *repo*."""
+    return Path(repo.path) / _FETCH_MARKER
+
+
+def record_fetch(repo):
+    """Note that *repo* has just been brought up to date."""
+    stamp = int(time.time())
+    try:
+        marker_path(repo).write_text(str(stamp))
+    except OSError:
+        return None
+    return stamp
+
+
+def last_fetch_time(repo):
+    """When this clone was last fetched, or None if that is unknown."""
+    try:
+        return int(marker_path(repo).read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _is_current(repo, upstream_mtime) -> bool:
+    """True when this clone was fetched after the upstream last changed.
+
+    A clone with no fetch marker falls back to the local HEAD commit time, so
+    an unchanged clone avoids an unnecessary network fetch.
+    """
+    fetched = last_fetch_time(repo)
+    if fetched is not None:
+        try:
+            return fetched >= int(upstream_mtime)
+        except (TypeError, ValueError):
+            return False
+    try:
+        commit = repo.head.peel()
+        return int(commit.commit_time) >= int(upstream_mtime)
+    except (AttributeError, pygit2.GitError, KeyError, TypeError, ValueError):
+        return False

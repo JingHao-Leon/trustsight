@@ -67,6 +67,12 @@ MAX_URLS_PER_SIDE = 4096
 MAX_URL_TOKEN_BYTES = 8192
 MAX_DIFF_BYTES = 5 * 1024 * 1024
 
+#: Commits any single history walk visits.  Repository history is
+#: attacker-authored: a package can carry a million commits as easily as ten,
+#: and a walk that runs to exhaustion turns that into unbounded work.  Walks
+#: are newest-first, so the bound keeps the signal and drops the tail.
+MAX_HISTORY_COMMITS = 5_000
+
 
 def truncate_diff(diff_text: str, max_bytes: int = MAX_DIFF_BYTES) -> tuple[str, bool]:
     """Return a deterministic UTF-8-safe prefix and truncation status."""

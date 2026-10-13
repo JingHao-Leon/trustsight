@@ -550,7 +550,7 @@ def _finding_line(finding: dict) -> str:
     return clean(" ".join(parts))
 
 
-def _explain_lines(fact, repo) -> list[str]:
+def _explain_lines(fact, project) -> list[str]:
     """What the parser believed: the recipe and diff documents.
 
     ``--explain`` renders the typed core's own view (the RecipeDoc of the
@@ -559,13 +559,12 @@ def _explain_lines(fact, repo) -> list[str]:
     re-read of the raw text.
     """
     from ..diffdoc import parse_diff_lines
-    from ..differ import generate_diff_bounded
     from ..fetcher import get_pkgbuild_at_commit
     from ..recipedoc import parse_recipe
     from ..tokenizer import split_lines
 
     lines = ["Parser view:"]
-    text = get_pkgbuild_at_commit(repo, fact.new_commit) if fact.new_commit else ""
+    text = get_pkgbuild_at_commit(project, fact.new_commit) if fact.new_commit else ""
     if text:
         recipe = parse_recipe(text)
         scalars = ", ".join(
@@ -586,8 +585,8 @@ def _explain_lines(fact, repo) -> list[str]:
     else:
         lines.append("  (no PKGBUILD at the analysed commit)")
     if fact.old_commit and fact.new_commit:
-        diff_text, _summary, _trunc = generate_diff_bounded(
-            repo, fact.old_commit, fact.new_commit
+        diff_text, _summary, _trunc = project.diff_bounded(
+            fact.old_commit, fact.new_commit
         )
         doc = parse_diff_lines(split_lines(diff_text))
         n_hunks = sum(len(f.hunks) for f in doc.files)
@@ -756,8 +755,11 @@ def register_commands(app: typer.Typer):
         )
         if explain:
             from ..fetcher import clone_or_fetch
-            repo = clone_or_fetch(package)
-            lines = _explain_lines(fact, repo)
+            project = clone_or_fetch(package)
+            try:
+                lines = _explain_lines(fact, project)
+            finally:
+                project.close()
             if json_output:
                 if body is not None:
                     body["explain"] = lines
@@ -871,14 +873,12 @@ def _inspect_history(
 ):
     """Walk history and analyse the N most recent content-bearing diffs."""
 
+    from ..differ import MAX_HISTORY_COMMITS
     from ..fetcher import (
-        MAX_HISTORY_COMMITS,
         MAX_RUN_DIFF_BYTES,
         clone_or_fetch,
         get_head_commit,
-        walk_bounded,
     )
-    from ..analysis.pipeline import _collect_tree_files
     from ..full_aur.analyze import TemporalContext, analyze_package_text
     from ..reporting import evaluate_fact, report_body
 
@@ -890,7 +890,7 @@ def _inspect_history(
 
     # Clone or fetch the repository.
     try:
-        repo = clone_or_fetch(package, upstream_mtime)
+        project = clone_or_fetch(package, upstream_mtime)
     except Exception as exc:
         msg = f"Could not fetch '{package}' from AUR: {exc}"
         if json_output:
@@ -899,7 +899,7 @@ def _inspect_history(
             _print_colored(msg, "red", stderr=True)
         raise typer.Exit(code=2)
 
-    head = get_head_commit(repo)
+    head = get_head_commit(project)
     if not head:
         msg = f"Package '{package}' has no commits."
         if json_output:
@@ -914,29 +914,24 @@ def _inspect_history(
     history_truncated = False
     commits_seen = 0
 
-    for commit in walk_bounded(repo, head, limit=MAX_HISTORY_COMMITS):
+    for commit in project.walk(head, MAX_HISTORY_COMMITS):
         commits_seen += 1
         if len(results) >= n_results:
             break
 
-        # Get parent commit.
+        # Get parent commit id.
         parent = commit.parents[0] if commit.parents else None
         if parent is None:
             continue
 
         # Read PKGBUILD content from each commit.
         try:
-            new_tree = commit.tree
-            old_tree = parent.tree
-            # Check if PKGBUILD exists in new commit
-            if "PKGBUILD" not in new_tree:
+            # An absent PKGBUILD reads as empty text, which is also how an
+            # empty one reads; neither carries content to analyse.
+            new_pkgbuild = project.file_at(commit.id, "PKGBUILD")
+            if not new_pkgbuild:
                 continue
-            new_pkgbuild = new_tree["PKGBUILD"].data.decode("utf-8", errors="replace")
-            # Read old PKGBUILD (empty if not present)
-            if "PKGBUILD" in old_tree:
-                old_pkgbuild = old_tree["PKGBUILD"].data.decode("utf-8", errors="replace")
-            else:
-                old_pkgbuild = None
+            old_pkgbuild = project.file_at(parent, "PKGBUILD")
         except Exception as exc:
             # A commit whose tree could not be read is not "nothing to see":
             # dropping it shortens the history silently and reads as clean.
@@ -964,7 +959,7 @@ def _inspect_history(
         # it every history result reported ``tree_not_analyzed`` and read as
         # Inconclusive even for a trivial bump.
         try:
-            tree_files, _tree_complete = _collect_tree_files(repo, str(commit.id))
+            tree_files, _tree_complete = project.tree_files(str(commit.id))
         except Exception:
             tree_files = []
         try:

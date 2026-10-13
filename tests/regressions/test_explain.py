@@ -5,6 +5,7 @@ core believed (the RecipeDoc of the analysed PKGBUILD, the DiffDoc
 summary of the analysed diff), not from a re-read of the raw text.
 """
 
+from tests.git_fake import FakeGitProject
 from trustsight.cli.inspect import _explain_lines
 from trustsight.schema import PackageFact
 
@@ -43,7 +44,7 @@ def test_explain_renders_the_recipe_and_diff_documents(tmp_path):
     repo, head = _repo(tmp_path, [{"PKGBUILD": _V1}, {"PKGBUILD": _V2}])
     old = str(repo.revparse_single("HEAD~1").id)
     fact = PackageFact(package_name="demo", old_commit=old, new_commit=head)
-    out = "\n".join(_explain_lines(fact, repo))
+    out = "\n".join(_explain_lines(fact, FakeGitProject(repo)))
     assert "scalars: install=demo.install, pkgname=demo, pkgver=1.1" in out
     assert "array source: 1 entry" in out
     assert "functions: package" in out
@@ -54,6 +55,6 @@ def test_explain_renders_the_recipe_and_diff_documents(tmp_path):
 def test_explain_without_a_diff_renders_the_recipe_alone(tmp_path):
     repo, head = _repo(tmp_path, [{"PKGBUILD": _V1}])
     fact = PackageFact(package_name="demo", old_commit="", new_commit=head)
-    out = "\n".join(_explain_lines(fact, repo))
+    out = "\n".join(_explain_lines(fact, FakeGitProject(repo)))
     assert "pkgname=demo" in out
     assert "diff:" not in out

@@ -543,7 +543,7 @@ def test_the_tree_manifest_reads_enough_of_a_companion_to_see_its_payload():
     """
     import pygit2
     import tempfile
-    from trustsight.analysis.pipeline import _collect_tree_files
+    from trustsight.sandbox.git_project import collect_tree_files
 
     repo = pygit2.init_repository(tempfile.mkdtemp(), bare=True)
     builder = repo.TreeBuilder()
@@ -555,7 +555,7 @@ def test_the_tree_manifest_reads_enough_of_a_companion_to_see_its_payload():
     oid = str(repo.create_commit("refs/heads/master", sig, sig, "c",
                                  builder.write(), []))
 
-    files, complete = _collect_tree_files(repo, oid)
+    files, complete = collect_tree_files(repo, oid)
     sizes = dict((n, len(d)) for n, d in files)
     assert sizes["p.service"] == len(unit)
     assert sizes["README"] == 64
@@ -567,7 +567,7 @@ def test_a_truncated_companion_does_not_report_a_complete_tree():
     old size cap used to tell."""
     import pygit2
     import tempfile
-    from trustsight.analysis.pipeline import _collect_tree_files
+    from trustsight.sandbox.git_project import collect_tree_files
 
     repo = pygit2.init_repository(tempfile.mkdtemp(), bare=True)
     builder = repo.TreeBuilder()
@@ -577,6 +577,6 @@ def test_a_truncated_companion_does_not_report_a_complete_tree():
     oid = str(repo.create_commit("refs/heads/master", sig, sig, "c",
                                  builder.write(), []))
 
-    files, complete = _collect_tree_files(repo, oid)
+    files, complete = collect_tree_files(repo, oid)
     assert not complete
     assert len(dict(files)["p.conf"]) == 16 * 1024

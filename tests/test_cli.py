@@ -400,14 +400,16 @@ def test_batch_prefetches_then_analyses_without_refetching(monkeypatch):
     fetched = []
 
     class FakeRepo:
-        def __getitem__(self, _oid):
-            return type("C", (), {"commit_time": 1700000000})()
+        def last_fetch_time(self):
+            return 1700000000
+
+        def close(self):
+            pass
 
     monkeypatch.setattr(
         "trustsight.fetcher.clone_or_fetch",
         lambda name, mtime=None: fetched.append((name, mtime)) or FakeRepo(),
     )
-    monkeypatch.setattr("trustsight.fetcher.last_fetch_time", lambda repo: 1700000000)
 
     seen = {}
 
@@ -452,14 +454,20 @@ def test_prefetch_deadline_abandons_a_stalled_fetch(monkeypatch):
     release = threading.Event()
     started = threading.Event()
 
+    class _Project:
+        def last_fetch_time(self):
+            return None
+
+        def close(self):
+            pass
+
     def fake_fetch(name, mtime=None):
         if name == "stalled":
             started.set()
             release.wait(30)
-        return object()
+        return _Project()
 
     monkeypatch.setattr("trustsight.fetcher.clone_or_fetch", fake_fetch)
-    monkeypatch.setattr("trustsight.fetcher.last_fetch_time", lambda repo: None)
     monkeypatch.setattr(
         engine, "load_config", lambda: {"limits": {"prefetch_timeout": 1}}
     )

@@ -356,15 +356,18 @@ def prefetch_deadline() -> int:
 
 def prefetch(pkgs: list[dict], progress_callback: Optional[ProgressCallback] = None) -> dict[str, int]:
     """Clone or fetch AUR repos for *pkgs* in parallel, returning {name: hint}."""
-    from .fetcher import clone_or_fetch, last_fetch_time
+    from .fetcher import clone_or_fetch
 
     def fetch(entry: dict) -> tuple[str, int | None]:
         name = entry["name"]
-        repo = clone_or_fetch(name, entry.get("last_modified"))
-        hint = entry.get("last_modified")
-        if hint is None:
-            hint = last_fetch_time(repo)
-        return name, hint
+        project = clone_or_fetch(name, entry.get("last_modified"))
+        try:
+            hint = entry.get("last_modified")
+            if hint is None:
+                hint = project.last_fetch_time()
+            return name, hint
+        finally:
+            project.close()
 
     hints: dict[str, int] = {}
     total = len(pkgs)

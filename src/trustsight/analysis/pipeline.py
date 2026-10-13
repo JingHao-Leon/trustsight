@@ -4,8 +4,6 @@ import logging
 import re
 import time
 
-import pygit2
-
 from ..buckets import classify_urls
 from ..config import (
     config_fingerprint,
@@ -29,11 +27,7 @@ from ..db import (
 from ..diffdoc import parse_diff_lines
 from ..differ import (
     diff_summary_from_text,
-    generate_diff_bounded,
     binary_metadata_in_text,
-    binary_metadata_paths,
-    changed_opaque_members,
-    companion_source_hunks,
     detect_gpg_verification_removed,
     detect_verification_evidence,
     extract_urls_from_diff,
@@ -47,9 +41,9 @@ from ..fetcher import (
     get_pkgbuild_at_commit,
     get_pkgver_from_head,
     get_srcinfo_at_commit,
-    walk_bounded,
 )
 from ..findings import stamp
+from ..sandbox.git_client import GitOpError, GitSandboxUnavailable
 from ..novelty import (
     build_novelty_context,
     normalize_url,
@@ -124,154 +118,6 @@ from .version import (
 from .temporal import _package_is_new, _recent_update, _stale_revival
 
 log = logging.getLogger(__name__)
-
-
-#: Read size when draining a streamed blob.  Only the head is kept; this is
-#: the memory the drain costs, not the file.
-_DRAIN_CHUNK_BYTES = 256 * 1024
-
-
-#: Committed files whose *content* is worth more than their magic bytes.
-#:
-#: 64 bytes answers "is this an ELF", which is all H066 asked. It cannot
-#: answer "what does this unit file run", and that question is the one the
-#: audit kept finding unanswerable: a `.service` committed in one push and
-#: `install`ed in a later one shows the reviewer nothing but the install
-#: line, because the payload is in a file the diff does not touch and the
-#: manifest truncated at byte 64.
-#:
-#: The extra reading is bounded twice - per file and in total - because the
-#: tree is attacker-controlled, and it is bounded to the names a recipe can
-#: actually ship or apply.
-_COMPANION_CONTENT_RE = re.compile(
-    r"(?:\.(?:service|socket|timer|path|mount|automount|target|desktop"
-    r"|rules|conf|cfg|ini|install|hook|patch|diff|sh|bash|zsh|py|pl|rb)\Z"
-    r"|(?:\A|/)(?:\.?[A-Za-z0-9_.-]+\.d/|PKGBUILD\Z|\.SRCINFO\Z))",
-    re.IGNORECASE,
-)
-
-#: Per-file and whole-tree ceilings on the selective read.
-_COMPANION_HEAD_BYTES = 16 * 1024
-_COMPANION_TOTAL_BYTES = 512 * 1024
-
-
-def _collect_tree_files(
-    repo,
-    commit_oid: str,
-    max_file_bytes: int = 512 * 1024,
-    head_bytes: int = 64,
-    max_stream_bytes: int = 64 * 1024 * 1024,
-) -> tuple[list[tuple[str, bytes]], bool]:
-    """Walk a commit tree, returning ``([(path, first_bytes)], complete)``.
-
-    ``complete`` is False when any member could not be read, so the caller
-    can say the tree was not fully examined instead of implying it was.
-
-    A blob larger than *max_file_bytes* used to be **skipped**, on the
-    reasoning that "a committed payload is small".  That is an assumption
-    about the attacker, and the attacker reads it: H066 fires on a
-    committed ELF, and a payload binary is far more likely to be large than
-    small, so anything over 512 KiB was invisible - while
-    ``tree_analyzed`` still reported True because some other file had been
-    read.  An incomplete read reporting as complete is what
-    [B2](../../docs/security.md) forbids.
-
-    The size cap existed because ``blob.data`` materialises the whole blob.
-    Streaming the head instead removes the reason for it over the range that
-    matters: H066 needs the magic bytes, not the file.
-
-    Streaming has its own bound.  ``pygit2.BlobIO`` runs libgit2's filter
-    chain on a worker thread feeding a ``Queue(maxsize=1)``, and ``close()``
-    waits for that writer to finish - so reading 64 bytes of a 1 MiB blob
-    and closing deadlocks, with the writer parked on a full queue forever.
-    Reading the head therefore means draining the rest, which costs time
-    linear in the blob but holds memory at one chunk.  Past
-    *max_stream_bytes* that time is the attacker's to choose, so the member
-    is left unread and *reported* unread - the fallback is the old
-    behaviour, minus the silence.
-    """
-    files: list[tuple[str, bytes]] = []
-    complete = True
-    budget = _COMPANION_TOTAL_BYTES
-
-    def head_of(blob, want: int) -> bytes | None:
-        """The first *want* bytes of *blob*, or None if it was not read."""
-        if blob.size <= max_file_bytes:
-            try:
-                return blob.data[:want]
-            except (KeyError, TypeError, ValueError):
-                note_stage_failure("tree-blob-read")
-                return None
-        if blob.size > max_stream_bytes:
-            return None
-        try:
-            stream = pygit2.BlobIO(blob)
-        except Exception:
-            note_stage_failure("tree-blob-read")
-            return None
-        try:
-            head = stream.read(want)
-            # Drain, or close() blocks on the writer thread.
-            while stream.read(_DRAIN_CHUNK_BYTES):
-                pass
-            return head
-        except Exception:
-            note_stage_failure("tree-blob-read")
-            return None
-        finally:
-            try:
-                stream.close()
-            except Exception:
-                pass
-
-    # Iterative walk on an explicit stack: the tree's depth is the
-    # attacker's choice (a checkout of ~1500 one-character directories fits
-    # in PATH_MAX), and a recursive walk raised RecursionError past the
-    # interpreter limit - escaping analysis entirely instead of degrading
-    # to the tree_not_analyzed gap.
-    def walk(tree, prefix: str) -> None:
-        nonlocal complete, budget
-        stack = [(tree, prefix)]
-        while stack:
-            cur_tree, cur_prefix = stack.pop()
-            for entry in cur_tree:
-                if entry.type_str == "tree":
-                    try:
-                        stack.append((repo[entry.id], cur_prefix + entry.name + "/"))
-                    except (KeyError, TypeError, ValueError):
-                        complete = False
-                elif entry.type_str == "blob":
-                    try:
-                        blob = repo[entry.id]
-                    except (KeyError, TypeError, ValueError):
-                        complete = False
-                        continue
-                    path = cur_prefix + entry.name
-                    want = head_bytes
-                    if budget > 0 and _COMPANION_CONTENT_RE.search(path):
-                        want = max(head_bytes, min(_COMPANION_HEAD_BYTES, budget))
-                    data = head_of(blob, want)
-                    if data is None:
-                        complete = False
-                        continue
-                    if want > head_bytes:
-                        budget -= len(data)
-                        # A companion cut short is a companion partly read, and
-                        # saying the tree was fully examined would be the same
-                        # untruth the size cap used to tell.
-                        if blob.size > len(data):
-                            complete = False
-                    files.append((path, data))
-
-    try:
-        commit = repo.get(commit_oid)
-        if commit is not None:
-            walk(commit.tree, "")
-        else:
-            complete = False
-    except (KeyError, AttributeError, TypeError, ValueError):
-        complete = False
-    return files, complete
 
 
 _SCRIPTLET_ATTR_RE = re.compile(
@@ -455,20 +301,13 @@ def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False,
     return result
 
 
-def _parent_commit(repo, head_commit: str) -> str:
+def _parent_commit(project, head_commit: str) -> str:
     """The first parent of *head_commit*, or ``""`` when there is none.
 
     Used only when no analysis has been recorded: the repository's own
     history supplies the base a read-only first review compares against.
     """
-    if not head_commit:
-        return ""
-    try:
-        commit = repo[head_commit]
-        parents = commit.parents
-    except (KeyError, IndexError, AttributeError, pygit2.GitError, TypeError):
-        return ""
-    return str(parents[0].id) if parents else ""
+    return project.parent_commit(head_commit)
 
 
 def _cached_analysis(
@@ -541,24 +380,21 @@ def analyze_package(
     if installed_version is None:
         installed_version = _get_installed_version(pkg_name)
 
-    repo = clone_or_fetch(pkg_name, upstream_mtime)
-    try:
-        head_commit = get_head_commit(repo)
-    except pygit2.GitError:
-        head_commit = ""
+    project = clone_or_fetch(pkg_name, upstream_mtime)
+    head_commit = get_head_commit(project)
     # Read once, here, rather than after the two fresh-analysis returns
     # below: the declared version and the VCS question are both answered
     # from this text, and both are needed on every path out of this
     # function.  It used to be read further down, which is how the first
     # analysis of a package ended up with no version comparison at all.
-    head_pkgbuild = get_pkgbuild_at_commit(repo, head_commit) if head_commit else ""
+    head_pkgbuild = get_pkgbuild_at_commit(project, head_commit) if head_commit else ""
 
     # The full `[epoch:]pkgver-pkgrel` the recipe declares, not the bare
     # `pkgver=` line.  `get_pkgver_from_head` remains the fallback for a
     # repository whose HEAD tree cannot be read at all.
     head_version = (
         full_version_from_pkgbuild(head_pkgbuild)
-        or get_pkgver_from_head(repo)
+        or get_pkgver_from_head(project)
         or new_version
     )
 
@@ -574,7 +410,7 @@ def analyze_package(
         package_id = get_package_id(pkg_name) or 0
 
     if not head_commit:
-        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record, resolved_depth=resolved_depth)
+        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, project, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record, resolved_depth=resolved_depth)
 
     # A review run whose HEAD, versions, depth and ruleset all match the
     # recorded analysis is served that analysis (#20) instead of re-running
@@ -609,11 +445,11 @@ def analyze_package(
                 old_commit = stored_commit
             elif head_commit:
                 try:
-                    for c in walk_bounded(repo, head_commit):
+                    for c in project.walk(head_commit):
                         if not c.parents:
                             old_commit = str(c.id)
                             break
-                except pygit2.GitError:
+                except (GitSandboxUnavailable, GitOpError):
                     # The fallback below compares HEAD against HEAD, whose
                     # diff is empty - every rule then matches nothing and
                     # the package reports clean because the walk failed.
@@ -629,15 +465,15 @@ def analyze_package(
             # the package's history, so the run says so with a gap.
             comparison_base = "parent"
             parent_baseline = True
-            old_commit = _parent_commit(repo, head_commit)
+            old_commit = _parent_commit(project, head_commit)
             if not old_commit:
-                return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record, resolved_depth=resolved_depth)
+                return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, project, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record, resolved_depth=resolved_depth)
 
     # The generator's own truncation has to travel: a patch it declined to
     # retain leaves the assembled text at or under the cap, so measuring the
     # text below would report "complete" while content had been skipped.
-    diff_text, diff_summary, generated_truncated = generate_diff_bounded(
-        repo, old_commit, head_commit,
+    diff_text, diff_summary, generated_truncated = project.diff_bounded(
+        old_commit, head_commit,
         config.get("diff", {}).get("max_context_lines", 3),
         max_bytes=config.get("diff", {}).get("max_diff_bytes", 5_242_880),
     )
@@ -647,7 +483,7 @@ def analyze_package(
     # rules as the PKGBUILD, or a curl|bash simply moves one file over and the
     # filename filter above drops it.  Appended before the byte cap, so an
     # oversized companion truncates the combined diff and fails closed.
-    companion, companion_truncated = companion_source_hunks(repo, head_commit)
+    companion, companion_truncated = project.companion_hunks(head_commit)
     if companion:
         diff_text = f"{diff_text.rstrip(chr(10))}\n{companion}" if diff_text.strip() else companion
 
@@ -670,8 +506,8 @@ def analyze_package(
     )
     version_moved = any_version_scalar_moved(diff_text)
 
-    old_maintainer = get_maintainer_from_commit(repo, old_commit) or ""
-    new_maintainer = get_maintainer_from_commit(repo, head_commit) or ""
+    old_maintainer = get_maintainer_from_commit(project, old_commit) or ""
+    new_maintainer = get_maintainer_from_commit(project, head_commit) or ""
 
     if not old_maintainer:
         pkg_row = get_package(pkg_name)
@@ -720,11 +556,11 @@ def analyze_package(
         resolved_indices=resolved_indices,
         raw_indices=raw_indices,
     )
-    tree_manifest, tree_complete = _collect_tree_files(repo, head_commit)
+    tree_manifest, tree_complete = project.tree_files(head_commit) if head_commit else ([], False)
     # A committed binary changing produces an *empty* diff - git emits no
     # body for it - so nothing downstream can see the change. The blob id
     # is a content hash and both trees are already open.
-    swapped = changed_opaque_members(repo, old_commit, head_commit)
+    swapped = project.opaque_changed(old_commit, head_commit)
     if swapped:
         triggered_rules.append(stamp({
             "rule_id": "C009" if version_moved else "C008",
@@ -746,7 +582,7 @@ def analyze_package(
     # the analysis claims to read it, and a binary PKGBUILD is never
     # legitimate.  The HIGH finding plus the gap is what stops it reading
     # clean.
-    binary_meta = binary_metadata_paths(repo, old_commit, head_commit)
+    binary_meta = project.binary_meta(old_commit, head_commit)
     if binary_meta:
         triggered_rules.append(_binary_metadata_finding(binary_meta))
     # H092 on the review path: the generated metadata and the recipe must
@@ -754,7 +590,7 @@ def analyze_package(
     # FP-free on the corpus path, where it has always run.
     from ..full_aur.properties import metadata_divergence
 
-    srcinfo_text = get_srcinfo_at_commit(repo, head_commit)
+    srcinfo_text = get_srcinfo_at_commit(project, head_commit)
     for host in metadata_divergence(head_pkgbuild, srcinfo_text):
         triggered_rules.append(stamp({
             "rule_id": "H092",
@@ -851,13 +687,13 @@ def analyze_package(
     triggered_rules, suppressed_rules = filter_triggered_rules(
         triggered_rules, package=pkg_name
     )
-    recent = _recent_update(repo, head_commit)
+    recent = _recent_update(project, head_commit)
     if recent:
         triggered_rules.append(recent)
-    new_pkg = _package_is_new(repo, head_commit, pkg_name)
+    new_pkg = _package_is_new(project, head_commit, pkg_name)
     if new_pkg:
         triggered_rules.append(new_pkg)
-    revived = _stale_revival(repo, old_commit, head_commit)
+    revived = _stale_revival(project, old_commit, head_commit)
     if revived:
         triggered_rules.append(revived)
 
@@ -929,13 +765,13 @@ def analyze_package(
             # Bounded because history is attacker-authored, and free to
             # bound because the walk is newest-first: a burst inside 24h
             # lives in the newest commits or it is not a burst.
-            for c in walk_bounded(repo, head_commit):
+            for c in project.walk(head_commit):
                 if (time.time() - c.commit_time) / 3600 <= 24:
                     count_24h += 1
                 if count_24h >= 3:
                     recent_commit_burst = True
                     break
-        except (AttributeError, pygit2.GitError):
+        except (GitSandboxUnavailable, GitOpError):
             note_stage_failure("commit-burst")
 
     aggregate_pinning = _aggregate_pinning(
@@ -1468,7 +1304,7 @@ def analyze_package_text(
 
 
 def _make_fresh_analysis(
-    pkg_name: str, version: str, commit: str, package_id: int, repo, config: dict,
+    pkg_name: str, version: str, commit: str, package_id: int, project, config: dict,
     installed_version: str = "", head_pkgbuild: str = "", record: bool = False,
     resolved_depth: int = 0,
 ) -> PackageFact:
@@ -1497,10 +1333,10 @@ def _make_fresh_analysis(
     """
     novelty = build_novelty_context([], package_id, record=record)
     triggered_rules: list[dict] = []
-    recent = _recent_update(repo, commit)
+    recent = _recent_update(project, commit)
     if recent:
         triggered_rules.append(recent)
-    new_pkg = _package_is_new(repo, commit, pkg_name)
+    new_pkg = _package_is_new(project, commit, pkg_name)
     if new_pkg:
         triggered_rules.append(new_pkg)
     parity = recipe_checksum_parity_finding(head_pkgbuild)
@@ -1513,7 +1349,7 @@ def _make_fresh_analysis(
     tree_complete = True
     if commit:
         from .delivery import scan_tree_manifest
-        tree_manifest, tree_complete = _collect_tree_files(repo, commit)
+        tree_manifest, tree_complete = project.tree_files(commit)
         if tree_manifest:
             triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
     # This path used to declare tree_analyzed=True unconditionally, which
@@ -1552,7 +1388,7 @@ def _make_fresh_analysis(
             is_vcs=is_vcs_package(pkg_name, head_pkgbuild),
         ),
         new_commit=commit,
-        current_maintainer=get_maintainer_from_commit(repo, commit) or "" if commit else "",
+        current_maintainer=get_maintainer_from_commit(project, commit) or "" if commit else "",
         diff_summary=DiffSummary(),
         novelty_context=novelty,
         first_seen=True,

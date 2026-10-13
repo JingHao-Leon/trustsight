@@ -2,6 +2,8 @@
 
 import pytest
 
+from trustsight.sandbox import git_project
+
 from .helpers import _shipped_ids, _x
 
 # ---------------------------------------------------------------------------
@@ -611,12 +613,16 @@ def test_a_first_analysis_reads_checksum_parity_from_the_recipe(monkeypatch):
 
     monkeypatch.setattr(pipeline, "_recent_update", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
-    monkeypatch.setattr(pipeline, "_collect_tree_files", lambda repo, commit: ([], True))
+    monkeypatch.setattr(git_project, "collect_tree_files", lambda repo, commit: ([], True))
     monkeypatch.setattr(pipeline, "build_novelty_context", lambda *a, **k: NoveltyContext())
     monkeypatch.setattr(pipeline, "get_maintainer_from_commit", lambda repo, commit: "")
 
+    class _Project:
+        def tree_files(self, commit):
+            return ([], True)
+
     fact = pipeline._make_fresh_analysis(
-        "fsearch-bin", "0.3.1-2", "abc123", 1, object(), load_config(),
+        "fsearch-bin", "0.3.1-2", "abc123", 1, _Project(), load_config(),
         head_pkgbuild=_fsearch_recipe(True),
     )
     assert "H091" in {e.rule_id for e in fact.score_breakdown}

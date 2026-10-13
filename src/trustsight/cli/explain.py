@@ -291,7 +291,6 @@ def register_commands(app: typer.Typer):
 
         from ..reporting import finding_rows
         from ..fetcher import clone_or_fetch
-        from ..differ import generate_diff_bounded
 
         rows = [
             row for row in finding_rows(fact)
@@ -310,10 +309,13 @@ def register_commands(app: typer.Typer):
 
         diff_text = ""
         try:
-            repo = clone_or_fetch(package)
-            if fact.old_commit and fact.new_commit:
-                diff_text, _summary, _trunc = generate_diff_bounded(
-                    repo, fact.old_commit, fact.new_commit)
+            project = clone_or_fetch(package)
+            try:
+                if fact.old_commit and fact.new_commit:
+                    diff_text, _summary, _trunc = project.diff_bounded(
+                        fact.old_commit, fact.new_commit)
+            finally:
+                project.close()
         except Exception:
             # The explanation still answers from the finding's own facts;
             # the line re-read is best-effort.

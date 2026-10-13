@@ -1,14 +1,12 @@
 import re
 import signal
 import threading
-import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
-import pygit2
-
 from .config import CACHE_DIR
+from .sandbox.git_bounds import MAX_TOTAL_TRANSFER_BYTES
 
 _VALID_PKG_NAME = re.compile(r"^[a-zA-Z0-9@._+\-]+$")
 
@@ -28,7 +26,7 @@ def _timeout(seconds: int):
     """context manager that sets a SIGALRM timeout"""
     # signal.alarm is only legal on the main thread, and packages are
     # fetched from a worker pool.  Off the main thread the deadline is
-    # enforced by _DeadlineCallbacks instead, which works anywhere.
+    # enforced by the isolated worker instead, which works anywhere.
     if not hasattr(signal, "SIGALRM") or (
         threading.current_thread() is not threading.main_thread()
     ):
@@ -47,9 +45,6 @@ def _timeout(seconds: int):
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old)
 
-
-_NETWORK_TIMEOUTS_LOCK = threading.Lock()
-_NETWORK_TIMEOUTS_APPLIED = False
 
 # Fallbacks used when config.toml carries no [limits] entry.
 DEFAULT_CONNECT_TIMEOUT = 10
@@ -78,48 +73,6 @@ def _network_timeout_values() -> tuple[int, int]:
     )
 
 
-def _apply_network_timeouts() -> None:
-    """Bound libgit2's own socket timeouts, once per process.
-
-    _DeadlineCallbacks below can only fire while libgit2 is handing us
-    progress, so a connection that stalls *before* any byte arrives is never
-    cancelled by it and the fetch blocks forever.  These two settings are
-    enforced inside libgit2's transport, which is the only layer that sees a
-    silent socket.  Python's socket.setdefaulttimeout() has no effect here:
-    libgit2 does its own networking in C.
-    """
-    global _NETWORK_TIMEOUTS_APPLIED
-    if _NETWORK_TIMEOUTS_APPLIED:
-        return
-    with _NETWORK_TIMEOUTS_LOCK:
-        if _NETWORK_TIMEOUTS_APPLIED:
-            return
-        connect, transfer = _network_timeout_values()
-        try:
-            pygit2.settings.server_connect_timeout = connect * 1000
-            pygit2.settings.server_timeout = transfer * 1000
-        except (AttributeError, pygit2.GitError, ValueError):
-            # pygit2 < 1.14 / libgit2 < 1.7 has no server timeout options.
-            # The deadline callbacks remain as the only guard there.
-            pass
-        _NETWORK_TIMEOUTS_APPLIED = True
-
-
-#: Bytes one clone or fetch may pull. The deadline below bounds how *long*
-#: a transfer runs, which on a fast link is not a bound on how much arrives:
-#: 120 seconds is gigabytes, written straight to the cache directory. An AUR
-#: repository holds a recipe and occasionally a patch, so a few MiB is the
-#: honest size and this is two orders of magnitude above it.
-MAX_TRANSFER_BYTES = 256 * 1024 * 1024
-
-#: Bytes every transfer in this process may pull between them. The per-repo
-#: cap alone is not a disk bound, because the dependency walk multiplies it
-#: by `depth.MAX_DEPTH_NODES` (200) - a ceiling that was chosen when a node
-#: cost a recipe-sized clone, not a quarter-gigabyte one. A full-depth run
-#: over real packages moves a few hundred MiB, so this leaves ~10x headroom
-#: while keeping the worst case off the same order as a disk.
-MAX_TOTAL_TRANSFER_BYTES = 2 * 1024 * 1024 * 1024
-
 _transfer_lock = threading.Lock()
 _transferred_bytes = 0
 
@@ -146,7 +99,14 @@ def reset_transfer_budget() -> None:
 
 
 def _charge_transfer(received: int, previous: int) -> None:
-    """Charge the delta since this transfer's last progress callback."""
+    """Charge the delta since this transfer's last progress callback.
+
+    The per-transfer ceiling (``MAX_TRANSFER_BYTES``) is enforced inside the
+    isolated worker, which is where the bytes actually arrive.  This charges
+    the process-wide run budget across packages, the bound the per-repo
+    ceiling cannot give: a dependency walk visits up to ``MAX_DEPTH_NODES``
+    repositories, each under its own ceiling.
+    """
     global _transferred_bytes
     delta = received - previous
     if delta <= 0:
@@ -160,47 +120,6 @@ def _charge_transfer(received: int, previous: int) -> None:
             f"for this run"
         )
 
-
-class _DeadlineCallbacks(pygit2.RemoteCallbacks):
-    """Abort a transfer that runs past *seconds* or past its byte budget.
-
-    libgit2 invokes these callbacks as data arrives, so raising from one
-    cancels the operation.  Unlike SIGALRM this works on any thread, which
-    is what the concurrent prefetch needs.
-    """
-
-    def __init__(self, seconds: int):
-        super().__init__()
-        self._deadline = time.monotonic() + seconds
-        self._seconds = seconds
-        self._received = 0
-
-    def _check(self):
-        if time.monotonic() > self._deadline:
-            raise _TimeoutError(
-                f"operation timed out after {self._seconds}s"
-            )
-
-    def transfer_progress(self, stats):
-        self._check()
-        received = getattr(stats, "received_bytes", 0) or 0
-        if received > MAX_TRANSFER_BYTES:
-            raise _TransferTooLargeError(
-                f"transfer exceeded {MAX_TRANSFER_BYTES} bytes"
-            )
-        _charge_transfer(received, self._received)
-        self._received = received
-
-    def sideband_progress(self, string):
-        self._check()
-
-
-#: Commits any single history walk will visit. Repository history is
-#: attacker-authored: a package can carry a million commits as easily as
-#: ten, and every walk that ran to exhaustion turned that into unbounded
-#: work. Walks are newest-first, so a bound keeps the commits that carry
-#: signal and drops the tail no rule reads.
-MAX_HISTORY_COMMITS = 5_000
 
 #: Ceiling on ``--last N``: the most content-bearing diffs a single
 #: inspect run may produce.  A repository of a thousand ``.SRCINFO``-only
@@ -218,44 +137,6 @@ MAX_HISTORY_DIFFS = 50
 # analysis.pipeline -> fetcher).  Keep in sync with differ.MAX_DIFF_BYTES.
 _MAX_DIFF_BYTES = 5 * 1024 * 1024
 MAX_RUN_DIFF_BYTES = _MAX_DIFF_BYTES * 8
-
-
-def walk_bounded(repo: pygit2.Repository, head, *, sort=None, limit=None):
-    """Yield at most *limit* commits from *head*, newest first.
-
-    One implementation rather than a counter at each call site: the review
-    notes name "a control applied at one of several equivalent call sites"
-    as the recurring failure here, and unbounded walks were spread across
-    three modules.
-    """
-    cap = MAX_HISTORY_COMMITS if limit is None else limit
-    walker = repo.walk(head) if sort is None else repo.walk(head, sort)
-    for seen, commit in enumerate(walker, start=1):
-        yield commit
-        if seen >= cap:
-            return
-
-
-def _head_commit_id(repo: pygit2.Repository) -> str:
-    """Resolve HEAD to a commit OID, handling empty and unborn repos."""
-    try:
-        return str(repo.head.peel().id)
-    except pygit2.GitError:
-        pass
-    if repo.head_is_unborn or repo.is_empty:
-        return ""
-    for name in ("main", "master"):
-        try:
-            return str(repo.branches[name].peel().id)
-        except (KeyError, pygit2.GitError):
-            pass
-    for ref_name in repo.references:
-        try:
-            ref = repo.references[ref_name]
-            return str(ref.peel().id)
-        except (TypeError, pygit2.GitError):
-            pass
-    raise pygit2.GitError("cannot resolve HEAD to a commit")
 
 
 def _validate_pkg_name(pkg_name: str) -> None:
@@ -276,165 +157,62 @@ def repo_path(pkg_name: str) -> Path:
     return path
 
 
-# When the last successful fetch happened, recorded next to the repository.
-# Deliberately not derived from the HEAD commit's timestamp: a commit's date
-# is chosen by whoever authored it, so a maintainer who dates a commit in the
-# future would make the clone look permanently current and trustsight would
-# never fetch that package again; silently blinding it to every later
-# update, which is precisely what it exists to inspect.  A local record of
-# our own fetch cannot be influenced from the other end.
-_FETCH_MARKER = "trustsight-last-fetch"
+def clone_or_fetch(pkg_name: str, upstream_mtime: Optional[int] = None):
+    """Clone or update the AUR git repo for *pkg_name*, returning a handle.
 
-
-def _marker_path(repo: pygit2.Repository) -> Path:
-    """Location of the last-fetch marker for *repo*."""
-    return Path(repo.path) / _FETCH_MARKER
-
-
-def _record_fetch(repo: pygit2.Repository) -> Optional[int]:
-    """Note that *repo* has just been brought up to date."""
-    stamp = int(time.time())
-    try:
-        _marker_path(repo).write_text(str(stamp))
-    except OSError:
-        return None
-    return stamp
-
-
-def last_fetch_time(repo: pygit2.Repository) -> Optional[int]:
-    """When this clone was last fetched, or None if that is unknown."""
-    try:
-        return int(_marker_path(repo).read_text().strip())
-    except (OSError, ValueError):
-        return None
-
-
-def _is_current(repo: pygit2.Repository, upstream_mtime: int) -> bool:
-    """True when this clone was fetched after the upstream last changed.
-
-    A clone with no fetch marker falls back to the local HEAD commit time,
-    so an unchanged clone avoids an unnecessary network fetch.
+    The clone/fetch runs in the isolated worker; the returned
+    :class:`~trustsight.sandbox.git_client.GitProject` owns that worker and
+    answers every later read through it.  *upstream_mtime* is the AUR's
+    ``LastModified`` for the package; when the cached clone already holds a
+    commit that recent the worker skips the fetch.
     """
-    fetched = last_fetch_time(repo)
-    if fetched is not None:
-        # A marker we wrote is authoritative, and returns here without
-        # consulting the commit time below.  A maintainer can date a commit
-        # in the future, so an older marker plus a future-dated HEAD would
-        # satisfy the commit-time check and suppress the fetch, which is the
-        # blindness the marker exists to prevent.
-        try:
-            return fetched >= int(upstream_mtime)
-        except (TypeError, ValueError):
-            return False
-
-    try:
-        # No marker: fall back to HEAD's commit time so an unchanged clone
-        # avoids a needless fetch.
-        commit = repo.head.peel()
-        return int(commit.commit_time) >= int(upstream_mtime)
-    except (AttributeError, pygit2.GitError, KeyError, TypeError, ValueError):
-        return False
-
-
-def _advance_to_fetched_head(repo: pygit2.Repository) -> None:
-    """Move the local branch (and HEAD) onto what ``origin`` just fetched.
-
-    libgit2's ``Remote.fetch`` updates only ``refs/remotes/origin/*``.  The
-    local branch and HEAD stay where the first clone left them, and every
-    consumer reads HEAD, so without this the analysis keeps reporting the
-    first-cloned commit while the AUR helper installs the fetched one: a
-    maintainer can publish a benign version, wait for it to be cached, then
-    push a malicious one that is never analysed, and no coverage gap is
-    recorded because the analysis believes it read the current tree.
-    """
-    try:
-        if repo.head_is_unborn or repo.head_is_detached:
-            local_name = None
-        else:
-            local_name = repo.head.shorthand
-    except pygit2.GitError:
-        local_name = None
-
-    remote_ref_name = None
-    if local_name:
-        candidate = f"refs/remotes/origin/{local_name}"
-        if candidate in repo.references:
-            remote_ref_name = candidate
-    if remote_ref_name is None:
-        origin_head = repo.references.get("refs/remotes/origin/HEAD")
-        symbolic = getattr(origin_head, "symbolic_target", None) if origin_head else None
-        if symbolic:
-            remote_ref_name = symbolic
-    if remote_ref_name is None:
-        return
-    remote_ref = repo.references.get(remote_ref_name)
-    target = getattr(remote_ref, "target", None)
-    if target is None:
-        return
-
-    branch_ref = (
-        repo.references.get(f"refs/heads/{local_name}") if local_name else None
-    )
-    if branch_ref is not None:
-        # Fast-forward the local branch.  Nothing is checked out: consumers
-        # read the tree out of the commit object, so the working tree being
-        # stale is irrelevant.
-        branch_ref.set_target(target)
-    else:
-        # Detached or unborn: point HEAD straight at the fetched commit.
-        repo.set_head(remote_ref_name)
-
-
-def clone_or_fetch(
-    pkg_name: str, upstream_mtime: Optional[int] = None
-) -> pygit2.Repository:
-    """Clone or update the AUR git repo for *pkg_name*, returning the repo.
-
-    *upstream_mtime* is the AUR's ``LastModified`` for the package.  When
-    the cached clone already holds a commit that recent the fetch is
-    skipped, which on a repeat run removes the slowest single step of the
-    analysis for every package that has not actually changed.
-    """
-    path = repo_path(pkg_name)
+    repo_path(pkg_name)  # validate the name and its containment before any child runs
     from .release import offline
-    from .sandbox.git_client import GitSandboxUnavailable, GitSession
+    from .sandbox.git_client import GitProject, GitSandboxUnavailable, GitSession
 
     connect, transfer = _network_timeout_values()
     session = GitSession()
     try:
-        session.open_fetch(
+        result = session.open_fetch(
             pkg_name, str(CACHE_DIR), upstream_mtime, offline(), connect, transfer
         )
+        received = result.get("received_bytes", 0) if isinstance(result, dict) else 0
+        if isinstance(received, int) and received > 0:
+            _charge_transfer(received, 0)
     except GitSandboxUnavailable as exc:
         # A sandbox that cannot answer is the same class as a timed-out
         # fetch: the package was not brought up to date, so callers record a
         # coverage gap rather than analysing a stale or empty tree (B2).
-        raise _TimeoutError(f"git sandbox unavailable: {exc}") from exc
-    finally:
         session.close()
-    # The clone/fetch ran in the isolated child; the parent opens the result
-    # to read objects.  Phases 2-5 move those reads into the worker too.
-    return pygit2.Repository(str(path))
+        raise _TimeoutError(f"git sandbox unavailable: {exc}") from exc
+    except Exception:
+        session.close()
+        raise
+    return GitProject(session, pkg_name, str(CACHE_DIR))
 
 
-def get_head_commit(repo: pygit2.Repository) -> str:
-    """Return the OID of HEAD for *repo*."""
-    return _head_commit_id(repo)
+def get_head_commit(project) -> str:
+    """Return the OID of HEAD for *project*, or "" when it has none."""
+    from .sandbox.git_client import GitOpError
 
-
-def get_pkgver_from_head(repo: pygit2.Repository) -> Optional[str]:
-    """Extract pkgver from the HEAD PKGBUILD, or None."""
     try:
-        blob = repo[_head_commit_id(repo)].tree["PKGBUILD"]
-        pkgbuild = blob.data.decode()
-        match = re.search(
-            r'^pkgver\s*=\s*["\']?([^\s"\']+)', pkgbuild, re.MULTILINE
-        )
-        if match:
-            return match.group(1)
-    except (KeyError, AttributeError, ValueError):
-        pass
-    return None
+        return project.head_commit()
+    except GitOpError:
+        return ""
+
+
+def get_pkgver_from_head(project) -> Optional[str]:
+    """Extract pkgver from the HEAD PKGBUILD, or None."""
+    head = get_head_commit(project)
+    if not head:
+        return None
+    text = project.file_at(head, "PKGBUILD")
+    if not text:
+        return None
+    match = re.search(
+        r'^pkgver\s*=\s*["\']?([^\s"\']+)', text, re.MULTILINE
+    )
+    return match.group(1) if match else None
 
 
 # The maintainer is a PKGBUILD comment, not a .SRCINFO field.  makepkg
@@ -466,64 +244,44 @@ def extract_maintainer(pkgbuild: str = "", srcinfo: str = "") -> Optional[str]:
     return None
 
 
-def _read_blob(tree, name: str) -> str:
-    """read and decode a named blob from a git tree, returning empty string on failure"""
-    try:
-        return tree[name].data.decode("utf-8", errors="replace")
-    except (KeyError, AttributeError, ValueError, TypeError):
-        return ""
-
-
-def get_pkgbuild_at_commit(repo: pygit2.Repository, commit_oid: str) -> str:
+def get_pkgbuild_at_commit(project, commit_oid: str) -> str:
     """Return the PKGBUILD text at *commit_oid*, or "" when unavailable.
 
     Rules that describe the package's *current* state (H056) need the file
     as it now stands, not only the lines this revision touched.
     """
-    try:
-        commit = repo.get(commit_oid)
-        tree = commit.tree
-    except (KeyError, AttributeError, TypeError, ValueError):
-        return ""
-    if tree is None:
-        return ""
-    return _read_blob(tree, "PKGBUILD")
+    return project.file_at(commit_oid, "PKGBUILD") if commit_oid else ""
 
 
-def get_srcinfo_at_commit(repo: pygit2.Repository, commit_oid: str) -> str:
+def get_srcinfo_at_commit(project, commit_oid: str) -> str:
     """Return the .SRCINFO text at *commit_oid*, or "" when unavailable.
 
     H092 compares the generated metadata against the recipe on the review
     path, the same comparison the full-AUR corpus path has always run.
     """
-    try:
-        commit = repo.get(commit_oid)
-        tree = commit.tree
-    except (KeyError, AttributeError, TypeError, ValueError):
-        return ""
-    if tree is None:
-        return ""
-    return _read_blob(tree, ".SRCINFO")
+    return project.file_at(commit_oid, ".SRCINFO") if commit_oid else ""
 
 
-def get_maintainer_from_repo(repo: pygit2.Repository) -> Optional[str]:
-    """Return the maintainer from *repo*'s HEAD PKGBUILD or .SRCINFO."""
-    try:
-        tree = repo[_head_commit_id(repo)].tree
-    except (KeyError, AttributeError, ValueError, TypeError):
+def get_maintainer_from_repo(project) -> Optional[str]:
+    """Return the maintainer from *project*'s HEAD PKGBUILD or .SRCINFO."""
+    head = get_head_commit(project)
+    if not head:
         return None
-    return extract_maintainer(_read_blob(tree, "PKGBUILD"), _read_blob(tree, ".SRCINFO"))
+    return extract_maintainer(
+        project.file_at(head, "PKGBUILD"), project.file_at(head, ".SRCINFO")
+    )
 
 
-def get_maintainer_from_commit(repo: pygit2.Repository, commit_oid: str) -> Optional[str]:
-    """Return the maintainer from *repo* at a specific *commit_oid*."""
+def get_maintainer_from_commit(project, commit_oid: str) -> Optional[str]:
+    """Return the maintainer from *project* at a specific *commit_oid*."""
     if not commit_oid:
         return None
-    try:
-        commit = repo.get(commit_oid)
-        tree = commit.tree
-    except (KeyError, AttributeError, TypeError):
-        return None
-    if tree is None:
-        return None
-    return extract_maintainer(_read_blob(tree, "PKGBUILD"), _read_blob(tree, ".SRCINFO"))
+    return extract_maintainer(
+        project.file_at(commit_oid, "PKGBUILD"),
+        project.file_at(commit_oid, ".SRCINFO"),
+    )
+
+
+def last_fetch_time(project) -> Optional[int]:
+    """When this clone was last fetched, or None if that is unknown."""
+    return project.last_fetch_time()

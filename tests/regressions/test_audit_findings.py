@@ -17,7 +17,7 @@ def test_a_large_blob_is_read_not_skipped():
     """A 1 MiB ELF is still identified by its magic bytes."""
     import pygit2
     import tempfile
-    from trustsight.analysis.pipeline import _collect_tree_files
+    from trustsight.sandbox.git_project import collect_tree_files
 
     with tempfile.TemporaryDirectory() as tmp:
         repo = pygit2.init_repository(tmp, bare=True)
@@ -29,7 +29,7 @@ def test_a_large_blob_is_read_not_skipped():
         sig = pygit2.Signature("t", "t@example.invalid")
         commit = repo.create_commit("refs/heads/master", sig, sig, "c", tree, [])
 
-        files, complete = _collect_tree_files(repo, str(commit))
+        files, complete = collect_tree_files(repo, str(commit))
 
     assert complete, "the walk read everything it was asked for"
     assert dict(files)["payload.bin"].startswith(b"\x7fELF"), (
@@ -49,7 +49,7 @@ def test_a_streamed_blob_read_does_not_deadlock():
     import threading
     import pygit2
     import tempfile
-    from trustsight.analysis.pipeline import _collect_tree_files
+    from trustsight.sandbox.git_project import collect_tree_files
 
     result = {}
 
@@ -63,7 +63,7 @@ def test_a_streamed_blob_read_does_not_deadlock():
             commit = repo.create_commit(
                 "refs/heads/master", sig, sig, "c", builder.write(), [],
             )
-            result["files"], result["complete"] = _collect_tree_files(
+            result["files"], result["complete"] = collect_tree_files(
                 repo, str(commit),
             )
 
@@ -83,7 +83,7 @@ def test_a_blob_past_the_stream_ceiling_is_reported_unread():
     """
     import pygit2
     import tempfile
-    from trustsight.analysis.pipeline import _collect_tree_files
+    from trustsight.sandbox.git_project import collect_tree_files
 
     with tempfile.TemporaryDirectory() as tmp:
         repo = pygit2.init_repository(tmp, bare=True)
@@ -94,7 +94,7 @@ def test_a_blob_past_the_stream_ceiling_is_reported_unread():
         commit = repo.create_commit(
             "refs/heads/master", sig, sig, "c", builder.write(), [],
         )
-        files, complete = _collect_tree_files(
+        files, complete = collect_tree_files(
             repo, str(commit), max_stream_bytes=1024,
         )
 
@@ -294,7 +294,7 @@ def test_a_tree_deeper_than_the_recursion_limit_is_walked_not_raised():
     import sys
     import pygit2
     import tempfile
-    from trustsight.analysis.pipeline import _collect_tree_files
+    from trustsight.sandbox.git_project import collect_tree_files
 
     depth = sys.getrecursionlimit() + 200
     with tempfile.TemporaryDirectory() as tmp:
@@ -310,7 +310,7 @@ def test_a_tree_deeper_than_the_recursion_limit_is_walked_not_raised():
         sig = pygit2.Signature("t", "t@example.invalid")
         commit = repo.create_commit("refs/heads/master", sig, sig, "c", tree, [])
 
-        files, complete = _collect_tree_files(repo, str(commit))
+        files, complete = collect_tree_files(repo, str(commit))
 
     assert complete
     assert dict(files)["d/" * depth + "leaf.txt"] == b"payload"
