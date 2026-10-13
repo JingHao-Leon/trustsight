@@ -1,4 +1,4 @@
-<!-- description: The complete TrustSight rule catalog by category, with severity, weight, match target and scope for every R, H, C, D, S, X, T, G, E, I, M, A, W and P identifier. -->
+<!-- description: The complete TrustSight rule catalog by category, with severity, weight, match target and scope for every R, H, C, D, S, X, T, G, E, I, M, A, U, W and P identifier. -->
 
 # Rules Reference
 
@@ -6,14 +6,15 @@ TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
 rules X001-X033, integrity-change rules C001-C031, dependency rules
 D001-D004, temporal rules T001-T003, correlation rules G001-G003, entropy
-rules E001-E003, the indicator rule H056, meta rules M001-M003, artifact
-rules A001-A008, declared-practice rules P001-P008 (P004 skipped), and
-unverifiable rules W001-W008.
+rules E001-E003, the indicator rule H056, meta rules M001-M003, committed-manifest
+rules U001-U005, artifact rules A001-A008, declared-practice rules P001-P008 (P004 skipped), and
+unverifiable rules W001-W009.
 
 Each rule contributes according to its severity weight, match target and
 scope, except the P and W series and the weight-0 M annotations, which are
-weight 0 and report rather than score, and the A and I series, which are
-reported outside the heuristic score.
+weight 0 and report rather than score (the U-series is the same shape: only U003, a
+new remote source, and U004, a redirected resolver, score), and the A and I
+series, which are reported outside the heuristic score.
 
 This page is the map. [The rule system reference](system.md) explains how
 the engine works and holds everything that is not an individual rule: the
@@ -52,12 +53,13 @@ generated from it by `scripts/build_rules_index.py`.
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
 | [Crossfire](crossfire.md) | `crossfire` | 33 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
-| [Unverifiable](unverifiable.md) | `unverifiable` | 8 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
+| [Unverifiable](unverifiable.md) | `unverifiable` | 9 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 3 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
-| [Correlation](correlation.md) | `correlation` | 3 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
+| [Correlation](correlation.md) | `correlation` | 4 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
 | [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 | [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
+| [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 6 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
@@ -140,6 +142,7 @@ is deliberately non-contiguous; see
 | [G001](correlation.md#g001) | Shared Gained Host | Correlation | HIGH | [Correlation](correlation.md) |
 | [G002](correlation.md#g002) | Shared Added Literal | Correlation | HIGH | [Correlation](correlation.md) |
 | [G003](correlation.md#g003) | Coordinated Adoption | Correlation | MEDIUM | [Correlation](correlation.md) |
+| [G004](correlation.md#g004) | Shared Upstream Dependency | Correlation | HIGH | [Correlation](correlation.md) |
 | [H001](integrity.md#h001) | Checksum Disabled | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H002](integrity.md#h002) | Checksum Emptied | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H003](fetch-and-execution.md#h003) | Insecure Download Protocol | Heuristic | LOW | [Fetch and Execution](fetch-and-execution.md) |
@@ -295,6 +298,12 @@ is deliberately non-contiguous; see
 | [T001](temporal.md#t001) | Signing-Key Novelty | Temporal | HIGH | [Temporal Context](temporal.md) |
 | [T002](temporal.md#t002) | Maintainer Domain Novelty | Temporal | MEDIUM | [Temporal Context](temporal.md) |
 | [T003](temporal.md#t003) | Signing Key Rotated | Temporal | HIGH | [Temporal Context](temporal.md) |
+| [U001](upstream-manifests.md#u001) | Manifest Added Or Removed | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U002](upstream-manifests.md#u002) | Upstream Dependency Delta | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U003](upstream-manifests.md#u003) | New Remote Source In Manifest | U | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
+| [U004](upstream-manifests.md#u004) | Registry Redirect | U | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
+| [U005](upstream-manifests.md#u005) | Dependency Surface Jump | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U006](upstream-manifests.md#u006) | Manifest Changed Without Its Lockfile | U | INFO | [Upstream Manifests](upstream-manifests.md) |
 | [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
@@ -303,6 +312,7 @@ is deliberately non-contiguous; see
 | [W006](unverifiable.md#w006) | Generated File Names A Build-Only Path | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W007](unverifiable.md#w007) | Dependency Novelty Declined For Insufficient Observations | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W008](unverifiable.md#w008) | Unresolved Construct In A Recipe | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
+| [W009](unverifiable.md#w009) | Upstream Manifests Not Examined | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
 | [X002](crossfire.md#x002) | Non-Literal Executable Name | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
 | [X003](crossfire.md#x003) | Obfuscated Command Argument | Crossfire | HIGH | [Crossfire](crossfire.md) |

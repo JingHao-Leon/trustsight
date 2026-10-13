@@ -40,9 +40,36 @@ promise of safety. The evidence is what you decide on. See
 
 !!! tip "Rules Reference"
 
-    TrustSight ships 228 documented detection rules across ten families: 37 R-series detection rules, 103 H-series heuristics, 31 C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, 33 X-series crossfire rules, three M-series meta rules, three E-series entropy rules, two T-series temporal rules, and three G-series correlation rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families are reported but never weighted: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W008. The optional L9 build lane adds five artifact rules A001-A005, reported outside the heuristic when enabled. Each rule has a severity, match target, and scope that determine how it fires and what it reports.
+    TrustSight ships 235 documented detection rules across eleven families: 37 R-series detection rules, 103 H-series heuristics, 31 C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, 33 X-series crossfire rules, three M-series meta rules, three E-series entropy rules, two T-series temporal rules, and four G-series correlation rules, and six U-series manifest rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families are reported but never weighted: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W009. The optional L9 build lane adds eight artifact rules A001-A008, reported outside the heuristic when enabled. Each rule has a severity, match target, and scope that determine how it fires and what it reports.
 
     [Browse the full rule catalog &rarr;](reference/rules/index.md)
+
+---
+
+## Assurance layers
+
+Every rule also carries an **evidence layer**, `L1`-`L8`, naming the kind of
+evidence a finding is. Layers are not ordered barriers: a finding at `L4` does
+not mean `L1`-`L3` were passed, and a layer that stayed silent is not proof of
+safety.
+
+| Layer | The question its evidence answers | Rule families |
+|---|---|---|
+| `L1` Structural coherence | Does the change hang together as an honest edit? | `C`, `M` |
+| `L2` Readability | Was anything hidden from the reader? | `W`, and the refusal rules `X026`/`X027` |
+| `L3` Payload signature | Does it do a known-bad thing? | `R`, `S` |
+| `L4` Evasion shape | Was it *written* to defeat reading? | `X`, `E` |
+| `L5` Behavioral suspicion | Does the package's story make sense? | `H` |
+| `L6` Ecosystem memory | Has the ecosystem seen this before? | `D`, `T` |
+| `L7` Known indicators | Is it on the list? | `I` |
+| `L8` Campaign correlation | Do other packages tell the same story? | `G` |
+
+The report keeps detection and coverage independent - `L3 fired` records the
+check that matched, `L1 passed` records that a check was read in full and stayed
+silent, and `L8 not_applicable` records a check that could not run - and the
+optional `L9` build lane inspects the built package rather than the diff.
+[How TrustSight groups security evidence](assurance-layers.md) covers the labels,
+the coverage states, and a worked report example.
 
 ---
 
@@ -59,6 +86,7 @@ promise of safety. The evidence is what you decide on. See
 | Page | What it covers |
 |------|----------------|
 | [How TrustSight Works](explanation/index.md) | Full pipeline: parse, analyse, classify, translate. |
+| [Assurance Layers](assurance-layers.md) | How rules group into L1-L8 evidence categories, detection vs coverage, and what a layer label does and does not mean. |
 | [Security Model](security.md) | What TrustSight guarantees while reading hostile input, why every result is deterministic and reproducible, what a verdict claims, and how each invariant is enforced. |
 | [Cold Start and Maturity](explanation/cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating. |
 | [Corpus and Priors](explanation/corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting. |

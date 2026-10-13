@@ -475,6 +475,30 @@ def test_the_feed_is_recorded_before_the_snapshot_advances(monkeypatch):
     assert order == ["feed", "snapshot"]
 
 
+def test_context_cluster_rules_do_not_alert(monkeypatch):
+    """H057/H060/H061 are weight-0 corpus context: only scoring cluster rules
+    reach record_alerts.  A sweep that returns only H061 hubs must not
+    manufacture hundreds of "new alert(s)" (226 in one observed cycle)."""
+    import trustsight.full_aur.pipeline as pipeline
+
+    _stub_cycle(monkeypatch, pipeline, {"demo": 5})
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(pipeline, "record_alerts",
+                        lambda pairs: seen.extend(pairs) or [])
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: [
+        {"rule_id": "H061", "severity": "INFO", "name": "Dependency Centrality",
+         "match": "sdl2 hub", "params": {"members": ["sdl2"]}},
+        {"rule_id": "H046", "severity": "MEDIUM",
+         "name": "Orphan/Adoption Dependency", "match": "x",
+         "params": {"members": ["dep-pkg"]}},
+    ])
+
+    pipeline.run_baseline_build()
+
+    assert ("dep-pkg", "H046") in seen
+    assert ("sdl2", "H061") not in seen
+
+
 # --- --since backfill ---
 
 _DAY = 86400
@@ -598,6 +622,38 @@ def test_since_joins_the_live_stream_when_caught_up(monkeypatch):
         assert result.processed == 1
         assert saved == ["saved"]
         assert _cursor() in (None, "")
+    finally:
+        _clear_cursor()
+
+
+def test_a_caught_up_replay_does_not_restart_on_the_next_cycle(monkeypatch):
+    """Catching up must join the live stream for good.  The --since is
+    re-passed every cycle, so clearing the origin sentinel made the next
+    cycle start the whole backfill over: the watcher replayed five months
+    of history every few hours instead of staying live."""
+    from types import SimpleNamespace
+
+    import time as _time
+    import trustsight.full_aur.pipeline as pipeline
+
+    now = int(_time.time())
+    monkeypatch.setattr(
+        pipeline,
+        "time",
+        SimpleNamespace(
+            time=lambda: now, strftime=_time.strftime, gmtime=_time.gmtime
+        ),
+    )
+    _stub_since_cycle(monkeypatch, pipeline, {"fresh-pkg": (now - 100, 5)})
+    monkeypatch.setattr(pipeline, "save_metadata", lambda *a, **k: None)
+
+    try:
+        first = pipeline.run_baseline_build(since=now - _DAY)
+        assert not first.backfilling
+        # The watch loop passes the same --since again: it must not start
+        # the replay over.
+        second = pipeline.run_baseline_build(since=now - _DAY)
+        assert not second.backfilling
     finally:
         _clear_cursor()
 

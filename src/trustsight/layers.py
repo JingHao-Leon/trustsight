@@ -101,6 +101,7 @@ SERIES_LAYER: dict[str, Layer] = {
     "G": Layer.L8,
     "E": Layer.L4,
     "I": Layer.L7,
+    "U": Layer.L3,
     "P": Layer.L1,
     "W": Layer.L2,
 }

@@ -1,4 +1,4 @@
-<!-- description: How each rule series detects: the mechanism behind R, H, C, D, S, X, T, G, E, I, M, A, P and W rules, and what that means for tuning and interpretation. -->
+<!-- description: How each rule series detects: the mechanism behind R, H, C, D, S, X, T, G, E, I, M, A, U, P and W rules, and what that means for tuning and interpretation. -->
 
 # Rule Nature
 
@@ -175,7 +175,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## W-series: **Warning** Analysis Boundaries
 
-**Count:** 8 rules (W001-W008)
+**Count:** 9 rules (W001-W009)
 
 **Mechanism:** Reports what the analysis *could not read*. W-series findings mark visibility boundaries in the analysis: a package will run code the examination did not cover, and silence about that would be dishonest. They **warn** the reviewer where the analysis stopped.
 
@@ -218,7 +218,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## G-series: **Correlation** Cross-Package Joins
 
-**Count:** 3 rules (G001-G003)
+**Count:** 4 rules (G001-G004)
 
 **Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N.
 
@@ -326,6 +326,25 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **When it fires:** Only in the optional L9 lane, when the built artifact does not match the recipe's declared surface.
 
+## U-series: **Manifest** Committed Dependency Surfaces
+
+**Count:** 5 rules (U001-U005)
+
+**Mechanism:** Parses the dependency manifests committed beside a recipe - `Cargo.toml`, `package.json`, `requirements.txt`, `go.mod`, `Gemfile`, `composer.json` and peers - with the existing tree walk and diff. No fetch and no extraction (A2, A8): these are repository bytes the analysis already reads.
+
+**What you can tune:**
+
+- The filename table (`[patterns] manifest_filenames`) and `[thresholds] u005.jump_factor`
+
+**What you cannot tune:**
+
+- That a manifest-introduced remote host joins the run's `hosts_gained` view
+- The rule IDs
+
+**Example:** U003 fires when a `Cargo.toml` gains a `git = "..."` dependency whose host the recipe never declared; U002 records the added and removed dependency names at weight 0.
+
+**When it fires:** On a committed manifest the diff added, removed or changed.
+
 ## Known fuzzy edges
 
 The taxonomy is a reading aid, not a partition, and a divergence found later is documented here rather than migrated (the W-series honesty principle applied to the taxonomy itself):
@@ -358,6 +377,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 | M | **Meta** | Other rules' findings | Layer count, per-layer ceiling | Severity-based; M002/M003 weight 0 | After the ownership resolver |
 | A | **Artifact** | Built package manifest | Enable flag only | Outside the score (L9) | Only in the optional build lane |
 | P | **Practice** | Declared practice | Visibility only | 0 (always) | On every analysis |
+| U | **Manifest** | Committed dependency surfaces | Filename table, threshold | U003/U004 MEDIUM; others 0 | When a committed manifest changes |
 | W | **Warning** | Analysis boundary | Visibility only | 0 (always) | When boundary encountered |
 
 ## See Also

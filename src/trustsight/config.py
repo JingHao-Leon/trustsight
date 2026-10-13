@@ -1792,6 +1792,120 @@ def _toml_value(val) -> str:
     return str(val)
 
 
+DEFAULT_MANIFEST_FILENAMES = (
+    "cargo::Cargo.toml",
+    "cargo::Cargo.lock",
+    "cargo::cargo/config.toml",
+    "cargo::.cargo/config.toml",
+    "cargo::cargo/config",
+    "cargo::.cargo/config",
+    "npm::package.json",
+    "npm::package-lock.json",
+    "npm::npm-shrinkwrap.json",
+    "npm::yarn.lock",
+    "npm::pnpm-lock.yaml",
+    "npm::.npmrc",
+    "npm::.yarnrc.yml",
+    "pip::pyproject.toml",
+    "pip::requirements.txt",
+    "pip::requirements*.txt",
+    "pip::requirements/*.txt",
+    "pip::*-requirements.txt",
+    "pip::requirements*.in",
+    "pip::constraints.txt",
+    "pip::constraints*.txt",
+    "pip::Pipfile",
+    "pip::Pipfile.lock",
+    "pip::poetry.lock",
+    "pip::uv.lock",
+    "pip::uv.toml",
+    "pip::pdm.lock",
+    "pip::pylock.toml",
+    "pip::pylock.*.toml",
+    "pip::setup.py",
+    "pip::setup.cfg",
+    "pip::tox.ini",
+    "pip::noxfile.py",
+    "pip::pip.conf",
+    "pip::pip.ini",
+    "pip::.pip/pip.conf",
+    "pip::.config/pip/pip.conf",
+    "pip::.pypirc",
+    "conda::environment.yml",
+    "conda::environment.yaml",
+    "conda::meta.yaml",
+    "conda::pixi.toml",
+    "conda::pixi.lock",
+    "conda::conda-lock.yml",
+    "conda::*.conda-lock.yml",
+    "go::go.mod",
+    "go::go.sum",
+    "go::go.work",
+    "go::go.work.sum",
+    "gem::Gemfile",
+    "gem::Gemfile.lock",
+    "gem::*.gemspec",
+    "composer::composer.json",
+    "composer::composer.lock",
+    "npm::deno.json",
+    "npm::deno.jsonc",
+    "npm::bun.lock",
+    "jvm::pom.xml",
+    "jvm::build.gradle",
+    "jvm::build.gradle.kts",
+    "jvm::settings.gradle",
+    "jvm::settings.gradle.kts",
+    "jvm::gradle/libs.versions.toml",
+    "dotnet::*.csproj",
+    "dotnet::*.fsproj",
+    "dotnet::*.vbproj",
+    "dotnet::packages.config",
+    "dotnet::NuGet.config",
+    "dotnet::Directory.Packages.props",
+    "dart::pubspec.yaml",
+    "dart::pubspec.lock",
+    "crystal::shard.yml",
+    "crystal::shard.lock",
+    "julia::Project.toml",
+    "julia::Manifest.toml",
+    "cpp::vcpkg.json",
+    "cpp::conanfile.txt",
+    "haskell::*.cabal",
+    "ocaml::*.opam",
+    "elixir::mix.exs",
+    "elixir::mix.lock",
+    "r::DESCRIPTION",
+    "r::renv.lock",
+    "perl::cpanfile",
+    "fortran::fpm.toml",
+    "gleam::gleam.toml",
+    "swift::Package.resolved",
+    "swift::Package.swift",
+    "swift::Podfile",
+    "swift::Cartfile",
+    "swift::Cartfile.resolved",
+    "zig::build.zig.zon",
+    "d::dub.json",
+    "nim::*.nimble",
+    "lua::*.rockspec",
+    "clojure::deps.edn",
+    "clojure::project.clj",
+    "ocaml::dune-project",
+    "elixir::rebar.config",
+    "elixir::rebar.lock",
+    "haskell::cabal.project",
+    "haskell::cabal.project.freeze",
+    "haskell::stack.yaml",
+    "haskell::stack.yaml.lock",
+    "haskell::package.yaml",
+    "cpp::CMakeLists.txt",
+    "cpp::meson.build",
+    "bazel::MODULE.bazel",
+    "perl::META.json",
+    "perl::META.yml",
+)
+
+
 DEFAULT_PATTERNS = (
     "[patterns]\n"
     "# H035 - foreign package managers invoked from an install hook.  A\n"
@@ -1851,6 +1965,13 @@ DEFAULT_PATTERNS = (
     "# one of these and starts vendoring a matching source copy, it bypasses\n"
     "# the distribution's security updates.\n"
     "security_relevant_libraries = " + _toml_str_list(DEFAULT_SECURITY_RELEVANT_LIBRARIES) + "\n"
+    "\n"
+    "# U-series - committed upstream dependency manifests.  Each entry is\n"
+    "# 'format::name'; a name containing '/' matches as a path suffix, a bare\n"
+    "# name matches a basename.  The table is configuration, not a code\n"
+    "# constant: which files count as a manifest is a policy choice, visible\n"
+    "# in the config fingerprint.\n"
+    "manifest_filenames = " + _toml_str_list(DEFAULT_MANIFEST_FILENAMES) + "\n"
 )
 
 DEFAULT_NAMING = (
@@ -1999,6 +2120,12 @@ DEFAULT_THRESHOLDS = (
     "# maintainer takeover).  One signal can be a coincidence; two is a\n"
     "# method.\n"
     "min_signals = 2\n"
+    "\n"
+    "[u005]\n"
+    "# U005 (dependency surface jump) reports a manifest whose dependency\n"
+    "# count multiplies past this factor in one update.  Weight 0; the\n"
+    "# correlation feed is its primary consumer, not the reader.\n"
+    "jump_factor = 3.0\n"
 )
 
 DEFAULT_IOCS = (

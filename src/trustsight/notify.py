@@ -72,6 +72,9 @@ def alert_payload(cycle) -> dict:
     n_alerts = len(cycle.new_alerts)
     # Addendum 5 §6.2/§9: the G-series campaign clusters, as member triples.
     # The same document shape as over_threshold, so notify plumbing is reused.
+    # Only the correlation family belongs here: the sweep also returns
+    # weight-0 context findings (H057/H060/H061), and counting those made a
+    # centrality pass read as hundreds of "campaign cluster(s)".
     campaign_cluster = [
         {
             "rule_id": finding.get("rule_id", ""),
@@ -79,6 +82,7 @@ def alert_payload(cycle) -> dict:
             "count": len(finding.get("params", {}).get("members", ())),
         }
         for finding in (getattr(cycle, "cluster_findings", None) or ())
+        if str(finding.get("rule_id", "")).startswith("G")
     ]
     parts = []
     if iocs:

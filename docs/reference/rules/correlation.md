@@ -34,6 +34,7 @@ This is a reference page. For how weight and scope work, see
 | [G001](#g001) | Shared Gained Host | HIGH |
 | [G002](#g002) | Shared Added Literal | HIGH |
 | [G003](#g003) | Coordinated Adoption | MEDIUM |
+| [G004](#g004) | Shared Upstream Dependency | HIGH |
 <!-- /generated: page-index -->
 
 ### G001: Shared Gained Host {#g001}
@@ -62,3 +63,12 @@ The literal's content is never printed - only its length and the members.
 - **Condition:** One maintainer key adopts at least `[thresholds] g_adopt.min_members` (default 3) packages in the window.
 
 Adoption is the temporal engine's own predicate - H044 (ownership transition) or H086 (orphan-to-maintained) - recorded per package, not a bare maintainer-change. The finding's `predicates` names which T instance the group joined on; H074 (mass adoption) is the cross-package aggregation this rule performs.
+
+### G004: Shared Upstream Dependency {#g004}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** HIGH (weight 25)
+- **Category:** `correlation`
+- **Condition:** The same upstream dependency (and host), added to a committed manifest, appears in at least `[thresholds] g_dep.min_packages` (default 2) packages in the window.
+
+The committed-manifest counterpart to G001: a dependency name and remote host that many packages gain in the same window is the same-new-upstream-dependency campaign shape. It reads the recorded `upstream_dep_additions` view (the U-series dependency additions); the engine ships and is unit-tested, and the corpus feed that fills the view is the same pending work G002's literal feed is.

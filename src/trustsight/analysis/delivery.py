@@ -2962,11 +2962,25 @@ def _unverifiable_findings(diff_text, config, add, tree_manifest=None,
         function, command = resolutions[0]
         others = len(resolutions) - 1
         suffix = f" (and {others} more)" if others else ""
+        # Cross-reference the committed manifest surface (U-series): the gap
+        # never reads the same with and without a committed manifest.
+        from .upstream_manifests import committed_manifest, ecosystem_of_command
+
+        committed = committed_manifest(tree_manifest, command)
+        if committed:
+            fmt, path = committed
+            tail = (f"; the {fmt} dependency surface is committed ({path}) "
+                    "and was analyzed, but the registry resolution at build "
+                    "time remains unseen")
+        else:
+            fmt = ecosystem_of_command(command)
+            tail = (f"; no committed {fmt} manifest names that surface"
+                    if fmt else "")
         add("W002", "Build Resolves Dependencies From A Registry", "INFO",
             "unverifiable",
             f"{function or 'the recipe'} runs {command.strip()[:60]}, so a "
             "registry chooses at build time which code runs; no checksum "
-            f"here covers it{suffix}",
+            f"here covers it{suffix}{tail}",
             line=_find_line(diff_text, command.strip()[:50]),
             position=function, command=command.strip()[:80],
             count=len(resolutions))

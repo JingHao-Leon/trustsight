@@ -47,7 +47,7 @@ NON_RULE_PAGES = {"index.md", "nature.md", "system.md"}
 # `P` is deliberately absent. Declared-practice findings are rendered from
 # `DECLARED_REASONS` and documented as one table in system.md rather than as
 # per-rule sections, so there is no `### P00N:` heading to find.
-_RULE_SECTION_RE = re.compile(r"^### ([RCDSXWH]\d{3}):", re.M)
+_RULE_SECTION_RE = re.compile(r"^### ([RCDSXWHU]\d{3}):", re.M)
 
 
 def _rule_page(rule_id: str) -> Path:

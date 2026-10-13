@@ -152,6 +152,14 @@ TEMPLATES: dict[str, str] = {
     # --- W-series boundary renderings ---
     "W007": "dependency novelty declined: {rule} abstained because the corpus holds {observed} observation(s), so {count} added dependency name(s) were not judged",
     "W008": "{match}",
+    "W009": "{match}",
+    # --- Upstream manifests (U series) ---
+    "U001": "{match}",
+    "U002": "{match}",
+    "U003": "{match}",
+    "U004": "{match}",
+    "U005": "{match}",
+    "U006": "{match}",
     "T003": "signing key rotated: {match}",
     "X032": "command name assembled by splicing: {shape}",
     "C028": "build cache written outside the build trees: {match}",

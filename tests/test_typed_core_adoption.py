@@ -32,6 +32,9 @@ PINNED_LOOPS = {
     "analysis/structural.py": 2,
     # A local file the operator hands in, read whole; not a diff.
     "cli/lint.py": 2,
+    # Hostile-input parsers over a manifest's own committed bytes (payload
+    # text), not a diff walk; the diff is read through DiffDoc elsewhere.
+    "analysis/manifests.py": 13,
 }
 
 

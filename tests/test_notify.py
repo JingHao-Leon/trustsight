@@ -285,3 +285,18 @@ def test_payload_carries_campaign_clusters():
     assert payload["campaign_cluster"] == [
         {"rule_id": "G001", "members": ["a", "b", "c"], "count": 3},
     ]
+
+
+def test_context_cluster_findings_are_not_campaigns():
+    """H057/H060/H061 are weight-0 corpus context, not G-series campaigns:
+    counting them made a centrality pass read as hundreds of campaigns."""
+    cycle = _cycle(cluster_findings=[
+        {"rule_id": "H061", "params": {"members": ["sdl2"]}},
+        {"rule_id": "H060", "params": {"members": ["x"]}},
+        {"rule_id": "G002", "params": {"members": ["a", "b"]}},
+    ])
+    payload = alert_payload(cycle)
+    assert payload["campaign_cluster"] == [
+        {"rule_id": "G002", "members": ["a", "b"], "count": 2},
+    ]
+    assert "1 campaign cluster" in payload["title"]

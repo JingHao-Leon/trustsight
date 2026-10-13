@@ -113,6 +113,55 @@ class VersionFacts:
 
 
 @dataclass(frozen=True)
+class ManifestDelta:
+    """One committed manifest's change, from the typed diff (U-series).
+
+    Derived once from the parsed ``ManifestDoc`` on each side, so the change
+    summary, the U-rules and the correlation feed read one object.
+    """
+
+    path: str
+    format: str
+    status: str
+    added: tuple[str, ...] = ()
+    removed: tuple[str, ...] = ()
+    remote_added: tuple[str, ...] = ()
+    redirects: tuple[tuple[str, str], ...] = ()
+    unresolved: tuple[str, ...] = ()
+    old_count: int = 0
+    new_count: int = 0
+
+    def to_dict(self) -> dict:
+        return {
+            "path": self.path,
+            "format": self.format,
+            "status": self.status,
+            "added": list(self.added),
+            "removed": list(self.removed),
+            "remote_added": list(self.remote_added),
+            "redirects": [list(r) for r in self.redirects],
+            "unresolved": list(self.unresolved),
+            "old_count": self.old_count,
+            "new_count": self.new_count,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ManifestDelta":
+        return cls(
+            path=data.get("path", ""),
+            format=data.get("format", ""),
+            status=data.get("status", ""),
+            added=tuple(data.get("added", ())),
+            removed=tuple(data.get("removed", ())),
+            remote_added=tuple(data.get("remote_added", ())),
+            redirects=tuple((r[0], r[1]) for r in data.get("redirects", ())),
+            unresolved=tuple(data.get("unresolved", ())),
+            old_count=int(data.get("old_count", 0)),
+            new_count=int(data.get("new_count", 0)),
+        )
+
+
+@dataclass(frozen=True)
 class ChangeDelta:
     """What changed in a diff, as one typed query result (spec §1).
 
@@ -169,6 +218,9 @@ class ChangeDelta:
     #: rule, because the whole PKGBUILD is not part of a diff object.
     checksum_parity: "tuple[int, int, str] | None" = None
     source_array_grew: bool = False
+    #: U-series: one entry per committed upstream manifest the diff touched
+    #: (added, removed or modified).  Empty when the diff carries none.
+    manifests: tuple[ManifestDelta, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -200,6 +252,7 @@ class ChangeDelta:
                 if self.checksum_parity is not None else None
             ),
             "source_array_grew": self.source_array_grew,
+            "manifests": [m.to_dict() for m in self.manifests],
         }
 
     @classmethod
@@ -239,6 +292,10 @@ class ChangeDelta:
                 if data.get("checksum_parity") else None
             ),
             source_array_grew=bool(data.get("source_array_grew", False)),
+            manifests=tuple(
+                ManifestDelta.from_dict(m)
+                for m in data.get("manifests", ())
+            ),
         )
 
 
@@ -331,8 +388,13 @@ def change_delta(diff_text: str, pkgbase: str = "") -> ChangeDelta:
     # the checksum classification the same walk settles (including its
     # `checksum_array_removed` override for a declaration deleted whole).
     url_changes = extract_urls_from_diff(diff_text)
+    manifests = _manifest_deltas(doc)
     added_hosts = {_host(u) for u in url_changes.added_urls if _host(u)}
     removed_hosts = {_host(u) for u in url_changes.removed_urls if _host(u)}
+    # U003: a remote host a committed manifest introduces joins the same
+    # ``hosts_gained`` view as a ``source=()`` host, so host-novelty tiers,
+    # source buckets and the G-series read both the same way.
+    added_hosts |= {h for m in manifests for h in m.remote_added}
     post_sources = local_source_names("\n".join(_post_diff_lines(diff_text)))
     pre_sources = local_source_names("\n".join(_pre_diff_lines(diff_text)))
     return ChangeDelta(
@@ -362,7 +424,98 @@ def change_delta(diff_text: str, pkgbase: str = "") -> ChangeDelta:
                    or pgp_keys.reordered),
         checksum_parity=checksum_array_parity(diff_text),
         source_array_grew=source_array_grew_in_diff(diff_text),
+        manifests=manifests,
     )
+
+
+def _manifest_deltas(doc) -> tuple[ManifestDelta, ...]:
+    """One :class:`ManifestDelta` per manifest file the diff touched.
+
+    The pre and post text of a single file is projected from the parsed
+    ``DiffDoc`` lines (context plus that side's changes), parsed through the
+    same ``ManifestDoc`` contract the tree walk uses, and diffed by
+    dependency name and remote host.  No new parse, no new walker.
+
+    A hunk carries three lines of context, so the structured parse can lose a
+    dependency whose section header is outside the hunk.  The scored signal
+    (a new remote host) is therefore also read by a section-agnostic scan of
+    the added and removed lines, which no header can hide.
+    """
+    from .analysis.manifests import (
+        manifest_format,
+        parse_manifest,
+        upstream_redirect_signals,
+        upstream_source_deps,
+        upstream_source_hosts,
+    )
+
+    out: list[ManifestDelta] = []
+    for file in doc.files:
+        fmt = manifest_format(file.path)
+        if fmt is None:
+            continue
+        pre_text = "\n".join(
+            line.content for line in doc.lines
+            if line.file == file.path and line.side in ("remove", "context")
+        )
+        post_text = "\n".join(
+            line.content for line in doc.lines
+            if line.file == file.path and line.side in ("add", "context")
+        )
+        added_text = "\n".join(
+            line.content for line in doc.lines
+            if line.file == file.path and line.side == "add"
+        )
+        removed_text = "\n".join(
+            line.content for line in doc.lines
+            if line.file == file.path and line.side == "remove"
+        )
+        pre_doc = parse_manifest(file.path, pre_text) if pre_text else None
+        post_doc = parse_manifest(file.path, post_text) if post_text else None
+        old = {d.name for d in (pre_doc.dependencies if pre_doc else ()) if d.name}
+        new = {d.name for d in (post_doc.dependencies if post_doc else ()) if d.name}
+        old |= {d.name for d in upstream_source_deps(removed_text) if d.name}
+        new |= {d.name for d in upstream_source_deps(added_text) if d.name}
+        old_remotes = {
+            d.remote for d in (pre_doc.dependencies if pre_doc else ()) if d.remote
+        }
+        new_remotes = {
+            d.remote for d in (post_doc.dependencies if post_doc else ()) if d.remote
+        }
+        old_remotes |= upstream_source_hosts(removed_text)
+        new_remotes |= upstream_source_hosts(added_text)
+        # A refusal is only a refusal when the whole file was in the diff: an
+        # added or removed manifest is present in full, while a modified one
+        # is reconstructed from a three-line hunk and is expected to be a
+        # fragment.  Naming that a "manifest that could not be parsed" would
+        # be a boundary the committed file does not have.
+        if file.status in ("added", "removed"):
+            unresolved = tuple(pre_doc.unresolved if pre_doc else ()) + tuple(
+                post_doc.unresolved if post_doc else ())
+        else:
+            unresolved = ()
+        # Combine the structured redirects with the section-agnostic scan,
+        # deduped on the destination so a line both readers see is one
+        # finding, not two.
+        post_redirects: dict[str, str] = {}
+        for kind, value in (post_doc.redirects if post_doc else ()):
+            post_redirects[value] = kind
+        for kind, value in upstream_redirect_signals(added_text):
+            post_redirects.setdefault(value, kind)
+        pre_redirects = {value for _kind, value in (pre_doc.redirects if pre_doc else ())}
+        pre_redirects |= {value for _kind, value in upstream_redirect_signals(removed_text)}
+        redirects = tuple(sorted(
+            (kind, value) for value, kind in post_redirects.items()
+            if value not in pre_redirects
+        ))
+        out.append(ManifestDelta(
+            path=file.path, format=fmt, status=file.status,
+            added=tuple(sorted(new - old)), removed=tuple(sorted(old - new)),
+            remote_added=tuple(sorted(new_remotes - old_remotes)),
+            redirects=redirects, unresolved=unresolved,
+            old_count=len(old), new_count=len(new),
+        ))
+    return tuple(out)
 
 
 def _host(url: str) -> str:

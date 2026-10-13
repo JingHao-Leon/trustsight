@@ -373,6 +373,7 @@ directly by their named rules; they do not merge with a generic host setting.
 | `network_tools` | D003 | Package names that grant a build network access. |
 | `security_relevant_flags` | H047 | Hardening flags whose appearance or disappearance changes the mitigation set. |
 | `security_relevant_libraries` | H048 | Libraries whose vendoring bypasses distribution security updates. |
+| `manifest_filenames` | U-series | Which committed files are dependency manifests, as `format::name`; the name is a glob (`requirements*.txt`, `*.csproj`, `pylock.*.toml`), matched against the basename, or against the path when it contains `/`. The most specific match wins, so an exact `requirements.txt` beats `requirements*.txt`. |
 
 These lists are consumed directly by their named rules. `network_tools` is the
 exception with a legacy fallback: D003 reads `patterns.toml` first, then
@@ -411,6 +412,7 @@ own project's names from firing a scope-expansion rule.
 | `h064.widely_provided_observations` | H064 | `25` | Observations that make a provided name widely provided. |
 | `h074.window_days` | H074 | `14` | How recent the modification must be after an adoption. |
 | `h098.min_signals` | H098 | `2` | Distinct naming/deception signals a package's findings must carry before the cluster is scored. One signal can be a coincidence; two is a method. |
+| `u005.jump_factor` | U005 | `3.0` | How much a committed manifest's dependency count must multiply in one update before the surface-jump ledger entry is reported (weight 0). |
 | `longitudinal.stability_floor` | Class C | `10` | Consecutive observations a property must hold before a change is reported at all. |
 | `t_key.min_observations` | T001 | `1` | Ecosystem signing keys recorded before T001 judges a new `validpgpkeys` fingerprint novel; below the floor the rule declines silently. |
 | `t_dom.min_observations` / `t_dom.window_days` | T002 | `1` / `30` | Domains recorded before T002 judges a maintainer domain novel, and the observation window that counts as "new". |

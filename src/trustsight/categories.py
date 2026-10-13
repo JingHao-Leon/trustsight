@@ -78,6 +78,10 @@ class RuleCategory(StrEnum):
     #: federation are the same mechanism, so H056 is filed here (its id is
     #: unchanged); new federation matches take ``I`` ids.
     INDICATOR = "indicator"
+    #: The U series. Committed upstream dependency manifests: what the
+    #: repository itself shows about the dependency surface, read from the
+    #: existing tree walk and diff - never a fetch and never an extraction.
+    UPSTREAM_MANIFESTS = "upstream-manifests"
 
     @property
     def doc_page(self) -> str:
@@ -121,6 +125,7 @@ _TITLES: dict[RuleCategory, str] = {
     RuleCategory.CORRELATION: "Correlation",
     RuleCategory.ARTIFACT: "Artifact",
     RuleCategory.INDICATOR: "Indicators",
+    RuleCategory.UPSTREAM_MANIFESTS: "Upstream Manifests",
 }
 
 _SUMMARIES: dict[RuleCategory, str] = {
@@ -206,6 +211,11 @@ _SUMMARIES: dict[RuleCategory, str] = {
         "A declared surface matches an entry in signed external data: the "
         "IOC list, or a federated publisher's indicator set.  Outside the "
         "heuristic score and alerted at maximum priority."
+    ),
+    RuleCategory.UPSTREAM_MANIFESTS: (
+        "A committed dependency manifest changed: a dependency moved, a new "
+        "remote source entered the recipe's reach, or the resolver is being "
+        "redirected.  Read from the repository, never fetched."
     ),
 }
 
@@ -320,6 +330,13 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "W006": _C.UNVERIFIABLE,
     "W007": _C.UNVERIFIABLE,
     "W008": _C.UNVERIFIABLE,
+    "W009": _C.UNVERIFIABLE,
+    "U001": _C.UPSTREAM_MANIFESTS,
+    "U002": _C.UPSTREAM_MANIFESTS,
+    "U003": _C.UPSTREAM_MANIFESTS,
+    "U004": _C.UPSTREAM_MANIFESTS,
+    "U005": _C.UPSTREAM_MANIFESTS,
+    "U006": _C.UPSTREAM_MANIFESTS,
     "M001": _C.META,
     "M002": _C.META,
     "M003": _C.META,
@@ -332,6 +349,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "G001": _C.CORRELATION,
     "G002": _C.CORRELATION,
     "G003": _C.CORRELATION,
+    "G004": _C.CORRELATION,
     "A001": _C.ARTIFACT,
     "A002": _C.ARTIFACT,
     "A003": _C.ARTIFACT,

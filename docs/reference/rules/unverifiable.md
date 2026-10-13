@@ -60,6 +60,7 @@ rules, because a W is weight-0 by construction:
 | [W006](#w006) | Generated File Names A Build-Only Path | INFO |
 | [W007](#w007) | Dependency Novelty Declined For Insufficient Observations | INFO |
 | [W008](#w008) | Unresolved Construct In A Recipe | INFO |
+| [W009](#w009) | Upstream Manifests Not Examined | INFO |
 <!-- /generated: page-index -->
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}
@@ -217,3 +218,19 @@ function, scored) report as a suspicion - [X026 and X027 may fire on the
 same diff](crossfire.md#x026), weight-0 vs scored.
 
 Names the unresolved assignments (capped). It never changes the score.
+
+### W009: Upstream Manifests Not Examined {#w009}
+
+**INFO** (weight 0) · category `unverifiable`
+
+Fires when a committed dependency manifest could not be parsed (malformed,
+or over the byte cap), or when the recipe declares a source archive whose
+listing contains a known manifest filename. The second shape is a standing
+boundary, not a per-diff gap: the analysis never fetches and never extracts
+(A2, A8), so the manifests inside an upstream archive are outside what any
+run can read by design.
+
+It forbids nothing by itself and never changes the score. It exists so a
+quiet result never implies "dependency surface reviewed": the layer's edge
+is part of the output. Absence of even the archive listing (the cgit
+fallback) is reported separately as `tree_not_analyzed`.

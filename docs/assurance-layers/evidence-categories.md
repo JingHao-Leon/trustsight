@@ -95,6 +95,7 @@ from its family's. The mapping is data in `trustsight.layers`:
 | `R` | L3 |
 | `S` | L3 |
 | `T` | L6 |
+| `U` | L3 |
 | `W` | L2 |
 | `X` | L4 |
 

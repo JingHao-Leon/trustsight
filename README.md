@@ -255,11 +255,28 @@ A run is deterministic: the same diff, effective configuration, and stored obser
 
 Verdicts are template-based, describing each triggered finding in plain English. All output is deterministic and generated locally.
 
+### The evidence layers
+
+Every rule carries an **evidence layer**, `L1`-`L8`, naming the *kind* of evidence a finding is - not a stage an attacker passed through. A finding at `L4` does not mean `L1`-`L3` were cleared, and a layer with no finding is not a safety certificate.
+
+| Layer | The question its evidence answers | Rule families |
+|---|---|---|
+| `L1` Structural coherence | Does the change hang together as an honest edit? | `C`, `M` |
+| `L2` Readability | Was anything hidden from the reader? | `W`, and the refusal rules `X026`/`X027` |
+| `L3` Payload signature | Does it do a known-bad thing? | `R`, `S` |
+| `L4` Evasion shape | Was it *written* to defeat reading? | `X`, `E` |
+| `L5` Behavioral suspicion | Does the package's story make sense? | `H` |
+| `L6` Ecosystem memory | Has the ecosystem seen this before? | `D`, `T` |
+| `L7` Known indicators | Is it on the list? | `I` |
+| `L8` Campaign correlation | Do other packages tell the same story? | `G` |
+
+The report keeps detection and coverage separate: `L3 fired` says the payload-signature check matched, `L1 passed` says the structural check was read in full and stayed silent (not that the update is safe), and `L8 not_applicable` says the check could not run on a single package. The optional `L9` build lane (`A001`-`A008`) inspects the built package and is not one of the eight. See [How TrustSight groups security evidence](https://docs.trustsight.org/assurance-layers/).
+
 ### The score, on request
 
 A weighted score is computed on every run but is not part of the default output; ask for it with `--score` (`--risk` for the band). It is a heuristic aggregate of the fired findings - not a probability of compromise, not a confidence, and not a prediction. A score of 40 does not mean "40% likely to be malicious"; it means the findings that fired carry that combined weight. See [How TrustSight Works](https://docs.trustsight.org/explanation/) and the [scoring philosophy](https://docs.trustsight.org/explanation/scoring-philosophy/).
 
-Signals come from 228 documented rules across ten rule families: 37 detection rules (R-series, TOML-configurable), 103 heuristic rules (H-series), 31 code-structure rules (C001-C031), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008), 33 crossfire anti-evasion rules (X001-X033), 3 meta rules (M001-M003), 3 entropy rules (E001-E003), 3 temporal rules (T001-T003), and 3 correlation rules (G001-G003). Two further families are reported but never weighted: declared practice (P001-P008) and unverifiable (W001-W008), the latter naming what an analysis could not read. The optional L9 build lane adds five artifact rules (A001-A005), reported outside the heuristic when enabled. Calibration uses a locked, point-in-time 3,739-diff benign corpus of real AUR updates and 204 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
+Signals come from 235 documented rules across eleven rule families: 37 detection rules (R-series, TOML-configurable), 103 heuristic rules (H-series), 31 code-structure rules (C001-C031), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008), 33 crossfire anti-evasion rules (X001-X033), 3 meta rules (M001-M003), 3 entropy rules (E001-E003), 3 temporal rules (T001-T003), 4 correlation rules (G001-G004), and 6 manifest rules (U001-U006). Two further families are reported but never weighted: declared practice (P001-P008) and unverifiable (W001-W009), the latter naming what an analysis could not read. The optional L9 build lane adds eight artifact rules (A001-A008), reported outside the heuristic when enabled. Calibration uses a locked, point-in-time 3,739-diff benign corpus of real AUR updates and 205 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
 
 ---
 

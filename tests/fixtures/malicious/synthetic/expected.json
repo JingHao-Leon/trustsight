@@ -1269,6 +1269,12 @@
       "S008"
     ]
   },
+  "U003-manifest-git-dep.diff": {
+    "min_score": 15,
+    "must_fire": [
+      "U003"
+    ]
+  },
   "X001-hex-decoded-to-shell.diff": {
     "min_score": 30,
     "must_fire": [

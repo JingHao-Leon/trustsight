@@ -24,7 +24,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 __all__ = ["correlate", "shared_gained_host", "shared_added_literal",
-           "coordinated_adoption"]
+           "coordinated_adoption", "shared_upstream_dependency"]
 
 
 def _thresholds(config) -> dict:
@@ -108,6 +108,39 @@ def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
     return out
 
 
+def shared_upstream_dependency(records, min_packages: int = 2) -> list[dict]:
+    """G004: the same upstream dependency added across packages in the window.
+
+    A name and its host added to committed manifests (the U-series change
+    view) in at least *min_packages* distinct packages: the same-new-
+    upstream-dependency campaign shape, one alert naming the members.
+    """
+    by_dep: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for record in records:
+        for entry in record.get("upstream_dep_additions", ()) or ():
+            if isinstance(entry, (list, tuple)):
+                name = str(entry[0]) if entry else ""
+                host = str(entry[1]) if len(entry) > 1 else ""
+            else:
+                name, host = str(entry), ""
+            if name:
+                by_dep[(name, host)].add(str(record.get("package", "")))
+    out = []
+    for (name, host), members in sorted(by_dep.items()):
+        if len(members) >= min_packages:
+            where = f" from {host}" if host else ""
+            out.append({
+                "rule_id": "G004",
+                "name": "Shared Upstream Dependency",
+                "severity": "HIGH", "category": "correlation",
+                "match": (f"upstream dependency {name}{where} appears in "
+                          f"{len(members)} packages in the window"),
+                "params": {"members": sorted(members), "dependency": name,
+                           "host": host},
+            })
+    return out
+
+
 def correlate(records, config=None) -> list[dict]:
     """All G-series findings for one cycle's records."""
     thresholds = _thresholds(config)
@@ -115,8 +148,10 @@ def correlate(records, config=None) -> list[dict]:
     blob_n = int(thresholds.get("g_blob", {}).get("min_packages", 2))
     blob_len = int(thresholds.get("g_blob", {}).get("min_length", 256))
     adopt_m = int(thresholds.get("g_adopt", {}).get("min_members", 3))
+    dep_n = int(thresholds.get("g_dep", {}).get("min_packages", 2))
     out: list[dict] = []
     out.extend(shared_gained_host(records, host_n))
     out.extend(shared_added_literal(records, blob_n, blob_len))
     out.extend(coordinated_adoption(records, adopt_m))
+    out.extend(shared_upstream_dependency(records, dep_n))
     return out

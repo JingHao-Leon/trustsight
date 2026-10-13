@@ -843,6 +843,13 @@ def _structural_findings(
         diff_text, package_name, config or {}, add, current_text=current_text,
         delta=cdelta,
     )
+    # U-series: committed upstream dependency manifests (spec: Upstream
+    # Manifests).  Reads the diff's ManifestDelta and names a refusal.
+    from .upstream_manifests import upstream_manifest_findings
+
+    upstream_manifest_findings(
+        diff_text, tree_manifest, cdelta, add, config or {}, package_name
+    )
     _build_findings(diff_text, config or {}, add, current_text=current_text,
                     ctx=ctx)
     from .persistence_engine import run_persistence_instances

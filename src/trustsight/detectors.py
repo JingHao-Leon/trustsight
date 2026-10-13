@@ -39,6 +39,7 @@ SERIES_MECHANISM: dict[str, str] = {
     "I": "external indicator membership",
     "M": "predicate over other findings",
     "A": "built-artifact inspection",
+    "U": "committed-manifest parse",
     "P": "declared-practice record",
     "W": "analysis-boundary report",
 }
@@ -57,6 +58,7 @@ SERIES_EVIDENCE: dict[str, str] = {
     "I": "signed indicator baselines",
     "M": "the finding set",
     "A": "the built-package manifest",
+    "U": "committed manifest files",
     "P": "recipe declarations",
     "W": "coverage-gap records",
 }
@@ -77,6 +79,7 @@ SERIES_DEPENDENCIES: dict[str, frozenset[str]] = {
     "I": frozenset({"ioc_baseline"}),
     "M": frozenset({"finding_set"}),
     "A": frozenset({"artifact_manifest"}),
+    "U": frozenset({"manifests", "tree_walk", "diffdoc"}),
     "P": frozenset({"recipedoc", "diffdoc"}),
     "W": frozenset({"coverage"}),
 }

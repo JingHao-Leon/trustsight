@@ -127,6 +127,7 @@ Rules = [
   {Correlation = "reference/rules/correlation.md"},
   {Artifact = "reference/rules/artifact.md"},
   {Indicators = "reference/rules/indicator.md"},
+  {"Upstream Manifests" = "reference/rules/upstream-manifests.md"},
 ]
 
 [[project.nav]]
