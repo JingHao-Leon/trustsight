@@ -8,6 +8,8 @@ import urllib.parse
 import urllib.request
 from typing import Optional
 
+from .subproc import minimal_env
+
 AUR_RPC_BASE = "https://aur.archlinux.org/rpc"
 log = logging.getLogger(__name__)
 
@@ -129,7 +131,7 @@ def _vercmp(v1: str, v2: str) -> int:
     try:
         result = subprocess.run(
             ["vercmp", v1, v2], capture_output=True, text=True, check=False,
-            timeout=30,
+            timeout=30, env=minimal_env(),
         )
         return int(result.stdout.strip())
     except FileNotFoundError:
@@ -144,7 +146,7 @@ def _run_pacman(args: list[str]) -> subprocess.CompletedProcess:
     FileNotFoundError when pacman is not on PATH (containers, non-Arch)."""
     try:
         return subprocess.run(args, capture_output=True, text=True, check=False,
-                              timeout=30)
+                              timeout=30, env=minimal_env())
     except FileNotFoundError:
         raise RuntimeError(
             f"{args[0]} is required but was not found on PATH; install "

@@ -308,36 +308,35 @@ _ESCALATED_GROWTH = 8.0
 def is_superlinear(compiled: re.Pattern) -> bool:
     """Whether *compiled* costs more than linearly in its input length.
 
-    A ratio over budget is re-measured once. Scheduler contention inflates a
-    timing and never deflates one, so a linear pattern measured beside a busy
-    test suite can produce a single inflated ratio while a genuinely
-    quadratic pattern stays over budget on every measurement. Without the
-    second reading the linter reported a clean ruleset as unlinted depending
-    on what else was running.
+    The flakiness this replaced lived entirely in `_growth`, not here: a
+    fast linear matcher's short probe is tens of microseconds, so a single
+    contended long reading just over the floor divided by it produced a
+    spurious ratio of 6 to 27 and the shipped-pattern audit refused a linear
+    pattern as quadratic.  Flooring the ratio's divisor (see
+    :data:`_GROWTH_FLOOR_S`) bounds that quotient by ``long_med / floor``, so
+    the noisy reading is no longer amplified into a verdict and the decision
+    can stay a single clean measurement.
+
+    Re-measuring and taking the minimum, the obvious alternative, is unsafe
+    in the other direction: contention inflates the *short* probe as readily
+    as the long one, and a retry whose short reading spiked drops a genuine
+    quadratic's ratio below the threshold, so the min hides a real pattern.
 
     A *borderline* ratio escalates to a four-times longer baseline instead
-    of being trusted. On a fast CPU the fixed match overhead dilutes the
-    ratio: four times the input measures at least four times the time even
-    for a purely linear pattern, so a quadratic one whose asymptotic 16x is
-    diluted toward 4 lands in the same band as an honest linear pattern,
-    and the longer baseline reduces the dilution sixteenfold.
-
-    The escalated decision re-measures the ratio, and only the smaller of
-    two readings counts. The absolute cost is deliberately not a refusal
-    there: under load a genuinely linear shipped pattern (ratio near 4 at
-    both lengths) crossed the budget at the longer length while the
-    quadratic matcher stayed above 13 on every reading, so cost alone
-    failed the shipped-pattern audit. The ratio kept the two apart.
+    of being trusted.  There is no separate "immediate refuse" band above it:
+    the same escalation decides every suspicious reading.  A single 4096-char
+    ratio is what a starved scheduler inflates - a linear matcher's long
+    probe can spike above ten while short stays near the floor - and refusing
+    on that one reading is exactly the flake.  At four times the length the
+    two hypotheses separate cleanly (the quadratics measure ~15, a fast
+    linear matcher ~2), so the escalated ratio is the only one trusted.  It
+    costs seconds for a genuinely quadratic pattern, which is rare and is
+    being refused anyway.
     """
     ratio = growth_ratio(compiled)
     if ratio <= _BORDERLINE_GROWTH:
         return False
-    if ratio > SUPERLINEAR_GROWTH:
-        return min(ratio, growth_ratio(compiled)) > SUPERLINEAR_GROWTH
-    longer = LONG_PROBE_LEN * 4
-    if _growth(compiled, longer)[0] <= _ESCALATED_GROWTH:
-        return False
-    return _growth(compiled, longer)[0] > _ESCALATED_GROWTH
+    return _growth(compiled, LONG_PROBE_LEN * 4)[0] > _ESCALATED_GROWTH
 
 
 def has_nested_quantifier(pattern: str) -> bool:
@@ -352,24 +351,31 @@ def has_nested_quantifier(pattern: str) -> bool:
     return False
 
 
-#: A pattern whose cost grows faster than this multiple of its input is
-#: superlinear. Four times the input costs four times the time when a
-#: pattern is linear, and about sixteen when it is quadratic, so ten
-#: separates the two with room for a noisy machine.
-SUPERLINEAR_GROWTH = 10.0
-
-#: Below this, a measurement is noise rather than signal and the growth
-#: check is skipped. A pattern too fast to measure is fast enough.
+#: Below this, a measurement is noise rather than signal.  It floors the long
+#: median (a pattern too fast to measure is fast enough) and caps the divisor
+#: of the growth ratio, so a contended reading cannot be divided by a
+#: microsecond-scale short probe into a spurious quadratic verdict.
 _GROWTH_FLOOR_S = 0.001
 
 
 def _time_search(compiled: re.Pattern, text: str) -> float:
-    start = time.perf_counter()
+    """CPU seconds for one search.
+
+    `time.process_time` measures time the process actually ran, not wall
+    time.  A regex costs CPU, never I/O, so the only thing wall time adds is
+    the scheduler's opinion: on a machine building the package beside a
+    5,700-test suite a wall-clock reading is inflated by every deschedule,
+    which is what made the shipped-pattern audit fail intermittently on a
+    linear pattern and pass on the next identical run.  Process CPU time is
+    immune to being starved of the CPU and to background load; only genuine
+    work moves it.
+    """
+    start = time.process_time()
     try:
         compiled.search(text)
     except (RecursionError, MemoryError):
         return BACKTRACK_BUDGET_S * 100
-    return time.perf_counter() - start
+    return time.process_time() - start
 
 
 def _growth(compiled: re.Pattern,
@@ -397,7 +403,17 @@ def _growth(compiled: re.Pattern,
         worst_long = max(worst_long, long_med)
         if long_med < _GROWTH_FLOOR_S:
             continue
-        worst_ratio = max(worst_ratio, long_med / max(short_med, 1e-9))
+        # The numerator is floored, so only a pattern genuinely slower than
+        # the floor at the long length can clear the threshold; the divisor
+        # is floored too, which bounds any ratio by `long_med / floor`.  That
+        # is what removes the flake: a fast linear matcher's short probe is
+        # tens of microseconds, and a single contended long reading just over
+        # the floor divided by it produced a spurious ratio of 6 to 27, which
+        # the shipped-pattern audit then refused as quadratic.  Flooring the
+        # *short median itself* and skipping when it is below is wrong - it
+        # hides a genuine quadratic whose short probe sits at the floor (the
+        # `(-?\\d+,)+;` matcher measures ~1 ms there).
+        worst_ratio = max(worst_ratio, long_med / max(short_med, _GROWTH_FLOOR_S))
     return worst_ratio, worst_long
 
 
@@ -423,16 +439,19 @@ def backtracking_risk(compiled: re.Pattern) -> float:
 
     Probes are the fixed set plus a set derived from the pattern, because
     a probe drawn from the wrong alphabet reports zero rather than safe.
+    Measured as process CPU time, not wall time: a match costs CPU and never
+    I/O, so wall time only adds the scheduler's opinion, and a pattern on a
+    loaded machine then reads as over budget when it is not.
     """
     worst = 0.0
     probes = BACKTRACK_PROBES + derived_probes(compiled.pattern)
     for probe in probes:
-        start = time.perf_counter()
+        start = time.process_time()
         try:
             compiled.search(probe)
         except (RecursionError, MemoryError):
             return BACKTRACK_BUDGET_S * 100
-        elapsed = time.perf_counter() - start
+        elapsed = time.process_time() - start
         worst = max(worst, elapsed)
         # A pattern already over budget needs no further probing, and the
         # remaining probes on a catastrophic pattern are the expensive part.

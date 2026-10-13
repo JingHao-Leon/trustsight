@@ -25,13 +25,16 @@ import os
 import queue
 import select
 import signal
-import subprocess
-import sys
 import threading
 import time
-from pathlib import Path
 
 from . import protocol
+from ._spawn import launch_args, spawn_isolated
+from ..subproc import minimal_env
+
+#: The worker module the client launches; ``_spawn`` imports and calls its
+#: ``main``.
+_WORKER_MODULE = "trustsight.sandbox.expand_worker"
 
 _log = logging.getLogger(__name__)
 
@@ -57,8 +60,6 @@ CPU_RETIRE_SECONDS = 3.5
 #: source constant` gate can hold it.
 WORKER_POOL_SIZE = 4
 
-_WORKER_PATH = Path(__file__).with_name("expand_worker.py")
-
 
 class TokenizerUnavailable(RuntimeError):
     """The sandboxed tokenizer could not answer for this input.
@@ -81,24 +82,7 @@ class _Worker:
         self._stderr_thread = None
 
     def start(self) -> None:
-        self.proc = subprocess.Popen(
-            # ``-s`` drops the user site directory, so a user ``.pth`` or
-            # ``sitecustomize`` cannot run inside the sandbox.  ``-I`` is
-            # deliberately not used: it would also ignore the PYTHONPATH
-            # that lets a dev checkout's child import the same tree.
-            [sys.executable, "-s", str(_WORKER_PATH)],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            # Piped, not discarded: the child reports whether the best-effort
-            # hardening (no_new_privs, network namespace) took effect.  A
-            # daemon thread drains it so a chatty child cannot block on a
-            # full pipe.
-            stderr=subprocess.PIPE,
-            close_fds=True,
-            start_new_session=True,
-            cwd="/",
-            env=_child_env(),
-        )
+        self.proc = spawn_isolated(_WORKER_MODULE)
         self.requests = 0
         self._stderr_thread = threading.Thread(
             target=self._drain_stderr, daemon=True
@@ -196,20 +180,34 @@ def _read_with_deadline(fh, n: int, deadline: float) -> bytes:
     return bytes(out)
 
 
-def _child_env() -> dict:
-    """A minimal environment that still finds this package.
+def _launch_args() -> list[str]:
+    """The child command line: isolated interpreter, trusted root inserted.
 
-    The source root is added to ``PYTHONPATH`` so a dev checkout's child
-    imports the same tree; an installed package needs no ``PYTHONPATH`` and
-    ignores the extra entry.
+    ``-I`` is isolated mode: it ignores ``PYTHONPATH`` and every other
+    ``PYTHON*`` variable, drops the user site directory, and does not put the
+    current directory on ``sys.path``.  ``-s`` alone was not enough - it
+    leaves ``PYTHONPATH`` searched at startup, so a writable directory on it
+    let an attacker drop a ``sitecustomize.py`` that Python imports during
+    interpreter startup, *before* the worker applies its limits or its
+    best-effort network drop.
+
+    The launch lives in :mod:`trustsight.sandbox._spawn`, shared with the git
+    worker, so the fix cannot reach only one sandbox.
     """
-    root = str(Path(__file__).resolve().parents[2])
-    env = os.environ.copy()
-    pythonpath = env.get("PYTHONPATH", "")
-    return {
-        "PATH": env.get("PATH", ""),
-        "PYTHONPATH": os.pathsep.join(p for p in (root, pythonpath) if p),
-    }
+    return launch_args(_WORKER_MODULE)
+
+
+def _child_env() -> dict:
+    """A minimal environment with no inherited import path.
+
+    ``PYTHONPATH`` is deliberately not copied.  The worker is launched ``-I``
+    and its import path is set by :func:`_launch_args`, so no environment
+    variable in this process - writable by an attacker, inherited at spawn -
+    can choose what the child imports or executes at startup.  A shared
+    allowlist covers the loader-injection variables too (``LD_PRELOAD`` and
+    friends); the child needs none of them.
+    """
+    return minimal_env()
 
 
 # --- pool -------------------------------------------------------------------

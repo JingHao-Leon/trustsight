@@ -212,6 +212,17 @@ def _review_with_bracketed_value(tmp_path, monkeypatch, argv, **patches):
     with contextlib.ExitStack() as stack:
         stack.enter_context(patch("trustsight.cli.review.HAS_RICH", True))
         stack.enter_context(patch("trustsight.cli.review.console", lambda: con))
+        # A review with no cached AUR snapshot downloads one; these tests are
+        # about Rich markup escaping, so stub the metadata fetch so it never
+        # touches the network (the suite is offline).
+        stack.enter_context(patch(
+            "trustsight.full_aur.metadata.fetch_metadata",
+            lambda *a, **k: {},
+        ))
+        stack.enter_context(patch(
+            "trustsight.full_aur.metadata.save_metadata",
+            lambda *a, **k: None,
+        ))
         for target, value in patches.items():
             stack.enter_context(patch(target, value))
         result = CliRunner().invoke(app, argv)

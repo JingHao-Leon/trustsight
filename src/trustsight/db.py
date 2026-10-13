@@ -18,6 +18,7 @@ from typing import Optional
 from .bounded_io import read_capped, read_file_capped
 from .config import DATA_DIR
 from .rule_id_history import RENAMED_RULE_IDS
+from .subproc import minimal_env
 
 log = logging.getLogger(__name__)
 
@@ -978,7 +979,7 @@ def official_package_names() -> frozenset:
                 try:
                     result = subprocess.run(
                         ["pacman", "-Slq"], capture_output=True, text=True,
-                        check=False, timeout=30,
+                        check=False, timeout=30, env=minimal_env(),
                     )
                     _official_names = frozenset(
                         line.strip().lower()

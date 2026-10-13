@@ -7,6 +7,7 @@ from ..buckets import PINNING_ORDER, classify_pinning_level
 from ..config import ensure_default_configs
 from ..db import dependency_observation_counts, init_db
 from ..differ import _has_checksum_in_post_diff
+from ..subproc import minimal_env
 
 log = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ def _get_installed_version(pkg_name: str) -> str:
         # with "-" would otherwise be read by pacman as a flag.
         result = subprocess.run(
             ["pacman", "-Q", "--", pkg_name],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, env=minimal_env(),
         )
         if result.returncode == 0 and result.stdout:
             parts = result.stdout.strip().split()

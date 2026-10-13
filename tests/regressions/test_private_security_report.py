@@ -231,8 +231,14 @@ def test_isolation_helpers_report_a_bool():
 
 
 def test_worker_spawn_disables_user_site(monkeypatch):
-    """The worker must not run a user .pth or sitecustomize."""
-    from trustsight.sandbox import client as client_mod
+    """The worker must not run a user .pth, sitecustomize, or PYTHONPATH code.
+
+    ``-s`` alone is not enough: it drops the user site directory but leaves
+    ``PYTHONPATH`` searched at startup, so a ``sitecustomize.py`` on it ran
+    before the worker's limits.  The launch is isolated (``-I``) and the
+    environment carries no ``PYTHON*`` variable.
+    """
+    from trustsight.sandbox import _spawn, client as client_mod
 
     captured = {}
 
@@ -245,14 +251,16 @@ def test_worker_spawn_disables_user_site(monkeypatch):
 
     def fake_popen(argv, **kwargs):
         captured["argv"] = argv
+        captured["env"] = kwargs.get("env", {})
         return FakeProc()
 
-    monkeypatch.setattr(client_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(_spawn.subprocess, "Popen", fake_popen)
     worker = client_mod._Worker()
     worker.start()
     try:
-        assert "-s" in captured["argv"]
-        assert "-I" not in captured["argv"]
+        assert "-I" in captured["argv"]
+        assert "-s" not in captured["argv"]
+        assert not any(k.startswith("PYTHON") for k in captured["env"])
     finally:
         worker.proc = None
 

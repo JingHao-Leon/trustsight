@@ -123,9 +123,41 @@ _NETWORK_MODULES = {
     "full_aur/metadata.py",
     "notify.py",
     "release.py",
+    # The isolated git worker clones the AUR repository (A16).
+    "sandbox/git_worker.py",
 }
 
 _NETWORK_CALLS = ("urlopen", "urlretrieve", "clone_repository", "create_connection")
+
+
+def gate_every_child_process_gets_an_explicit_environment() -> Gate:
+    """A child process must not inherit the parent's environment.
+
+    Process-startup variables turn "run a child" into "run attacker code":
+    ``PYTHONPATH`` makes ``site`` import ``sitecustomize`` at interpreter
+    startup (the tokenizer-worker finding), and ``LD_PRELOAD`` /
+    ``LD_LIBRARY_PATH`` map an attacker's library into any child, interpreter
+    or not (``PERL5LIB``, ``RUBYOPT``, ``BASH_ENV``, ``NODE_OPTIONS`` are the
+    per-runtime equivalents).  Every ``subprocess`` call in ``src/`` must pass
+    an explicit ``env=`` - in practice ``trustsight.subproc.minimal_env()``.
+    """
+    calls = {
+        "subprocess.run", "subprocess.call", "subprocess.check_call",
+        "subprocess.check_output", "subprocess.Popen",
+    }
+    hits: list[str] = []
+    for path in _python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = _call_name(node)
+            if name not in calls:
+                continue
+            if not any(kw.arg == "env" for kw in node.keywords):
+                hits.append(f"{_rel(path)}:{node.lineno} {name} without env=")
+    return Gate("every child process gets an explicit environment", not hits,
+                hits)
 
 
 def gate_network_is_confined() -> Gate:
@@ -811,6 +843,28 @@ def gate_tokenizer_module_is_isolated() -> Gate:
                     problems.append(f"{_rel(path)}:{node.lineno}")
     return Gate("tokenizer module is isolated", not problems,
                 problems or "engine imported only by the worker")
+
+
+def gate_tokenizer_worker_startup_is_isolated() -> Gate:
+    """A6: the worker's own startup cannot import an attacker's code.
+
+    ``-s`` drops the user site directory but leaves ``PYTHONPATH`` searched,
+    so a writable directory on it let a ``sitecustomize.py`` run before the
+    worker applied its limits.  The worker must be launched ``-I`` (isolated)
+    with no ``PYTHON*`` variables in its environment.
+    """
+    from trustsight.sandbox import client
+
+    problems: list[str] = []
+    args = client._launch_args()
+    if "-I" not in args:
+        problems.append("worker is not launched isolated (-I)")
+    env = client._child_env()
+    leaked = sorted(k for k in env if k.startswith("PYTHON"))
+    if leaked:
+        problems.append(f"worker environment carries PYTHON* vars: {leaked}")
+    return Gate("tokenizer worker startup is isolated", not problems,
+                problems or "isolated (-I), no PYTHON* env")
 
 
 def gate_tokenizer_pool_wait_is_bounded() -> Gate:
@@ -3747,9 +3801,208 @@ def gate_layer_profile_is_gap_precise_and_additive() -> Gate:
                 not problems, problems)
 
 
+def gate_manifest_parses_are_bounded_and_refusing() -> Gate:
+    """Every manifest parser is bounded on hostile input and refuses.
+
+    Bombed TOML, an oversized line-class file and unbalanced JSON must each
+    return quickly with either dependencies or a named refusal, never raise
+    and never hang (A4b/A5 extended).  The syntax layer is probed directly
+    too: a YAML alias bomb, a self-referential anchor, an XML entity bomb and
+    an oversized document must be refused or walked bounded, never loaded.
+    """
+    from trustsight.analysis.manifest_syntax import (
+        MAX_MANIFEST_BYTES,
+        ManifestSyntaxError,
+        deep_items,
+        load_json,
+        load_toml,
+        load_xml,
+        load_yaml,
+    )
+    from trustsight.analysis.manifests import parse_manifest
+
+    fixtures = {
+        "Cargo.toml": "[dependencies\nbroken = ",
+        "requirements.txt": "x==1\n" * 200000,
+        "package.json": "{" * 100000,
+        "go.mod": "require (\n" + "a b v1.0.0\n" * 100000,
+        "environment.yml": "dependencies:\n" + "  - x\n" * 100000,
+        "pylock.toml": "[[packages]]\n" + "name = \"x\"\n" * 100000,
+    }
+    hits: list[str] = []
+    for path, text in fixtures.items():
+        start = time.monotonic()
+        doc = parse_manifest(path, text)
+        elapsed = time.monotonic() - start
+        if elapsed > 5.0:
+            hits.append(f"{path}: parse took {elapsed:.1f}s")
+        if doc is None:
+            hits.append(f"{path}: not recognised")
+        elif not doc.unresolved and not doc.dependencies:
+            hits.append(f"{path}: neither parsed nor refused")
+
+    bomb_yaml = ["a0: &a0 [1, 2, 3]"]
+    for i in range(1, 40):
+        bomb_yaml.append(f"a{i}: &a{i} [*a{i-1}, *a{i-1}, *a{i-1}, *a{i-1}]")
+    start = time.monotonic()
+    try:
+        walk = list(deep_items(load_yaml("\n".join(bomb_yaml) + "\n")))
+        assert walk
+    except ManifestSyntaxError:
+        pass
+    if time.monotonic() - start > 2.0:
+        hits.append("yaml alias bomb was not bounded")
+
+    start = time.monotonic()
+    try:
+        list(deep_items(load_yaml("a: &x\n  b: *x\n")))
+    except ManifestSyntaxError:
+        pass
+    if time.monotonic() - start > 2.0:
+        hits.append("yaml anchor cycle was not bounded")
+
+    xml_bomb = ('<!DOCTYPE l [<!ENTITY e "x"><!ENTITY e2 "&e;&e;&e;">]><l>&e2;</l>')
+    try:
+        load_xml(xml_bomb)
+        hits.append("xml entity bomb was loaded")
+    except ManifestSyntaxError:
+        pass
+
+    oversized = "x: y\n" * (MAX_MANIFEST_BYTES // 2 + 10)
+    for loader in (load_yaml, load_json, load_toml, load_xml):
+        try:
+            loader(oversized)
+            hits.append(f"{loader.__name__} loaded an oversized document")
+        except ManifestSyntaxError:
+            pass
+
+    if MAX_MANIFEST_BYTES > 512 * 1024:
+        hits.append("MAX_MANIFEST_BYTES exceeds the existing tree cap")
+    return Gate("manifest parses are bounded and refusing", not hits, hits)
+
+
+def gate_manifest_table_is_configuration() -> Gate:
+    """The manifest filename table lives in patterns.toml, not in code."""
+    from trustsight import config as config_module
+    from trustsight.analysis.manifests import manifest_filenames
+
+    hits: list[str] = []
+    default = getattr(config_module, "DEFAULT_MANIFEST_FILENAMES", None)
+    if not default:
+        hits.append("no DEFAULT_MANIFEST_FILENAMES in config")
+    if "manifest_filenames" not in config_module.DEFAULT_PATTERNS:
+        hits.append("manifest_filenames is not written to patterns.toml")
+    if not manifest_filenames():
+        hits.append("manifest_filenames() returns an empty table")
+    return Gate("manifest table is configuration", not hits, hits)
+
+
+def gate_u003_joins_the_host_view() -> Gate:
+    """A manifest-introduced git host joins the run's ``hosts_gained``."""
+    from trustsight.changes import change_delta
+
+    diff = (
+        "--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1,1 +1,2 @@\n"
+        " [dependencies]\n"
+        '+serde = { git = "https://evil.example/serde.git" }\n'
+    )
+    hosts = change_delta(diff).hosts_gained
+    return Gate("U003 joins the host view", "evil.example" in hosts, sorted(hosts))
+
+
+def gate_manifest_ledger_stays_weight_zero() -> Gate:
+    """U001/U002/U005/U006 are INFO (weight 0); only U003/U004 score."""
+    from trustsight.analysis.pipeline import scan_diff
+
+    diff = (
+        "--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1,1 +1,6 @@\n"
+        " [dependencies]\n"
+        '+a = "1"\n+b = "1"\n+c = "1"\n+d = "1"\n'
+        '+evil = { git = "https://evil.example/x.git" }\n'
+    )
+    fact = scan_diff(diff, package_name="p")
+    severity = {}
+    for entry in fact.score_breakdown:
+        severity.setdefault(entry.rule_id, entry.severity)
+    hits: list[str] = []
+    for rule_id in ("U001", "U002", "U005", "U006"):
+        if severity.get(rule_id, "INFO") != "INFO":
+            hits.append(f"{rule_id} is {severity.get(rule_id)}")
+    return Gate("manifest ledger stays weight 0", not hits, hits)
+
+
+def gate_archive_listing_adds_no_extraction() -> Gate:
+    """The manifest layer reads committed files; it never extracts archives."""
+    src = (ROOT / "src" / "trustsight" / "analysis" / "manifests.py").read_text(
+        encoding="utf-8")
+    hits = [tok for tok in ("tarfile", "extractfile", "extractall", "zipfile")
+            if re.search(rf"\b{tok}\b", src)]
+    return Gate("archive listing adds no extraction", not hits, hits)
+
+
+def gate_yaml_is_only_safe_load() -> Gate:
+    """PyYAML parses package-controlled bytes, so the loader is pinned safe.
+
+    `yaml.load` with a non-safe loader can construct arbitrary Python objects
+    from a manifest an attacker wrote.  Only `yaml.safe_load` is permitted
+    anywhere under ``src/``; the check is structural so a new parser cannot
+    reintroduce the unsafe call.
+    """
+    hits: list[str] = []
+    offenders = ("yaml.load(", "yaml.full_load(", "yaml.unsafe_load(",
+                 "yaml.load_all(", "yaml.full_load_all(", "yaml.unsafe_load_all(",
+                 "Loader=", "UnsafeLoader", "FullLoader")
+    for path in _python_files():
+        if path.name == "security_gates.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for token in offenders:
+            if token in text:
+                hits.append(f"{_rel(path)} {token}")
+    return Gate("yaml is only ever safe_load", not hits, hits)
+
+
+def gate_libgit2_is_not_the_vulnerable_version() -> Gate:
+    """The bundled libgit2 must carry the 1.9.5 / 1.8.6 fix.
+
+    libgit2 before 1.8.6 / 1.9.5 trusts a sender-controlled delta result
+    size in ``git_delta_apply`` and allocates it before reading any delta
+    instruction, so a sub-kilobyte pack can allocate gigabytes while cloning
+    or fetching a malicious repository (GHSA-27m5-gxxh-x79j /
+    CVE-2026-53585; the same 1.9.5 release fixes CVE-2026-53583..53587).
+    TrustSight clones AUR repositories with pygit2, and transfer-byte caps
+    do not bound an in-process allocation, so the pinned dependency must
+    bundle a patched libgit2.  This reads the version libgit2 actually
+    reports at runtime, not the declared pin.
+    """
+    name = "libgit2 is not the vulnerable version"
+    try:
+        import pygit2
+    except Exception as exc:  # noqa: BLE001 - a missing dep is the failure
+        return Gate(name, False, f"pygit2 not importable: {exc}", ">= 1.9.5")
+    raw = str(getattr(pygit2, "LIBGIT2_VERSION", "") or "")
+    parts: list[int] = []
+    for token in raw.split("."):
+        digits = ""
+        for ch in token:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        parts.append(int(digits) if digits else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    major, minor, patch = parts[0], parts[1], parts[2]
+    patched = ((major, minor, patch) >= (1, 10, 0)
+               or (major == 1 and minor == 9 and patch >= 5)
+               or (major == 1 and minor == 8 and patch >= 6))
+    return Gate(name, patched, raw, ">= 1.9.5 (or >= 1.8.6)")
+
+
 def run_gates() -> list[Gate]:
     gates = [
         gate_no_interpreter_calls(),
+        gate_every_child_process_gets_an_explicit_environment(),
         gate_network_is_confined(),
         gate_single_network_host(),
         gate_network_reads_are_bounded(),
@@ -3772,6 +4025,7 @@ def run_gates() -> list[Gate]:
         gate_untrusted_text_is_sanitised_where_it_is_rendered(),
         gate_tokenizer_smoke_is_deterministic(),
         gate_tokenizer_module_is_isolated(),
+        gate_tokenizer_worker_startup_is_isolated(),
         gate_tokenizer_pool_wait_is_bounded(),
         gate_dead_tokenizer_child_fails_the_package(),
         gate_release_artifacts_share_commit(),
@@ -3839,6 +4093,13 @@ def run_gates() -> list[Gate]:
     gates.append(gate_boundaries_forbid_clean_exactly_when_gaps())
     gates.append(gate_indicator_tier_mirrors_ioc_matches())
     gates.append(gate_layer_profile_is_gap_precise_and_additive())
+    gates.append(gate_manifest_parses_are_bounded_and_refusing())
+    gates.append(gate_manifest_table_is_configuration())
+    gates.append(gate_u003_joins_the_host_view())
+    gates.append(gate_manifest_ledger_stays_weight_zero())
+    gates.append(gate_archive_listing_adds_no_extraction())
+    gates.append(gate_yaml_is_only_safe_load())
+    gates.append(gate_libgit2_is_not_the_vulnerable_version())
     gates.append(gate_doc_lists_every_gate(gates))
     return gates
 
