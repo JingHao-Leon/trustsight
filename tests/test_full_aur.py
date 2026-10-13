@@ -475,6 +475,30 @@ def test_the_feed_is_recorded_before_the_snapshot_advances(monkeypatch):
     assert order == ["feed", "snapshot"]
 
 
+def test_context_cluster_rules_do_not_alert(monkeypatch):
+    """H057/H060/H061 are weight-0 corpus context: only scoring cluster rules
+    reach record_alerts.  A sweep that returns only H061 hubs must not
+    manufacture hundreds of "new alert(s)" (226 in one observed cycle)."""
+    import trustsight.full_aur.pipeline as pipeline
+
+    _stub_cycle(monkeypatch, pipeline, {"demo": 5})
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(pipeline, "record_alerts",
+                        lambda pairs: seen.extend(pairs) or [])
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: [
+        {"rule_id": "H061", "severity": "INFO", "name": "Dependency Centrality",
+         "match": "sdl2 hub", "params": {"members": ["sdl2"]}},
+        {"rule_id": "H046", "severity": "MEDIUM",
+         "name": "Orphan/Adoption Dependency", "match": "x",
+         "params": {"members": ["dep-pkg"]}},
+    ])
+
+    pipeline.run_baseline_build()
+
+    assert ("dep-pkg", "H046") in seen
+    assert ("sdl2", "H061") not in seen
+
+
 # --- --since backfill ---
 
 _DAY = 86400

@@ -81,6 +81,13 @@ _SINCE_ORIGIN_KEY = "since_origin"
 # and an unbounded list would bury the cluster findings under it.
 _FLAGGED_REPORT_LIMIT = 10
 
+# Cluster rules that describe the corpus for prioritisation and must not
+# alert: H057 (a transitive orphan), H060 (a live orphan in the closure) and
+# H061 (a centrality hub) are weight-0 context, and a sweep emits hundreds of
+# H061 hubs at once.  Passing them to record_alerts made a routine sweep read
+# as "226 campaign cluster(s) ... 226 new alert(s)".
+_NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061"})
+
 
 def _since_cursor() -> Optional[int]:
     """The active backfill cursor (unix seconds), or None when not replaying."""
@@ -806,18 +813,26 @@ def _run_baseline_build(
     clear_resume_state()
     result.cluster_findings = cluster_findings
     result.processed = len(processed)
-    # What this cycle analysed, worst first.  Cluster findings describe the
-    # corpus; these are the individual packages a watcher would otherwise
-    # have to go looking for in `trustsight list`.  Both lists were computed
-    # above the partial-cycle return, so this path only reads them.
+    # A context rule describes the corpus for prioritisation and must not
+    # alert.  H057/H060/H061 are weight 0; feeding them to record_alerts
+    # turned a routine sweep into hundreds of "new alert(s)" - 226 H061
+    # centrality hubs in one cycle.  What this cycle analysed, worst first:
+    # the individual packages a watcher would otherwise have to go looking
+    # for in `trustsight list`.  Both lists were computed above the
+    # partial-cycle return, so this path only reads them.
+    alerting = [
+        finding for finding in cluster_findings
+        if finding["rule_id"] not in _NON_ALERTING_CLUSTER_RULES
+    ]
     result.new_alerts = record_alerts([
         (member, finding["rule_id"])
-        for finding in cluster_findings
+        for finding in alerting
         for member in finding["params"]["members"]
     ])
     if cluster_findings:
-        _log(f"Corpus sweep: {len(cluster_findings)} cluster finding(s)")
-        for finding in cluster_findings:
+        _log(f"Corpus sweep: {len(cluster_findings)} cluster finding(s), "
+             f"{len(alerting)} alerting")
+        for finding in alerting:
             _log(
                 f"  {finding['rule_id']} ({finding['severity']}) "
                 f"{finding['name']}: {finding['match']}"
