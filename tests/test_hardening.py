@@ -522,10 +522,10 @@ def test_generator_truncation_is_returned_not_inferred():
     """
     import inspect
 
-    from trustsight import differ
     from trustsight.analysis import pipeline
+    from trustsight.sandbox import git_project
 
-    source = inspect.getsource(differ.generate_diff_bounded)
+    source = inspect.getsource(git_project.generate_diff_bounded)
     assert "truncated = True" in source
     assert source.rstrip().endswith("return unified, summary, truncated")
 

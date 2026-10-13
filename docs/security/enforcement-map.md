@@ -96,6 +96,7 @@ python scripts/security_gates.py
 | `every input bound is a source constant` | A14 | bound constants are module-level literals |
 | `every result render ends with a direction to review` | B9 | `verdict.DIRECTIONS`, structural |
 | `no git filters or hooks are configured` | A3 | clone configuration |
+| `libgit2 stays behind the git sandbox` | A16 | only `sandbox/git_project.py`, `sandbox/git_worker.py` and the not-yet-cutover modules import `pygit2`; the list is a ratchet |
 | `docs/security.md matches the gates` | this page | the table above |
 | `CI installs from the lock` | the CI assumption | `uv sync --locked` in every workflow, `uv.lock` |
 | `critical paths are synchronised` | `CODEOWNERS`, signature workflow and contributor policy | canonical `scripts/critical_paths.py` |

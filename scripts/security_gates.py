@@ -2911,6 +2911,38 @@ def gate_every_render_reports_the_same_information() -> Gate:
                 problems or sorted(renders))
 
 
+#: Modules permitted to import libgit2.  This is a ratchet: it shrinks as the
+#: git cutover proceeds and must never grow.
+_GIT_ALLOWED_IMPORTS = frozenset({
+    "sandbox/git_project.py",
+    "sandbox/git_worker.py",
+    "analysis/pipeline.py",
+    "analysis/temporal.py",
+    "fetcher.py",
+})
+
+
+def gate_libgit2_stays_behind_the_sandbox() -> Gate:
+    """A16: only the git sandbox operates libgit2.
+
+    The parent reaches every git operation through the isolated worker; the
+    modules here are the ones the cutover has not yet emptied.  The list is a
+    ratchet - a new importer is a regression, and removing one is the point.
+    """
+    hits: list[str] = []
+    for path in _python_files():
+        rel = path.relative_to(SRC).as_posix()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                if any(a.name == "pygit2" for a in node.names) \
+                        and rel not in _GIT_ALLOWED_IMPORTS:
+                    hits.append(f"{rel}:{node.lineno}")
+            elif isinstance(node, ast.ImportFrom) and node.module == "pygit2" \
+                    and rel not in _GIT_ALLOWED_IMPORTS:
+                hits.append(f"{rel}:{node.lineno}")
+    return Gate("libgit2 stays behind the git sandbox", not hits, hits)
+
+
 def gate_generated_diff_is_bounded_before_assembly() -> Gate:
     """A4: the diff generator bounds what it allocates, not what it keeps.
 
@@ -2928,14 +2960,14 @@ def gate_generated_diff_is_bounded_before_assembly() -> Gate:
     """
     import inspect
 
-    from trustsight import differ
     from trustsight.analysis import pipeline
+    from trustsight.sandbox import git_project
 
     problems = []
 
     # The bounded form must return the flag.
-    signature = inspect.signature(differ.generate_diff_bounded)
-    source = inspect.getsource(differ.generate_diff_bounded)
+    signature = inspect.signature(git_project.generate_diff_bounded)
+    source = inspect.getsource(git_project.generate_diff_bounded)
     if "-> tuple[str, DiffSummary, bool]" not in str(signature.return_annotation) + source:
         problems.append("generate_diff_bounded does not declare a truncation flag")
     for name in ("MAX_DIFF_PATCHES", "MAX_PATCH_BYTES", "MAX_DIFF_SUMMARY_FILES"):
@@ -2971,7 +3003,7 @@ def gate_generated_diff_is_bounded_before_assembly() -> Gate:
             touched.append(True)
             raise AssertionError("patch text read before the size check")
 
-    huge = differ.MAX_PATCH_SOURCE_BYTES * 4
+    huge = git_project.MAX_PATCH_SOURCE_BYTES * 4
 
     class _Diff:
         deltas = [_Delta(huge)]
@@ -2988,7 +3020,7 @@ def gate_generated_diff_is_bounded_before_assembly() -> Gate:
             return _Diff()
 
     try:
-        _text, _summary, flag = differ.generate_diff_bounded(_Repo(), "a", "b")
+        _text, _summary, flag = git_project.generate_diff_bounded(_Repo(), "a", "b")
     except AssertionError:
         problems.append("an oversized delta had its text requested")
     else:
@@ -3022,9 +3054,10 @@ def gate_companion_reads_are_bounded_before_data() -> Gate:
     import inspect
 
     from trustsight import differ
+    from trustsight.sandbox import git_project
 
     problems = []
-    source = inspect.getsource(differ.companion_source_hunks)
+    source = inspect.getsource(git_project.companion_source_hunks)
     for name in ("MAX_PKG_BUILD_BYTES",):
         if name not in source:
             problems.append(f"{name} is not enforced in companion_source_hunks")
@@ -4058,6 +4091,7 @@ def run_gates() -> list[Gate]:
         gate_every_input_bound_is_a_source_constant(),
         gate_every_render_ends_with_a_direction(),
         gate_no_git_filters_or_hooks(),
+        gate_libgit2_stays_behind_the_sandbox(),
         gate_no_template_grants_permission(),
         gate_content_findings_carry_a_location(),
         gate_flag_threshold_is_derived(),

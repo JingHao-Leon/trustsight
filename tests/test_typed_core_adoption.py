@@ -35,6 +35,8 @@ PINNED_LOOPS = {
     # Hostile-input parsers over a manifest's own committed bytes (payload
     # text), not a diff walk; the diff is read through DiffDoc elsewhere.
     "analysis/manifests.py": 13,
+    # Reads a committed companion file's payload text, not a diff.
+    "sandbox/git_project.py": 1,
 }
 
 

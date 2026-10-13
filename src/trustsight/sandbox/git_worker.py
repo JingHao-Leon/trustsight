@@ -319,7 +319,7 @@ def _diff(payload: dict) -> dict:
     result and the isolated one cannot drift: the same code builds the patch
     text, applies the same caps, and selects the same files.
     """
-    from trustsight.differ import generate_diff_bounded
+    from trustsight.sandbox.git_project import generate_diff_bounded
 
     old = _require_oid(payload.get("old"), "commit id")
     new = _require_oid(payload.get("new"), "commit id")
@@ -407,7 +407,7 @@ def _tree_files(payload: dict) -> dict:
 
 
 def _companion_hunks(payload: dict) -> dict:
-    from trustsight.differ import companion_source_hunks
+    from trustsight.sandbox.git_project import companion_source_hunks
 
     oid = _require_oid(payload.get("oid"), "commit id")
     repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
@@ -420,7 +420,7 @@ def _companion_hunks(payload: dict) -> dict:
 
 
 def _opaque_changed(payload: dict) -> dict:
-    from trustsight.differ import changed_opaque_members
+    from trustsight.sandbox.git_project import changed_opaque_members
 
     old = _require_oid(payload.get("old"), "commit id")
     new = _require_oid(payload.get("new"), "commit id")
@@ -429,7 +429,7 @@ def _opaque_changed(payload: dict) -> dict:
 
 
 def _binary_meta(payload: dict) -> dict:
-    from trustsight.differ import binary_metadata_paths
+    from trustsight.sandbox.git_project import binary_metadata_paths
 
     old = _require_oid(payload.get("old"), "commit id")
     new = _require_oid(payload.get("new"), "commit id")

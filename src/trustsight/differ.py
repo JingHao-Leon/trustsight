@@ -3,9 +3,6 @@ import re
 from collections import Counter
 from typing import NamedTuple
 
-import pygit2
-from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_DELTA_RENAMED
-
 from .changes import ChangeDelta, FileDelta, VersionFacts, change_delta  # noqa: F401
 from .coverage import unpinned_source_refs
 from .diffdoc import parse_diff_lines, strip_diff_path_prefix
@@ -97,27 +94,6 @@ def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
     """
     return parse_diff_lines(split_lines(diff_text)).line_map()
 
-_DELTA_STATUS_MAP = {
-    GIT_DELTA_ADDED: "added",
-    GIT_DELTA_DELETED: "removed",
-    GIT_DELTA_MODIFIED: "modified",
-    GIT_DELTA_RENAMED: "renamed",
-}
-
-
-def _delta_side_size(side) -> int:
-    """One side's declared size, or 0 when libgit2 does not report it.
-
-    A missing or nonsensical size is treated as 0 rather than as unbounded:
-    the byte caps downstream still apply, and refusing to read a patch whose
-    size libgit2 declined to state would drop ordinary deltas.
-    """
-    size = getattr(side, "size", 0)
-    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
-        return 0
-    return size
-
-
 def _is_metadata_path(path: str) -> bool:
     """Whether a delta path is one the analysis reads."""
     return (path in ("PKGBUILD", ".SRCINFO")
@@ -133,138 +109,25 @@ def _bounded_path(path: str) -> str:
 
 
 def generate_diff_bounded(
-    repo: pygit2.Repository, old_oid: str, new_oid: str, context_lines: int = 3,
+    repo, old_oid: str, new_oid: str, context_lines: int = 3,
     max_bytes: int | None = None,
 ) -> tuple[str, DiffSummary, bool]:
     """Generate a unified diff, and say whether anything was dropped.
 
-    The third value is the truncation flag, and it is the reason this helper
-    exists rather than the two-value form alone. A caller that re-derives
-    truncation by measuring the returned text cannot see a patch this
-    function *declined to retain*: the assembled text is then at or under the
-    cap, measuring it reports "complete", and content has been skipped with
-    no coverage gap recorded. That is the silent-skip B2 forbids, so the flag
-    travels rather than being inferred.
-
-    Three bounds apply, and each is on what gets *allocated* rather than on
-    what survives:
-
-    * ``MAX_PATCH_BYTES`` - ``patch.text`` materialises a whole patch, so a
-      cap applied afterwards bounds only what is kept. A patch over this
-      limit contributes its bounded prefix and sets truncation.
-    * ``MAX_DIFF_PATCHES`` - the metadata filter accepts every ``.install``
-      file, and a repository may contain any number of them.
-    * ``MAX_DIFF_SUMMARY_FILES`` - the summary walks every delta regardless
-      of the text cap, so a wide repository would otherwise choose the size
-      of a stored ``fact_json``.
-
-    Policy omission is not truncation. Dropping a ``.png`` because the filter
-    does not read it leaves nothing unexamined; dropping a ``.install``
-    because a cap was reached does. Only the second sets the flag.
+    The libgit2 work lives in :mod:`trustsight.sandbox.git_project` (A16); the
+    production path reaches it through a ``GitSession``, and a fixture
+    repository is handled in-process for tests.
     """
-    old_commit = repo.get(old_oid) if old_oid else None
-    new_commit = repo.get(new_oid)
-    if (old_oid and old_commit is None) or new_commit is None:
-        return "", DiffSummary(), False
+    from .sandbox.git_project import generate_diff_bounded as _core
 
-    if max_bytes is None:
-        max_bytes = MAX_GENERATED_DIFF_BYTES
-    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
-        raise ValueError("max_bytes must be a positive integer")
-    max_bytes = min(max_bytes, MAX_GENERATED_DIFF_BYTES)
-
-    if old_commit is None:
-        # No base: the whole recipe, as if every file had just been added.
-        diff = new_commit.tree.diff_to_tree(context_lines=context_lines, swap=True)
-    else:
-        diff = repo.diff(old_commit.tree, new_commit.tree, context_lines=context_lines)
-
-    filtered_patches: list[str] = []
-    generated_bytes = 0
-    truncated = False
-
-    for patch in diff:
-        delta = patch.delta
-        if not (_is_metadata_path(delta.new_file.path)
-                or _is_metadata_path(delta.old_file.path)):
-            continue
-        if len(filtered_patches) >= MAX_DIFF_PATCHES:
-            truncated = True
-            break
-        remaining = max_bytes - generated_bytes
-        if remaining <= 0:
-            truncated = True
-            break
-
-        # Before `patch.text`, not after: that attribute materialises the
-        # whole patch, so every later cap bounds retention rather than
-        # allocation. The delta knows both file sizes already.
-        declared = max(_delta_side_size(delta.old_file),
-                       _delta_side_size(delta.new_file))
-        if declared > MAX_PATCH_SOURCE_BYTES:
-            # Skipped rather than fatal: one oversized `.install` must not
-            # stop the PKGBUILD beside it being read.
-            truncated = True
-            continue
-
-        text = patch.text or ""
-        # One bound, not two: the per-patch ceiling and what the running
-        # total can still accept are both byte limits on the same string, and
-        # truncating twice encodes it twice for no additional safety.
-        text, cut = truncate_diff(text, min(MAX_PATCH_BYTES, remaining))
-        if cut:
-            truncated = True
-        generated_bytes += len(text.encode("utf-8", errors="replace"))
-        filtered_patches.append(text)
-
-    unified = "\n".join(filtered_patches)
-    lines_added = diff.stats.insertions
-    lines_removed = diff.stats.deletions
-
-    seen: set[str] = set()
-    file_changes: list[dict] = []
-    summary_full = False
-    for delta in diff.deltas:
-        if len(seen) >= MAX_DIFF_SUMMARY_FILES:
-            summary_full = True
-            break
-        status = _DELTA_STATUS_MAP.get(delta.status, "modified")
-        path = _bounded_path(
-            delta.new_file.path if delta.status != GIT_DELTA_DELETED
-            else delta.old_file.path
-        )
-        if path in seen:
-            continue
-        seen.add(path)
-        if path not in (".SRCINFO", ".gitignore"):
-            file_changes.append({"path": path, "status": status})
-
-    # A summary cut short hides which files moved, which is content the
-    # reader would otherwise have seen.
-    if summary_full:
-        truncated = True
-
-    file_changes.sort(key=lambda item: (item["path"], item["status"]))
-    summary = DiffSummary(
-        lines_added=lines_added,
-        lines_removed=lines_removed,
-        files_changed=sorted(seen),
-        file_changes=file_changes,
-    )
-
-    return unified, summary, truncated
+    return _core(repo, old_oid, new_oid, context_lines, max_bytes)
 
 
 def generate_diff(
-    repo: pygit2.Repository, old_oid: str, new_oid: str, context_lines: int = 3,
+    repo, old_oid: str, new_oid: str, context_lines: int = 3,
     max_bytes: int | None = None,
 ) -> tuple[str, DiffSummary]:
-    """Two-value form, for callers that do not consume the truncation flag.
-
-    Kept so existing callers and tests are unaffected. New code should use
-    :func:`generate_diff_bounded`, because dropping the flag is exactly how a
-    skipped patch becomes invisible.
-    """
+    """Two-value form, for callers that do not consume the truncation flag."""
     text, summary, _truncated = generate_diff_bounded(
         repo, old_oid, new_oid, context_lines, max_bytes
     )
@@ -1340,130 +1203,29 @@ MAX_STREAM_BYTES = 64 * 1024 * 1024
 
 
 def read_blob_head(blob, limit: int, max_stream_bytes: int = MAX_STREAM_BYTES):
-    """The first *limit* bytes of *blob*, or None if it could not be read.
+    """The first *limit* bytes of *blob* (streaming work in git_project)."""
+    from .sandbox.git_project import read_blob_head as _core
 
-    ``blob.data`` materialises the whole blob, so taking a slice of it
-    bounds what is *kept*, not what is read.  Above a small size the head is
-    streamed instead - and streaming has a trap: ``pygit2.BlobIO`` feeds
-    from a worker thread through a ``Queue(maxsize=1)`` and ``close()``
-    joins that thread, so reading 64 bytes of a 1 MiB blob and closing
-    parks the writer on a full queue forever.  The rest is drained before
-    close, which holds memory at one chunk and costs time linear in the
-    blob - hence the ceiling above it.
-    """
-    size = getattr(blob, "size", 0)
-    if size <= max(limit, 512 * 1024):
-        try:
-            return blob.data[:limit]
-        except (KeyError, TypeError, ValueError):
-            return None
-    if size > max_stream_bytes:
-        return None
-    try:
-        stream = pygit2.BlobIO(blob)
-    except Exception:
-        return None
-    try:
-        head = stream.read(limit)
-        while stream.read(_DRAIN_CHUNK_BYTES):
-            pass
-        return head
-    except Exception:
-        return None
-    finally:
-        try:
-            stream.close()
-        except Exception:
-            pass
-
-
-#: Suffixes whose bytes the text rules never read.  A change to one of
-#: these produces an empty diff: git emits no content for a binary file, so
-#: the *only* observable is the blob's identity.
-_OPAQUE_MEMBER_RE = re.compile(
-    r"\.(?:bin|so(?:\.\d+)*|a|o|ko|dylib|dll|exe|elf|jar|war|apk|whl|gem"
-    r"|tar|tgz|gz|bz2|xz|zst|zip|7z|rar|deb|rpm|pkg|img|iso|db|sqlite3?"
-    r"|png|jpg|jpeg|gif|ico|pdf|woff2?|ttf|otf)$",
-    re.IGNORECASE,
-)
+    return _core(blob, limit, max_stream_bytes)
 
 
 def changed_opaque_members(repo, old_oid: str, new_oid: str) -> list[str]:
-    """Committed files whose bytes changed but whose diff is empty.
+    """Committed files whose bytes changed but whose diff is empty."""
+    from .sandbox.git_project import changed_opaque_members as _core
 
-    A git blob id is a content hash, so comparing the two trees answers
-    "did this file change" exactly, without reading either version - which
-    matters because these are the members the analysis deliberately does
-    not read. H066 claims a committed ELF's *presence*; it reports the same
-    thing whether the binary was replaced or left alone, because git emits
-    no diff body for it.
-
-    Cheap by construction: the ids are already in the tree objects, so this
-    is a walk of two manifests and no blob reads at all.
-    """
-    def members(oid: str) -> dict[str, str]:
-        commit = repo.get(oid) if oid else None
-        if commit is None:
-            return {}
-        found: dict[str, str] = {}
-        try:
-            for entry in commit.tree:
-                if getattr(entry, "type_str", None) != "blob":
-                    continue
-                if _OPAQUE_MEMBER_RE.search(entry.name):
-                    found[entry.name] = str(entry.id)
-        except (KeyError, AttributeError, TypeError, ValueError):
-            return {}
-        return found
-
-    before, after = members(old_oid), members(new_oid)
-    return sorted(
-        name for name, oid in after.items()
-        if name in before and before[name] != oid
-    )
+    return _core(repo, old_oid, new_oid)
 
 
-#: The one-line body git emits in place of a binary delta.  A `.gitattributes`
-#: `-diff`/`binary` marker produces the same shape without a NUL byte.
 _BINARY_DIFF_MARKER_RE = re.compile(
     r"^Binary files .*?(\S+?) and (\S+?) differ$", re.MULTILINE
 )
 
 
 def binary_metadata_paths(repo, old_oid: str, new_oid: str) -> list[str]:
-    """Metadata files git refused to diff because they are binary.
+    """Metadata files git refused to diff as binary (work in git_project)."""
+    from .sandbox.git_project import binary_metadata_paths as _core
 
-    ``generate_diff_bounded`` reads ``patch.text``, and for a binary delta
-    that is the single line ``Binary files a/PKGBUILD and b/PKGBUILD
-    differ``: no added line, no source URL, no rule.  A PKGBUILD with one
-    NUL byte therefore analyses as a clean, empty change while ``bash``
-    sources it normally, which is exactly the silent skip B2 forbids.
-
-    Detected from the delta flag rather than the text so an added file and a
-    replaced one are both caught, and so a ``.gitattributes`` marking a
-    metadata file binary is caught without a NUL.
-    """
-    old_commit = repo.get(old_oid) if old_oid else None
-    new_commit = repo.get(new_oid) if new_oid else None
-    if old_commit is None or new_commit is None:
-        return []
-    try:
-        diff = repo.diff(old_commit.tree, new_commit.tree, context_lines=0)
-    except (KeyError, AttributeError, TypeError, ValueError):
-        return []
-    found: list[str] = []
-    for patch in diff:
-        delta = patch.delta
-        new_path = delta.new_file.path
-        old_path = delta.old_file.path
-        if not (_is_metadata_path(new_path) or _is_metadata_path(old_path)):
-            continue
-        if not delta.is_binary:
-            continue
-        path = old_path if delta.status == GIT_DELTA_DELETED else new_path
-        if path and path not in found:
-            found.append(path)
-    return found
+    return _core(repo, old_oid, new_oid)
 
 
 def binary_metadata_in_text(diff_text: str) -> list[str]:
@@ -1483,120 +1245,12 @@ def binary_metadata_in_text(diff_text: str) -> list[str]:
 
 
 def companion_source_hunks(
-    repo: pygit2.Repository, commit_oid: str, max_bytes: int = _COMPANION_MAX_BYTES
+    repo, commit_oid: str, max_bytes: int = _COMPANION_MAX_BYTES
 ) -> tuple[str, bool]:
-    """Committed companion files as added-file hunks, and whether any was cut.
+    """Committed companion files as added-file hunks (git work in git_project)."""
+    from .sandbox.git_project import companion_source_hunks as _core
 
-    The second element is the honest half.  Every bound in this function
-    used to drop content and say nothing, so a payload past the budget
-    scored the same as a package with no companions at all.
-
-    Every committed text file the PKGBUILD names (a declared ``source=()``
-    entry or one it merely executes/sources/patches by path) is emitted as
-    a ``+++ b/<name>`` hunk whose whole current content is added lines, so the
-    ordinary line rules, the tokenizer and ``map_diff_lines`` see it with
-    correct file attribution.  Binary and ELF files are left out: H066-tree
-    already owns embedded binaries, and text rules over binary bytes are
-    noise.  The full current content is emitted, not just this commit's diff,
-    so a payload committed earlier and merely referenced now is still read.
-    """
-    max_bytes = max(1, min(max_bytes, MAX_COMPANION_BYTES))
-    commit = repo.get(commit_oid)
-    if commit is None:
-        return "", False
-    pkgbuild = _top_level_blob(commit.tree, "PKGBUILD")
-    if pkgbuild is None:
-        # No PKGBUILD is not a truncation: there is nothing to companion.
-        return "", False
-    try:
-        blob = repo[pkgbuild.id]
-        # Size before any read: `blob.data` materialises the whole blob, so a
-        # check afterwards bounds what is kept rather than what is read.  The
-        # companion names come from this text, so a cut PKGBUILD means
-        # companions this scan will never know to look for - which is a
-        # truncation, not an absence.
-        if getattr(blob, "size", 0) > MAX_PKG_BUILD_BYTES:
-            return "", True
-        head = read_blob_head(blob, MAX_PKG_BUILD_BYTES)
-        if head is None:
-            return "", True
-        pkgbuild_text = head.decode("utf-8", errors="replace")
-    except (KeyError, TypeError, ValueError):
-        return "", True
-
-    hunks: list[str] = []
-    used = 0
-    truncated = False
-    selected = set(_companion_names(commit.tree, pkgbuild_text))
-    if _COMPANION_INCOMPLETE in selected:
-        # The *selection* was cut, not just the reading: a name past the
-        # length cap, or a tree with more entries than the walk inspects.
-        selected.discard(_COMPANION_INCOMPLETE)
-        truncated = True
-    names = sorted(selected)
-    if len(names) > MAX_COMPANION_FILES:
-        truncated = True
-    # An equal share per named file rather than one pool drained in sort
-    # order.  A single pool is a starvation primitive: commit a large benign
-    # file whose name sorts first, and it consumes the whole budget before
-    # the payload file is reached - the attacker picks both names, so they
-    # pick the order.  Sharing spends no more bytes in total, it only stops
-    # one file deciding how much the others get.
-    selected = names[:MAX_COMPANION_FILES]
-    share = max(4096, max_bytes // max(1, len(selected)))
-    for name in selected:
-        entry = _top_level_blob(commit.tree, name)
-        if entry is None:
-            continue
-        remaining = min(share, max_bytes - used)
-        if remaining <= 0:
-            truncated = True
-            break
-        try:
-            blob = repo[entry.id]
-        except (KeyError, TypeError, ValueError):
-            truncated = True
-            continue
-        # An oversized companion used to `break` here, unread and unrecorded.
-        # Both halves of that were wrong.  `break` meant one padded benign
-        # file - which sorts wherever the attacker names it - ended the loop
-        # for every companion after it, so a small payload file placed later
-        # was never read either.  And nothing said so: the promise in
-        # `analyze_package` that a companion's "committed content is scanned
-        # with the same rules" silently stopped holding, while the verdict
-        # still read Low.  The head is now read within the remaining budget,
-        # the loop continues to the next file, and what was cut is reported.
-        oversized = getattr(blob, "size", 0) > remaining
-        data = read_blob_head(blob, remaining)
-        if data is None:
-            truncated = True
-            continue
-        if oversized:
-            truncated = True
-        # NUL in the head marks a binary; ELF is H066's job, not the text
-        # rules'.
-        # NUL in the head marks a binary; ELF is H066's job, not the text
-        # rules'.  Deliberately *not* recorded as a truncation: H066-tree
-        # reads the manifest and owns committed binaries, so this surface is
-        # examined by another rule rather than left unexamined - and a gap
-        # here would fire on every package that commits an icon.
-        if b"\x00" in data[:8192] or data[:4] == b"\x7fELF":
-            continue
-        text = data.decode("utf-8", errors="replace")
-        lines: list[str] = []
-        for ln in split_lines(text):
-            if used + len(ln) + 1 > max_bytes:
-                truncated = True
-                break
-            lines.append(ln)
-            used += len(ln) + 1
-        if not lines:
-            continue
-        hunks.append(
-            f"--- /dev/null\n+++ b/{name}\n@@ -0,0 +1,{len(lines)} @@\n"
-            + "\n".join("+" + ln for ln in lines)
-        )
-    return "\n".join(hunks), truncated
+    return _core(repo, commit_oid, max_bytes)
 
 
 _GPG_VERIFY_RE = re.compile(
