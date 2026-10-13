@@ -234,6 +234,11 @@ def read_blob_head(blob, limit: int, max_stream_bytes: int = MAX_STREAM_BYTES):
     blob - hence the ceiling above it.
     """
     size = getattr(blob, "size", 0)
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        # An unknown or nonsensical declared size is treated as unread: the
+        # head is reported missing rather than the whole blob materialised
+        # to discover its length.
+        return None
     if size <= max(limit, 512 * 1024):
         try:
             return blob.data[:limit]

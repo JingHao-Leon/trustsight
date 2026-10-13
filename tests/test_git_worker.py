@@ -357,6 +357,21 @@ def test_an_oversized_response_is_refused_not_framed(monkeypatch):
     assert b"exceeds" in huge and b"xxxx" not in huge
 
 
+def test_read_blob_head_refuses_an_unknown_declared_size():
+    from trustsight.sandbox import git_project as gp
+
+    class _Blob:
+        def __init__(self, size):
+            self.size = size
+
+        @property
+        def data(self):
+            return b"x" * 20
+
+    for size in (None, -1, True, "x"):
+        assert gp.read_blob_head(_Blob(size), 5) is None
+
+
 def test_offline_is_only_the_boolean_true(tmp_path, cache, monkeypatch):
     source = tmp_path / "src"
     src = pygit2.init_repository(str(source))
