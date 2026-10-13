@@ -307,10 +307,40 @@ def _file_at(payload: dict) -> dict:
     return {"text": blob.data.decode("utf-8", errors="replace")}
 
 
+def _diff(payload: dict) -> dict:
+    """Two commits' metadata-file diff, as text plus a serialised summary.
+
+    Reuses ``differ.generate_diff_bounded`` so the parent's current in-process
+    result and the isolated one cannot drift: the same code builds the patch
+    text, applies the same caps, and selects the same files.
+    """
+    from trustsight.differ import generate_diff_bounded
+
+    old = payload.get("old") or ""
+    new = payload.get("new") or ""
+    context = int(payload.get("context_lines", 3) or 3)
+    max_bytes = payload.get("max_bytes")
+    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
+    repo = pygit2.Repository(str(path))
+    text, summary, truncated = generate_diff_bounded(
+        repo, old, new, context_lines=context, max_bytes=max_bytes)
+    return {
+        "unified": text,
+        "summary": {
+            "lines_added": summary.lines_added,
+            "lines_removed": summary.lines_removed,
+            "files_changed": list(summary.files_changed),
+            "file_changes": [dict(entry) for entry in summary.file_changes],
+        },
+        "truncated": bool(truncated),
+    }
+
+
 _DISPATCH = {
     "open_fetch": _open_fetch,
     "head": _head,
     "file_at": _file_at,
+    "diff": _diff,
 }
 
 

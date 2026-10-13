@@ -136,6 +136,13 @@ class GitSession:
             "name": name, "max_bytes": max_bytes,
         })["text"]
 
+    def diff(self, pkg: str, cache_dir: str, old: str, new: str,
+             context_lines: int = 3, max_bytes: int | None = None) -> dict:
+        return self.request("diff", {
+            "pkg": pkg, "cache_dir": cache_dir, "old": old, "new": new,
+            "context_lines": context_lines, "max_bytes": max_bytes,
+        })
+
     def close(self) -> None:
         if self._closed:
             return

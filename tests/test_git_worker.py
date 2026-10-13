@@ -191,3 +191,24 @@ def test_an_unknown_member_is_refused():
 def test_a_path_outside_the_cache_is_refused():
     with pytest.raises(gw._OpError):
         gw._contained_repo_path("/tmp/cache", "../escape")
+
+
+def test_diff_projects_a_metadata_change(tmp_path, cache):
+    repo = pygit2.init_repository(str(cache / "diffdemo"))
+    author = pygit2.Signature("Tester", "tester@example.com")
+
+    def commit(text, parents):
+        blob = repo.create_blob(text)
+        builder = repo.TreeBuilder()
+        builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
+        return str(repo.create_commit("HEAD", author, author, "c",
+                                      builder.write(), parents))
+
+    old = commit(b"pkgver=1.0\n", [])
+    new = commit(b"pkgver=2.0\n", [pygit2.Oid(hex=old)])
+    out = gw._diff({"pkg": "diffdemo", "cache_dir": str(cache),
+                    "old": old, "new": new, "context_lines": 3,
+                    "max_bytes": None})
+    assert "pkgver=2.0" in out["unified"]
+    assert out["summary"]["files_changed"] == ["PKGBUILD"]
+    assert out["truncated"] is False

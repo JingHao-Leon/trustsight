@@ -56,6 +56,28 @@ def test_a_closed_session_refuses(cache):
         session.head("demo", str(cache))
 
 
+def test_diff_round_trip(cache):
+    repo = pygit2.init_repository(str(cache / "d"))
+    author = pygit2.Signature("Tester", "tester@example.com")
+
+    def commit(text, parents):
+        blob = repo.create_blob(text)
+        builder = repo.TreeBuilder()
+        builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
+        return str(repo.create_commit("HEAD", author, author, "c",
+                                      builder.write(), parents))
+
+    old = commit(b"pkgver=1.0\n", [])
+    new = commit(b"pkgver=2.0\n", [pygit2.Oid(hex=old)])
+    session = git_client.GitSession()
+    try:
+        out = session.diff("d", str(cache), old, new, context_lines=3)
+    finally:
+        session.close()
+    assert "pkgver=2.0" in out["unified"]
+    assert out["summary"]["files_changed"] == ["PKGBUILD"]
+
+
 def test_the_worker_launch_is_isolated():
     args = _spawn.launch_args("trustsight.sandbox.git_worker")
     assert "-I" in args
