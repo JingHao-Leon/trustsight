@@ -241,7 +241,7 @@ def _open_fetch(payload: dict) -> dict:
     pkg = payload.get("pkg", "")
     cache_dir = payload.get("cache_dir", "")
     upstream_mtime = payload.get("upstream_mtime")
-    offline = bool(payload.get("offline"))
+    offline = payload.get("offline") is True
     connect = _positive_int(payload.get("connect_timeout"), 10)
     transfer = _positive_int(payload.get("transfer_timeout"), 30)
 
@@ -321,11 +321,10 @@ def _diff(payload: dict) -> dict:
     """
     from trustsight.differ import generate_diff_bounded
 
-    old = payload.get("old") or ""
-    new = payload.get("new") or ""
-    for oid in (old, new):
-        if oid and not _OID_RE.match(oid):
-            raise _OpError(f"invalid commit id: {oid!r}")
+    old = _require_oid(payload.get("old"), "commit id")
+    new = _require_oid(payload.get("new"), "commit id")
+    if not new:
+        raise _OpError("missing new commit")
     try:
         context = int(payload.get("context_lines", 3))
     except (TypeError, ValueError):

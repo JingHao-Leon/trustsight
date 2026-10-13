@@ -326,6 +326,40 @@ def test_file_at_refuses_a_non_string_oid(cache):
                      "name": "PKGBUILD"})
 
 
+def test_diff_refuses_a_missing_new_commit(cache):
+    repo = pygit2.init_repository(str(cache / "dn"))
+    _commit_files(repo, {"PKGBUILD": b"v\n"}, [])
+    with pytest.raises(gw._OpError, match="missing new commit"):
+        gw._diff({"pkg": "dn", "cache_dir": str(cache), "old": "",
+                  "new": "", "context_lines": 3, "max_bytes": None})
+
+
+def test_offline_is_only_the_boolean_true(tmp_path, cache, monkeypatch):
+    source = tmp_path / "src"
+    src = pygit2.init_repository(str(source))
+    author = pygit2.Signature("Tester", "tester@example.com")
+    blob = src.create_blob(b"pkgver=1.0\n")
+    builder = src.TreeBuilder()
+    builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
+    src.create_commit("HEAD", author, author, "c", builder.write(), [])
+    real = pygit2.clone_repository
+    monkeypatch.setattr(gw.pygit2, "clone_repository",
+                        lambda url, dest, **kw: real(str(source), dest, bare=kw.get("bare", False)))
+    # offline=False (a bool) and offline="false" (a string) must both clone a
+    # missing cache; only `True` refuses.
+    for value in (False, "false"):
+        result = gw._open_fetch({"pkg": "new", "cache_dir": str(cache),
+                                 "upstream_mtime": None, "offline": value,
+                                 "connect_timeout": 5, "transfer_timeout": 5})
+        assert result["fetched"] is True
+        import shutil
+        shutil.rmtree(cache / "new", ignore_errors=True)
+    with pytest.raises(gw._OpError, match="TRUSTSIGHT_OFFLINE"):
+        gw._open_fetch({"pkg": "new", "cache_dir": str(cache),
+                        "upstream_mtime": None, "offline": True,
+                        "connect_timeout": 5, "transfer_timeout": 5})
+
+
 def test_commit_meta_skips_non_commit_objects(cache):
     repo = pygit2.init_repository(str(cache / "obj"))
     commit = _commit_files(repo, {"PKGBUILD": b"v\n"}, [])

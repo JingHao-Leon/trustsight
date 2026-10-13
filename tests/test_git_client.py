@@ -56,6 +56,17 @@ def test_a_closed_session_refuses(cache):
         session.head("demo", str(cache))
 
 
+def test_a_timed_out_request_closes_the_session(cache):
+    session = git_client.GitSession()
+    try:
+        with pytest.raises(git_client.GitSandboxUnavailable):
+            session.request("head", {"pkg": "demo", "cache_dir": str(cache)},
+                            timeout=0.0001)
+        assert session._closed, "a timed-out request left the worker alive"
+    finally:
+        session.close()
+
+
 def test_diff_round_trip(cache):
     repo = pygit2.init_repository(str(cache / "d"))
     author = pygit2.Signature("Tester", "tester@example.com")
