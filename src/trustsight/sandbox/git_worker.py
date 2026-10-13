@@ -36,6 +36,7 @@ import pygit2
 
 from trustsight.sandbox import protocol
 from trustsight.sandbox.git_bounds import (
+    GIT_DIFF_MAX_CONTEXT_LINES,
     GIT_PACK_MAX_OBJECTS,
     GIT_WORKER_CPU_SECONDS,
     GIT_WORKER_FSIZE_BYTES,
@@ -49,6 +50,7 @@ _PR_SET_NO_NEW_PRIVS = 38
 #: worker's path validation does not depend on the parent's module state.
 _VALID_PKG_NAME = re.compile(r"^[a-zA-Z0-9@._+\-]+$")
 _RESERVED_PKG_NAMES = frozenset({".", ".."})
+_OID_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 _FETCH_MARKER = "trustsight-last-fetch"
 
@@ -318,8 +320,20 @@ def _diff(payload: dict) -> dict:
 
     old = payload.get("old") or ""
     new = payload.get("new") or ""
-    context = int(payload.get("context_lines", 3) or 3)
+    for oid in (old, new):
+        if oid and not _OID_RE.match(oid):
+            raise _OpError(f"invalid commit id: {oid!r}")
+    try:
+        context = int(payload.get("context_lines", 3))
+    except (TypeError, ValueError):
+        context = 3
+    context = max(0, min(context, GIT_DIFF_MAX_CONTEXT_LINES))
     max_bytes = payload.get("max_bytes")
+    if max_bytes is not None:
+        try:
+            max_bytes = int(max_bytes)
+        except (TypeError, ValueError):
+            max_bytes = None
     path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
     repo = pygit2.Repository(str(path))
     text, summary, truncated = generate_diff_bounded(
@@ -373,9 +387,18 @@ def main() -> int:
             body = protocol.read_frame(stdin)
         except protocol.FrameError:
             return 0
-        stdout.write(protocol.frame(json.dumps(
+        payload = json.dumps(
             _handle(body), separators=(",", ":"), ensure_ascii=False
-        ).encode("utf-8")))
+        ).encode("utf-8")
+        # A response past the cap is refused here, before it is framed, so a
+        # wide projection cannot make the parent read a frame it must reject
+        # nor make this worker hold an unbounded reply (A4/A14).
+        if len(payload) > protocol.MAX_RESPONSE_BYTES:
+            payload = json.dumps(
+                {"error": "response exceeds the response byte cap"},
+                separators=(",", ":"),
+            ).encode("utf-8")
+        stdout.write(protocol.frame(payload))
         stdout.flush()
 
 

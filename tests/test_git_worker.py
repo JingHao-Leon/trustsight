@@ -212,3 +212,9 @@ def test_diff_projects_a_metadata_change(tmp_path, cache):
     assert "pkgver=2.0" in out["unified"]
     assert out["summary"]["files_changed"] == ["PKGBUILD"]
     assert out["truncated"] is False
+
+
+def test_diff_refuses_an_invalid_commit_id(cache):
+    with pytest.raises(gw._OpError, match="invalid commit id"):
+        gw._diff({"pkg": "d", "cache_dir": str(cache), "old": "not-an-oid",
+                  "new": "", "context_lines": 3, "max_bytes": None})

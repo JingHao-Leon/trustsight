@@ -50,3 +50,7 @@ GIT_FETCH_TIMEOUT_SECONDS = 180
 
 #: Wall-clock ceiling for a local object/diff request.
 GIT_OP_TIMEOUT_SECONDS = 60
+
+#: Context lines a diff request may ask for.  The analysis uses 3; a caller
+#: cannot make the worker build an arbitrarily wide patch.
+GIT_DIFF_MAX_CONTEXT_LINES = 200
