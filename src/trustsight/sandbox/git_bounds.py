@@ -63,3 +63,6 @@ GIT_TREE_MAX_ENTRIES = 100_000
 
 #: Commit ids one ``commit_meta`` request may name.
 GIT_COMMIT_META_MAX_OIDS = 64
+
+#: Largest file body ``file_at`` will return (the two it serves are small).
+GIT_FILE_AT_MAX_BYTES = 8 * 1024 * 1024

@@ -310,6 +310,22 @@ def test_walk_treats_a_nonpositive_limit_as_empty(cache):
                          "head": oid, "limit": limit})["commits"] == []
 
 
+def test_walk_refuses_an_uncoercible_limit(cache):
+    repo = pygit2.init_repository(str(cache / "wl"))
+    oid = _commit_files(repo, {"PKGBUILD": b"v\n"}, [])
+    with pytest.raises(gw._OpError, match="invalid walk limit"):
+        gw._walk({"pkg": "wl", "cache_dir": str(cache),
+                  "head": oid, "limit": "abc"})
+
+
+def test_file_at_refuses_a_non_string_oid(cache):
+    repo = pygit2.init_repository(str(cache / "fa"))
+    _commit_files(repo, {"PKGBUILD": b"v\n"}, [])
+    with pytest.raises(gw._OpError, match="invalid commit id"):
+        gw._file_at({"pkg": "fa", "cache_dir": str(cache), "oid": 123,
+                     "name": "PKGBUILD"})
+
+
 def test_commit_meta_skips_non_commit_objects(cache):
     repo = pygit2.init_repository(str(cache / "obj"))
     commit = _commit_files(repo, {"PKGBUILD": b"v\n"}, [])

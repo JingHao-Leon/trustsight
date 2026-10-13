@@ -113,8 +113,14 @@ class GitSession:
         except Exception as exc:  # noqa: BLE001 - any transport fault is a refusal
             self.close()
             raise GitSandboxUnavailable(str(exc)) from exc
+        if not isinstance(response, dict):
+            self.close()
+            raise GitSandboxUnavailable("malformed response from the git worker")
         if "error" in response:
             raise GitOpError(response["error"])
+        if "result" not in response:
+            self.close()
+            raise GitSandboxUnavailable("response carried neither result nor error")
         return response["result"]
 
     def open_fetch(self, pkg: str, cache_dir: str, upstream_mtime,

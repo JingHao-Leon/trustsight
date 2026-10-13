@@ -39,6 +39,7 @@ from trustsight.sandbox import protocol
 from trustsight.sandbox.git_bounds import (
     GIT_COMMIT_META_MAX_OIDS,
     GIT_DIFF_MAX_CONTEXT_LINES,
+    GIT_FILE_AT_MAX_BYTES,
     GIT_PACK_MAX_OBJECTS,
     GIT_TREE_MAX_ENTRIES,
     GIT_WORKER_CPU_SECONDS,
@@ -241,8 +242,8 @@ def _open_fetch(payload: dict) -> dict:
     cache_dir = payload.get("cache_dir", "")
     upstream_mtime = payload.get("upstream_mtime")
     offline = bool(payload.get("offline"))
-    connect = int(payload.get("connect_timeout", 10) or 10)
-    transfer = int(payload.get("transfer_timeout", 30) or 30)
+    connect = _positive_int(payload.get("connect_timeout"), 10)
+    transfer = _positive_int(payload.get("transfer_timeout"), 30)
 
     path = _contained_repo_path(cache_dir, pkg)
     try:
@@ -295,15 +296,16 @@ def _file_at(payload: dict) -> dict:
     name = payload.get("name", "")
     if name not in ("PKGBUILD", ".SRCINFO"):
         raise _OpError(f"file_at refuses unknown member: {name!r}")
-    oid = payload.get("oid") or ""
-    max_bytes = int(payload.get("max_bytes") or 5 * 1024 * 1024)
+    oid = _require_oid(payload.get("oid"), "commit id")
+    max_bytes = _positive_int(payload.get("max_bytes"), GIT_FILE_AT_MAX_BYTES)
+    max_bytes = min(max_bytes, GIT_FILE_AT_MAX_BYTES)
     repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     commit = repo.get(oid) if oid else None
-    if commit is None:
+    if not isinstance(commit, pygit2.Commit):
         return {"text": ""}
     try:
         blob = commit.tree[name]
-    except KeyError:
+    except (KeyError, AttributeError):
         return {"text": ""}
     if getattr(blob, "size", 0) > max_bytes:
         raise _OpError(f"{name} exceeds {max_bytes} bytes")
@@ -359,6 +361,15 @@ def _require_oid(value, name: str) -> str:
     return oid
 
 
+def _positive_int(value, default: int) -> int:
+    """*value* as a positive int, or *default* when absent or nonsensical."""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return default
+    return number if number > 0 else default
+
+
 def _open_repo(cache_dir: str, pkg: str):
     """Open a cached repository, refusing cleanly when it is unavailable."""
     path = _contained_repo_path(cache_dir, pkg)
@@ -397,10 +408,7 @@ def _companion_hunks(payload: dict) -> dict:
 
     oid = _require_oid(payload.get("oid"), "commit id")
     repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    try:
-        max_bytes = int(payload.get("max_bytes"))
-    except (TypeError, ValueError):
-        max_bytes = None
+    max_bytes = _positive_int(payload.get("max_bytes"), 0)
     if max_bytes:
         text, truncated = companion_source_hunks(repo, oid, max_bytes=max_bytes)
     else:
@@ -444,16 +452,18 @@ def _walk(payload: dict) -> dict:
     from trustsight.fetcher import MAX_HISTORY_COMMITS, walk_bounded
 
     head = _require_oid(payload.get("head"), "commit id")
-    limit = payload.get("limit")
-    try:
-        limit = int(limit) if limit is not None else None
-    except (TypeError, ValueError):
+    raw_limit = payload.get("limit")
+    if raw_limit is None:
         limit = None
-    if limit is not None and limit <= 0:
-        # ``walk_bounded`` yields the first commit before testing its cap, so
-        # a zero or negative limit must be answered here, not passed through.
-        return {"commits": []}
-    if limit is not None:
+    else:
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            raise _OpError("invalid walk limit") from None
+        if limit <= 0:
+            # ``walk_bounded`` yields the first commit before testing its cap,
+            # so a zero or negative limit must be answered here, not passed on.
+            return {"commits": []}
         limit = min(limit, MAX_HISTORY_COMMITS)
     if not head:
         return {"commits": []}
