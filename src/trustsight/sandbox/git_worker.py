@@ -21,6 +21,7 @@ Confinement, all fixed constants from :mod:`trustsight.sandbox.git_bounds`:
 """
 
 import atexit
+import base64
 import ctypes
 import json
 import os
@@ -350,11 +351,78 @@ def _diff(payload: dict) -> dict:
     }
 
 
+def _require_oid(value, name: str) -> str:
+    oid = value or ""
+    if oid and not _OID_RE.match(oid):
+        raise _OpError(f"invalid {name}: {oid!r}")
+    return oid
+
+
+def _tree_files(payload: dict) -> dict:
+    """The committed tree's file heads, as ``(path, base64 bytes)`` pairs.
+
+    Reuses ``pipeline._collect_tree_files`` so the isolated read applies the
+    same per-file and total caps as the in-process one.
+    """
+    from trustsight.analysis.pipeline import _collect_tree_files
+
+    oid = _require_oid(payload.get("oid"), "commit id")
+    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
+    repo = pygit2.Repository(str(path))
+    files, complete = _collect_tree_files(repo, oid)
+    return {
+        "files": [[name, base64.b64encode(data).decode("ascii")]
+                  for name, data in files],
+        "complete": complete,
+    }
+
+
+def _companion_hunks(payload: dict) -> dict:
+    from trustsight.differ import companion_source_hunks
+
+    oid = _require_oid(payload.get("oid"), "commit id")
+    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
+    repo = pygit2.Repository(str(path))
+    try:
+        max_bytes = int(payload.get("max_bytes"))
+    except (TypeError, ValueError):
+        max_bytes = None
+    if max_bytes:
+        text, truncated = companion_source_hunks(repo, oid, max_bytes=max_bytes)
+    else:
+        text, truncated = companion_source_hunks(repo, oid)
+    return {"text": text, "truncated": truncated}
+
+
+def _opaque_changed(payload: dict) -> dict:
+    from trustsight.differ import changed_opaque_members
+
+    old = _require_oid(payload.get("old"), "commit id")
+    new = _require_oid(payload.get("new"), "commit id")
+    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
+    repo = pygit2.Repository(str(path))
+    return {"names": changed_opaque_members(repo, old, new)}
+
+
+def _binary_meta(payload: dict) -> dict:
+    from trustsight.differ import binary_metadata_paths
+
+    old = _require_oid(payload.get("old"), "commit id")
+    new = _require_oid(payload.get("new"), "commit id")
+    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
+    repo = pygit2.Repository(str(path))
+    return {"paths": binary_metadata_paths(repo, old, new)}
+
+
 _DISPATCH = {
     "open_fetch": _open_fetch,
     "head": _head,
     "file_at": _file_at,
     "diff": _diff,
+    "tree_files": _tree_files,
+    "companion_hunks": _companion_hunks,
+    "opaque_changed": _opaque_changed,
+    "binary_meta": _binary_meta,
 }
 
 

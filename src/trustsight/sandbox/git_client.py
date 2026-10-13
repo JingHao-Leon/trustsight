@@ -16,6 +16,7 @@ string, so a poisoned repository can only retire its own session's worker.
 from __future__ import annotations
 
 import atexit
+import base64
 import json
 import logging
 import os
@@ -142,6 +143,32 @@ class GitSession:
             "pkg": pkg, "cache_dir": cache_dir, "old": old, "new": new,
             "context_lines": context_lines, "max_bytes": max_bytes,
         })
+
+    def tree_files(self, pkg: str, cache_dir: str, oid: str):
+        """``([(path, head_bytes)], complete)`` for a commit's tree."""
+        result = self.request("tree_files", {
+            "pkg": pkg, "cache_dir": cache_dir, "oid": oid,
+        })
+        files = [(name, base64.b64decode(data))
+                 for name, data in result["files"]]
+        return files, result["complete"]
+
+    def companion_hunks(self, pkg: str, cache_dir: str, oid: str,
+                        max_bytes: int | None = None):
+        return self.request("companion_hunks", {
+            "pkg": pkg, "cache_dir": cache_dir, "oid": oid,
+            "max_bytes": max_bytes,
+        })
+
+    def opaque_changed(self, pkg: str, cache_dir: str, old: str, new: str):
+        return self.request("opaque_changed", {
+            "pkg": pkg, "cache_dir": cache_dir, "old": old, "new": new,
+        })["names"]
+
+    def binary_meta(self, pkg: str, cache_dir: str, old: str, new: str):
+        return self.request("binary_meta", {
+            "pkg": pkg, "cache_dir": cache_dir, "old": old, "new": new,
+        })["paths"]
 
     def close(self) -> None:
         if self._closed:

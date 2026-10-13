@@ -98,3 +98,20 @@ def test_the_worker_ignores_an_inherited_pythonpath(tmp_path, cache, monkeypatch
     result = git_client.run_op("head", {"pkg": "demo", "cache_dir": str(cache)})
     assert result["head"]
     assert not sentinel.exists(), "the worker executed a PYTHONPATH sitecustomize"
+
+
+def test_tree_files_round_trip(cache):
+    repo = pygit2.init_repository(str(cache / "t"))
+    author = pygit2.Signature("Tester", "tester@example.com")
+    blob = repo.create_blob(b"pkgver=1.0\n")
+    builder = repo.TreeBuilder()
+    builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
+    head = str(repo.create_commit("HEAD", author, author, "c",
+                                  builder.write(), []))
+    session = git_client.GitSession()
+    try:
+        files, complete = session.tree_files("t", str(cache), head)
+    finally:
+        session.close()
+    assert complete is True
+    assert dict(files)["PKGBUILD"] == b"pkgver=1.0\n"

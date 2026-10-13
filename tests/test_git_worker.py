@@ -7,6 +7,7 @@ The subprocess transport and isolation are covered by ``test_git_client.py``.
 
 from __future__ import annotations
 
+import base64
 import time
 
 import pygit2
@@ -218,3 +219,45 @@ def test_diff_refuses_an_invalid_commit_id(cache):
     with pytest.raises(gw._OpError, match="invalid commit id"):
         gw._diff({"pkg": "d", "cache_dir": str(cache), "old": "not-an-oid",
                   "new": "", "context_lines": 3, "max_bytes": None})
+
+
+def _commit_files(repo, files, parents):
+    builder = repo.TreeBuilder()
+    for name, data in files.items():
+        builder.insert(name, repo.create_blob(data), pygit2.GIT_FILEMODE_BLOB)
+    author = pygit2.Signature("Tester", "tester@example.com")
+    return str(repo.create_commit("HEAD", author, author, "c",
+                                  builder.write(), parents))
+
+
+def test_tree_files_projects_blob_heads(cache):
+    repo = pygit2.init_repository(str(cache / "tree"))
+    oid = _commit_files(repo, {"PKGBUILD": b"pkgver=1.0\n",
+                               "helper.sh": b"echo hi\n"}, [])
+    result = gw._tree_files({"pkg": "tree", "cache_dir": str(cache), "oid": oid})
+    assert result["complete"] is True
+    by = {name: base64.b64decode(data) for name, data in result["files"]}
+    assert set(by) == {"PKGBUILD", "helper.sh"}
+    assert b"pkgver=1.0" in by["PKGBUILD"]
+
+
+def test_opaque_changed_names_a_replaced_binary(cache):
+    repo = pygit2.init_repository(str(cache / "opq"))
+    old = _commit_files(repo, {"PKGBUILD": b"pkgver=1.0\n", "blob.bin": b"A"}, [])
+    new = _commit_files(repo, {"PKGBUILD": b"pkgver=1.0\n", "blob.bin": b"B"},
+                        [pygit2.Oid(hex=old)])
+    names = gw._opaque_changed({"pkg": "opq", "cache_dir": str(cache),
+                                "old": old, "new": new})["names"]
+    assert names == ["blob.bin"]
+
+
+def test_companion_hunks_emit_a_named_file(cache):
+    repo = pygit2.init_repository(str(cache / "comp"))
+    oid = _commit_files(repo, {
+        "PKGBUILD": b"pkgname=x\nsource=(\"helper.sh\")\n",
+        "helper.sh": b"echo hi\n",
+    }, [])
+    out = gw._companion_hunks({"pkg": "comp", "cache_dir": str(cache),
+                               "oid": oid, "max_bytes": None})
+    assert "helper.sh" in out["text"]
+    assert "echo hi" in out["text"]
