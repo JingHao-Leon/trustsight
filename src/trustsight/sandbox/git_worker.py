@@ -39,6 +39,7 @@ from trustsight.sandbox import protocol
 from trustsight.sandbox.git_bounds import (
     GIT_DIFF_MAX_CONTEXT_LINES,
     GIT_PACK_MAX_OBJECTS,
+    GIT_TREE_MAX_ENTRIES,
     GIT_WORKER_CPU_SECONDS,
     GIT_WORKER_FSIZE_BYTES,
     GIT_WORKER_MEMORY_BYTES,
@@ -370,6 +371,12 @@ def _tree_files(payload: dict) -> dict:
     path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
     repo = pygit2.Repository(str(path))
     files, complete = _collect_tree_files(repo, oid)
+    if len(files) > GIT_TREE_MAX_ENTRIES:
+        # The byte budget bounds companion *content*, not the entry count, so
+        # a repository of millions of tiny files would build an unbounded
+        # list.  Truncating is a real skip, so it reports incomplete.
+        files = files[:GIT_TREE_MAX_ENTRIES]
+        complete = False
     return {
         "files": [[name, base64.b64encode(data).decode("ascii")]
                   for name, data in files],

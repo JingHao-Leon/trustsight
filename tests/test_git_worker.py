@@ -261,3 +261,12 @@ def test_companion_hunks_emit_a_named_file(cache):
                                "oid": oid, "max_bytes": None})
     assert "helper.sh" in out["text"]
     assert "echo hi" in out["text"]
+
+
+def test_tree_files_reports_incomplete_when_capped(cache, monkeypatch):
+    repo = pygit2.init_repository(str(cache / "many"))
+    oid = _commit_files(repo, {f"f{i}": b"x\n" for i in range(3)}, [])
+    monkeypatch.setattr(gw, "GIT_TREE_MAX_ENTRIES", 2)
+    result = gw._tree_files({"pkg": "many", "cache_dir": str(cache), "oid": oid})
+    assert result["complete"] is False
+    assert len(result["files"]) == 2

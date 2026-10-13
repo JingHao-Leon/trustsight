@@ -54,3 +54,9 @@ GIT_OP_TIMEOUT_SECONDS = 60
 #: Context lines a diff request may ask for.  The analysis uses 3; a caller
 #: cannot make the worker build an arbitrarily wide patch.
 GIT_DIFF_MAX_CONTEXT_LINES = 200
+
+#: Files one tree projection may return.  A recipe commits tens of files; a
+#: repository can commit millions, so the projection is capped and reports
+#: incomplete rather than building an unbounded list (the byte budget does
+#: not bound the entry count).
+GIT_TREE_MAX_ENTRIES = 100_000
