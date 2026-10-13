@@ -327,14 +327,14 @@ def _diff(payload: dict) -> dict:
         raise _OpError("missing new commit")
     try:
         context = int(payload.get("context_lines", 3))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         context = 3
     context = max(0, min(context, GIT_DIFF_MAX_CONTEXT_LINES))
     max_bytes = payload.get("max_bytes")
     if max_bytes is not None:
         try:
             max_bytes = int(max_bytes)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             max_bytes = None
     repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     text, summary, truncated = generate_diff_bounded(
@@ -361,10 +361,14 @@ def _require_oid(value, name: str) -> str:
 
 
 def _positive_int(value, default: int) -> int:
-    """*value* as a positive int, or *default* when absent or nonsensical."""
+    """*value* as a positive int, or *default* when absent or nonsensical.
+
+    ``OverflowError`` is caught too: JSON accepts ``Infinity``/``NaN``, and
+    ``int(float("inf"))`` raises rather than returning a number.
+    """
     try:
         number = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
     return number if number > 0 else default
 
@@ -457,7 +461,7 @@ def _walk(payload: dict) -> dict:
     else:
         try:
             limit = int(raw_limit)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             raise _OpError("invalid walk limit") from None
         if limit <= 0:
             # ``walk_bounded`` yields the first commit before testing its cap,
@@ -518,6 +522,24 @@ def _handle(body: bytes) -> dict:
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
+def _encode_response(response: dict) -> bytes:
+    """Serialise *response*, refusing one past the response byte cap.
+
+    Refusing here, before framing, means a wide projection cannot make the
+    parent read a frame it must reject, nor this worker hold an unbounded
+    reply (A4/A14).
+    """
+    payload = json.dumps(
+        response, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    if len(payload) > protocol.MAX_RESPONSE_BYTES:
+        payload = json.dumps(
+            {"error": "response exceeds the response byte cap"},
+            separators=(",", ":"),
+        ).encode("utf-8")
+    return payload
+
+
 def main() -> int:
     _apply_limits()
     _harden_libgit2()
@@ -532,18 +554,7 @@ def main() -> int:
             body = protocol.read_frame(stdin)
         except protocol.FrameError:
             return 0
-        payload = json.dumps(
-            _handle(body), separators=(",", ":"), ensure_ascii=False
-        ).encode("utf-8")
-        # A response past the cap is refused here, before it is framed, so a
-        # wide projection cannot make the parent read a frame it must reject
-        # nor make this worker hold an unbounded reply (A4/A14).
-        if len(payload) > protocol.MAX_RESPONSE_BYTES:
-            payload = json.dumps(
-                {"error": "response exceeds the response byte cap"},
-                separators=(",", ":"),
-            ).encode("utf-8")
-        stdout.write(protocol.frame(payload))
+        stdout.write(protocol.frame(_encode_response(_handle(body))))
         stdout.flush()
 
 

@@ -334,6 +334,29 @@ def test_diff_refuses_a_missing_new_commit(cache):
                   "new": "", "context_lines": 3, "max_bytes": None})
 
 
+def test_infinity_and_nan_arguments_do_not_leak_overflows(cache):
+    repo = pygit2.init_repository(str(cache / "inf"))
+    oid = _commit_files(repo, {"PKGBUILD": b"v\n"}, [])
+    inf, nan = float("inf"), float("nan")
+    with pytest.raises(gw._OpError, match="invalid walk limit"):
+        gw._walk({"pkg": "inf", "cache_dir": str(cache), "head": oid, "limit": inf})
+    with pytest.raises(gw._OpError, match="invalid walk limit"):
+        gw._walk({"pkg": "inf", "cache_dir": str(cache), "head": oid, "limit": nan})
+    # Nonsensical diff/file arguments fall back to their defaults.
+    assert "unified" in gw._diff({"pkg": "inf", "cache_dir": str(cache), "old": "",
+                                  "new": oid, "context_lines": inf, "max_bytes": inf})
+    assert gw._file_at({"pkg": "inf", "cache_dir": str(cache), "oid": oid,
+                        "name": "PKGBUILD", "max_bytes": inf})["text"] == "v\n"
+
+
+def test_an_oversized_response_is_refused_not_framed(monkeypatch):
+    monkeypatch.setattr(gw.protocol, "MAX_RESPONSE_BYTES", 32)
+    small = gw._encode_response({"result": "ok"})
+    assert b'"result"' in small
+    huge = gw._encode_response({"result": "x" * 1000})
+    assert b"exceeds" in huge and b"xxxx" not in huge
+
+
 def test_offline_is_only_the_boolean_true(tmp_path, cache, monkeypatch):
     source = tmp_path / "src"
     src = pygit2.init_repository(str(source))
