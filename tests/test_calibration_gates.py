@@ -130,5 +130,10 @@ def test_the_runner_reports_a_gate_per_plan_line(results):
     """The script's own contract: every gate is named and exits nonzero."""
     benign, malicious = results
     all_gates = gates._evaluate(benign, malicious)
-    assert len(all_gates) == 14
+    assert len(all_gates) == 15
     assert all(g.name for g in all_gates)
+
+
+def test_manifest_benign_corpus_stays_clean():
+    """The scored U-rules never fire on a benign manifest edit."""
+    _assert(gates.gate_manifest_benign_corpus())

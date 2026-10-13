@@ -46,8 +46,15 @@ from trustsight.rules import (
     resolve_generated_patterns,
 )
 from trustsight.sandbox.client import reset_after_fork
+from trustsight.sandbox.git_client import reset_after_fork as reset_git_after_fork
 
 FIXTURES = ROOT / "tests" / "fixtures"
+
+#: A small, curated benign manifest corpus, separate from the locked AUR
+#: corpus (whose content hash is pinned and must not move).  It exercises the
+#: U-series through the real ruleset: benign dependency edits across
+#: languages, none of which introduces a new host or redirect.
+MANIFEST_CORPUS = FIXTURES / "manifest-corpus"
 
 # Score-breakdown entries that are not rules: bucket, novelty and evidence
 # modifiers.  They have their own baselines and no fire-rate gate.
@@ -296,6 +303,7 @@ def _init_worker(
         db_module._local.cached = None
     db_module.init_db()
     reset_after_fork()
+    reset_git_after_fork()
     _WORKER_RULES = rules
     _WORKER_CONFIG = config
     _WORKER_INCLUDE_LOCATION = include_location
@@ -740,6 +748,36 @@ def gate_homograph_single_script() -> Gate:
     )
 
 
+def gate_manifest_benign_corpus() -> Gate:
+    """The U-series' scored rules stay silent on benign manifest edits.
+
+    The locked AUR corpus contains no dependency manifests, so the scored
+    U003/U004 would otherwise never be measured against benign input.
+    This gate scans a curated manifest corpus through the real ruleset and
+    requires the two scored rules to stay at zero, while at least one
+    weight-0 ledger rule fires - a corpus that exercises nothing would make
+    the gate vacuous.
+    """
+    name = "manifest corpus: scored U-rules silent, ledger exercised"
+    if not MANIFEST_CORPUS.exists():
+        return Gate(name, False, 0, 0, "manifest corpus missing")
+    rows = scan_corpus(MANIFEST_CORPUS)
+    fired: Counter = Counter()
+    for row in rows:
+        for entry in row["entries"]:
+            fired[entry["rule_id"]] += 1
+    problems: list[str] = []
+    for rule_id in ("U003", "U004"):
+        if fired.get(rule_id, 0):
+            problems.append(f"{rule_id} fired on {fired[rule_id]} benign diff(s)")
+    if not (fired.get("U002") or fired.get("U006")):
+        problems.append("corpus exercised no U ledger rule (vacuous)")
+    detail = ("; ".join(problems) or
+              f"{len(rows)} diffs; U002={fired.get('U002', 0)} "
+              f"U006={fired.get('U006', 0)}")
+    return Gate(name, not problems, len(rows), 0, detail)
+
+
 def _fixture_failures(result: dict) -> list[str]:
     expected = result["expected"]
     failures: list[str] = []
@@ -1108,6 +1146,7 @@ def _evaluate(benign: list[dict], malicious: list[dict]) -> list[Gate]:
         gate_ioc_exact_match(benign),
         gate_homograph_single_script(),
         gate_meta_escalation_below_cap(benign),
+        gate_manifest_benign_corpus(),
     ]
     if malicious:
         gates.append(gate_separation(benign, malicious))

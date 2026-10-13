@@ -1,6 +1,4 @@
-import os
 import re
-import shutil
 import signal
 import threading
 import time
@@ -58,6 +56,28 @@ DEFAULT_CONNECT_TIMEOUT = 10
 DEFAULT_TRANSFER_TIMEOUT = 30
 
 
+def _network_timeout_values() -> tuple[int, int]:
+    """The configured (connect, transfer) timeouts, with safe fallbacks."""
+    try:
+        from .config import load_config
+
+        limits = load_config().get("limits", {})
+    except Exception:
+        limits = {}
+
+    def _seconds(key: str, default: int) -> int:
+        try:
+            value = int(limits.get(key, default))
+        except (TypeError, ValueError):
+            return default
+        return value if value > 0 else default
+
+    return (
+        _seconds("network_connect_timeout", DEFAULT_CONNECT_TIMEOUT),
+        _seconds("network_transfer_timeout", DEFAULT_TRANSFER_TIMEOUT),
+    )
+
+
 def _apply_network_timeouts() -> None:
     """Bound libgit2's own socket timeouts, once per process.
 
@@ -74,22 +94,7 @@ def _apply_network_timeouts() -> None:
     with _NETWORK_TIMEOUTS_LOCK:
         if _NETWORK_TIMEOUTS_APPLIED:
             return
-        try:
-            from .config import load_config
-
-            limits = load_config().get("limits", {})
-        except Exception:
-            limits = {}
-
-        def _seconds(key: str, default: int) -> int:
-            try:
-                value = int(limits.get(key, default))
-            except (TypeError, ValueError):
-                return default
-            return value if value > 0 else default
-
-        connect = _seconds("network_connect_timeout", DEFAULT_CONNECT_TIMEOUT)
-        transfer = _seconds("network_transfer_timeout", DEFAULT_TRANSFER_TIMEOUT)
+        connect, transfer = _network_timeout_values()
         try:
             pygit2.settings.server_connect_timeout = connect * 1000
             pygit2.settings.server_timeout = transfer * 1000
@@ -391,53 +396,25 @@ def clone_or_fetch(
     analysis for every package that has not actually changed.
     """
     path = repo_path(pkg_name)
-    _apply_network_timeouts()
-    if path.exists():
-        cached = None
-        try:
-            cached = pygit2.Repository(str(path))
-            if not _head_commit_id(cached):
-                # A clone interrupted before its first fetch leaves a valid
-                # but empty repository.  It read as a cached clone, so every
-                # later run analysed an empty tree and reported a coverage
-                # gap instead of refetching.  An AUR package always has
-                # commits, so no commit means the clone is incomplete.
-                raise pygit2.GitError("cached clone has no commits")
-        except (_TimeoutError, pygit2.GitError):
-            # The clone itself is unreadable, so rebuild it below.  A failing
-            # *fetch* is not grounds for deleting a good clone: under the
-            # network stall that makes fetches fail, the re-clone fails too,
-            # and the cache is gone for the next run as well.
-            shutil.rmtree(path)
-            cached = None
-        if cached is not None:
-            if upstream_mtime is not None and _is_current(cached, upstream_mtime):
-                return cached
-            # Offline: use the clone on disk, never the network.  A cached
-            # clone is local state, so an air-gapped run can still analyse
-            # what it already has; only a *new* clone is refused below.
-            from .release import offline
-            if offline():
-                return cached
-            with _timeout(120):
-                cached.remotes["origin"].fetch(callbacks=_DeadlineCallbacks(120))
-            _advance_to_fetched_head(cached)
-            _record_fetch(cached)
-            return cached
     from .release import offline
-    if offline():
-        raise RuntimeError(
-            "TRUSTSIGHT_OFFLINE is set and no cached clone exists for "
-            f"{pkg_name!r}: refusing to clone from the AUR"
+    from .sandbox.git_client import GitSandboxUnavailable, GitSession
+
+    connect, transfer = _network_timeout_values()
+    session = GitSession()
+    try:
+        session.open_fetch(
+            pkg_name, str(CACHE_DIR), upstream_mtime, offline(), connect, transfer
         )
-    os.makedirs(path.parent, exist_ok=True)
-    url = f"https://aur.archlinux.org/{pkg_name}.git"
-    with _timeout(120):
-        repo = pygit2.clone_repository(
-            url, str(path), callbacks=_DeadlineCallbacks(120)
-        )
-    _record_fetch(repo)
-    return repo
+    except GitSandboxUnavailable as exc:
+        # A sandbox that cannot answer is the same class as a timed-out
+        # fetch: the package was not brought up to date, so callers record a
+        # coverage gap rather than analysing a stale or empty tree (B2).
+        raise _TimeoutError(f"git sandbox unavailable: {exc}") from exc
+    finally:
+        session.close()
+    # The clone/fetch ran in the isolated child; the parent opens the result
+    # to read objects.  Phases 2-5 move those reads into the worker too.
+    return pygit2.Repository(str(path))
 
 
 def get_head_commit(repo: pygit2.Repository) -> str:
