@@ -288,6 +288,43 @@ def test_walk_and_commit_meta(cache):
     assert {m["id"] for m in meta} == {c1, c3}
 
 
+def test_merge_parents_are_commit_ids_not_objects(cache):
+    repo = pygit2.init_repository(str(cache / "m"))
+    c1 = _commit_files(repo, {"PKGBUILD": b"v1\n"}, [])
+    c2 = _commit_files(repo, {"PKGBUILD": b"v2\n"}, [pygit2.Oid(hex=c1)])
+    tip = _commit_files(repo, {"PKGBUILD": b"v3\n"}, [pygit2.Oid(hex=c2)])
+    merge = _commit_files(repo, {"PKGBUILD": b"m\n"},
+                          [pygit2.Oid(hex=tip), pygit2.Oid(hex=c1)])
+    rec = next(c for c in gw._walk({"pkg": "m", "cache_dir": str(cache),
+                                    "head": merge, "limit": None})["commits"]
+               if c["id"] == merge)
+    assert rec["parents"] == [tip, c1]
+    assert all(len(p) == 40 for p in rec["parents"])
+
+
+def test_walk_treats_a_nonpositive_limit_as_empty(cache):
+    repo = pygit2.init_repository(str(cache / "lim"))
+    oid = _commit_files(repo, {"PKGBUILD": b"v\n"}, [])
+    for limit in (0, -5):
+        assert gw._walk({"pkg": "lim", "cache_dir": str(cache),
+                         "head": oid, "limit": limit})["commits"] == []
+
+
+def test_commit_meta_skips_non_commit_objects(cache):
+    repo = pygit2.init_repository(str(cache / "obj"))
+    commit = _commit_files(repo, {"PKGBUILD": b"v\n"}, [])
+    blob = str(repo.create_blob(b"x"))
+    out = gw._commit_meta({"pkg": "obj", "cache_dir": str(cache),
+                           "oids": [blob, commit]})["commits"]
+    assert [c["id"] for c in out] == [commit]
+
+
+def test_a_missing_repository_is_refused_cleanly(cache):
+    with pytest.raises(gw._OpError, match="repository unavailable"):
+        gw._walk({"pkg": "nope", "cache_dir": str(cache), "head": "0" * 40,
+                  "limit": None})
+
+
 def test_commit_meta_refuses_too_many_ids(cache):
     with pytest.raises(gw._OpError, match="too many"):
         gw._commit_meta({"pkg": "hist", "cache_dir": str(cache),

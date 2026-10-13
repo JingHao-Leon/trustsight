@@ -286,8 +286,7 @@ def _open_fetch(payload: dict) -> dict:
 
 
 def _head(payload: dict) -> dict:
-    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    repo = pygit2.Repository(str(path))
+    repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     return {"head": _head_commit_id(repo)}
 
 
@@ -298,8 +297,7 @@ def _file_at(payload: dict) -> dict:
         raise _OpError(f"file_at refuses unknown member: {name!r}")
     oid = payload.get("oid") or ""
     max_bytes = int(payload.get("max_bytes") or 5 * 1024 * 1024)
-    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    repo = pygit2.Repository(str(path))
+    repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     commit = repo.get(oid) if oid else None
     if commit is None:
         return {"text": ""}
@@ -337,8 +335,7 @@ def _diff(payload: dict) -> dict:
             max_bytes = int(max_bytes)
         except (TypeError, ValueError):
             max_bytes = None
-    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    repo = pygit2.Repository(str(path))
+    repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     text, summary, truncated = generate_diff_bounded(
         repo, old, new, context_lines=context, max_bytes=max_bytes)
     return {
@@ -355,9 +352,20 @@ def _diff(payload: dict) -> dict:
 
 def _require_oid(value, name: str) -> str:
     oid = value or ""
+    if not isinstance(oid, str):
+        raise _OpError(f"invalid {name}: {type(value).__name__}")
     if oid and not _OID_RE.match(oid):
         raise _OpError(f"invalid {name}: {oid!r}")
     return oid
+
+
+def _open_repo(cache_dir: str, pkg: str):
+    """Open a cached repository, refusing cleanly when it is unavailable."""
+    path = _contained_repo_path(cache_dir, pkg)
+    try:
+        return pygit2.Repository(str(path))
+    except pygit2.GitError as exc:
+        raise _OpError(f"repository unavailable: {pkg!r}") from exc
 
 
 def _tree_files(payload: dict) -> dict:
@@ -369,8 +377,7 @@ def _tree_files(payload: dict) -> dict:
     from trustsight.analysis.pipeline import _collect_tree_files
 
     oid = _require_oid(payload.get("oid"), "commit id")
-    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    repo = pygit2.Repository(str(path))
+    repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     files, complete = _collect_tree_files(repo, oid)
     if len(files) > GIT_TREE_MAX_ENTRIES:
         # The byte budget bounds companion *content*, not the entry count, so
@@ -389,8 +396,7 @@ def _companion_hunks(payload: dict) -> dict:
     from trustsight.differ import companion_source_hunks
 
     oid = _require_oid(payload.get("oid"), "commit id")
-    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    repo = pygit2.Repository(str(path))
+    repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     try:
         max_bytes = int(payload.get("max_bytes"))
     except (TypeError, ValueError):
@@ -407,8 +413,7 @@ def _opaque_changed(payload: dict) -> dict:
 
     old = _require_oid(payload.get("old"), "commit id")
     new = _require_oid(payload.get("new"), "commit id")
-    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    repo = pygit2.Repository(str(path))
+    repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     return {"names": changed_opaque_members(repo, old, new)}
 
 
@@ -417,8 +422,7 @@ def _binary_meta(payload: dict) -> dict:
 
     old = _require_oid(payload.get("old"), "commit id")
     new = _require_oid(payload.get("new"), "commit id")
-    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    repo = pygit2.Repository(str(path))
+    repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     return {"paths": binary_metadata_paths(repo, old, new)}
 
 
@@ -426,7 +430,7 @@ def _commit_record(commit) -> dict:
     return {
         "id": str(commit.id),
         "commit_time": int(commit.commit_time),
-        "parents": [str(parent) for parent in commit.parents],
+        "parents": [str(parent.id) for parent in commit.parents],
     }
 
 
@@ -445,12 +449,15 @@ def _walk(payload: dict) -> dict:
         limit = int(limit) if limit is not None else None
     except (TypeError, ValueError):
         limit = None
+    if limit is not None and limit <= 0:
+        # ``walk_bounded`` yields the first commit before testing its cap, so
+        # a zero or negative limit must be answered here, not passed through.
+        return {"commits": []}
     if limit is not None:
-        limit = max(0, min(limit, MAX_HISTORY_COMMITS))
+        limit = min(limit, MAX_HISTORY_COMMITS)
     if not head:
         return {"commits": []}
-    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    repo = pygit2.Repository(str(path))
+    repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     try:
         commits = [_commit_record(c) for c in walk_bounded(repo, head, limit=limit)]
     except pygit2.GitError:
@@ -463,13 +470,12 @@ def _commit_meta(payload: dict) -> dict:
     oids = payload.get("oids") or []
     if not isinstance(oids, list) or len(oids) > GIT_COMMIT_META_MAX_OIDS:
         raise _OpError("too many or malformed commit ids")
-    path = _contained_repo_path(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    repo = pygit2.Repository(str(path))
+    repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     out = []
     for raw in oids:
         oid = _require_oid(raw, "commit id")
         commit = repo.get(oid) if oid else None
-        if commit is not None:
+        if isinstance(commit, pygit2.Commit):
             out.append(_commit_record(commit))
     return {"commits": out}
 
