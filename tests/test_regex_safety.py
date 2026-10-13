@@ -845,3 +845,43 @@ def test_a_diluted_ratio_escalates_before_allowing(monkeypatch):
     monkeypatch.setattr(rs, "growth_ratio", first_call_diluted)
     monkeypatch.setattr(rs, "_growth", escalated_quadratic)
     assert rs.is_superlinear(compiled), "the diluted ratio was trusted"
+
+
+def test_a_contended_long_reading_is_not_amplified_by_a_tiny_short_probe(monkeypatch):
+    """Regression for the intermittent `check()` failure.
+
+    A fast linear matcher measured on a loaded machine produced a long probe
+    just over the floor (1.2 ms) divided by a microsecond-scale short probe
+    (30 us): a ratio of 40, refused as quadratic.  The shipped-pattern audit
+    failed on some builds and passed on the next from the same tarball.  The
+    divisor floor bounds the quotient by ``long_med / floor``, so the reading
+    is no longer amplified into a verdict.
+    """
+    import trustsight.regex_safety as rs
+
+    compiled = re.compile(r"(?:install|cp|mv|ln)\b([^;&|]*)$", re.IGNORECASE)
+
+    def contended(pattern, text):
+        # the short probe is a quarter the long length
+        return 0.00003 if len(text) < rs.LONG_PROBE_LEN else 0.0012
+
+    monkeypatch.setattr(rs, "_time_search", contended)
+
+    assert rs.growth_ratio(compiled) <= rs._BORDERLINE_GROWTH
+    assert not rs.is_superlinear(compiled), "a contended reading was refused"
+
+
+def test_the_denominator_floor_still_refuses_a_real_quadratic(monkeypatch):
+    """The floor must not hide a quadratic: a pattern slow at *both* lengths
+    keeps its ratio and is escalated and refused."""
+    import trustsight.regex_safety as rs
+
+    compiled = re.compile(r"(a|ab)+c")
+
+    def quadratic(pattern, text):
+        n = len(text)
+        return (n * n) * 1e-9  # strictly quadratic, so the ratio is ~16
+
+    monkeypatch.setattr(rs, "_time_search", quadratic)
+    assert rs.growth_ratio(compiled) > rs._BORDERLINE_GROWTH
+    assert rs.is_superlinear(compiled)
