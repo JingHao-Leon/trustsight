@@ -974,3 +974,11 @@ def test_campaign_corroboration_adds_a_bounded_attributed_bonus(db):
     # A gained host in scope corroborates instead of the name.
     score2, breakdown2 = _campaign_corroboration(10, [], "other", ["https://yau/x"])
     assert score2 == 12 and breakdown2[-1].rule_id == "G007"
+
+
+def test_bump_observation_seq_advances_the_clock(db):
+    from trustsight.db import bump_observation_seq, observation_seq
+
+    assert observation_seq() == 0
+    assert bump_observation_seq() == 1
+    assert observation_seq() == 1

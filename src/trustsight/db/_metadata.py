@@ -78,26 +78,38 @@ def observation_seq() -> int:
         return 0
 
 
+def _bump_observation_seq(conn) -> int:
+    """Advance the clock on *conn*, without committing.
+
+    One implementation, shared by :func:`bump_observation_seq` and
+    ``insert_analysis``: the latter calls it inside the same transaction that
+    writes the analysis row, so the clock and the recorded history cannot
+    diverge.  It does not commit, so the caller owns the transaction.
+    """
+    row = conn.execute(
+        "SELECT value FROM metadata WHERE key = ?", (OBSERVATION_SEQ_KEY,)
+    ).fetchone()
+    try:
+        current = max(0, int(row["value"])) if row else 0
+    except (TypeError, ValueError):
+        current = 0
+    nxt = current + 1
+    conn.execute(
+        """INSERT INTO metadata (key, value) VALUES (?, ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+        (OBSERVATION_SEQ_KEY, str(nxt)),
+    )
+    return nxt
+
+
 def bump_observation_seq() -> int:
     """Advance the observation clock by one and return the new value.
 
-    Called from ``insert_analysis`` inside the same transaction that writes
-    the analysis row, so the clock and the recorded history cannot diverge:
-    every observation the instrument can later consult has bumped it once.
+    The standalone form (its own transaction); ``insert_analysis`` uses the
+    shared :func:`_bump_observation_seq` inside its own transaction so the
+    clock advances exactly when an observation is written.
     """
     with get_connection() as conn:
-        row = conn.execute(
-            "SELECT value FROM metadata WHERE key = ?", (OBSERVATION_SEQ_KEY,)
-        ).fetchone()
-        try:
-            current = max(0, int(row["value"])) if row else 0
-        except (TypeError, ValueError):
-            current = 0
-        nxt = current + 1
-        conn.execute(
-            """INSERT INTO metadata (key, value) VALUES (?, ?)
-               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
-            (OBSERVATION_SEQ_KEY, str(nxt)),
-        )
+        nxt = _bump_observation_seq(conn)
         conn.commit()
         return nxt
