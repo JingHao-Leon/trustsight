@@ -175,7 +175,7 @@ in TrustSight decides what belongs on the list.
 
 ## Federation
 
-The indicator tier (Addendum 5 §6.4, I-series) formalizes what this page
+The indicator tier (I-series) formalizes what this page
 describes: signed external data as a first-class tier, matched outside the
 heuristic score and reported at maximum alert priority. The [Indicators
 reference](rules/indicator.md) documents the tier and H056.

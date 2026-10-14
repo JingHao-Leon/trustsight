@@ -141,7 +141,7 @@ The boundary does not disappear in CI, it moves. A pipeline still authorizes, it
 The whole model stands on one interface rule: **every unknown the tool recorded must be visible to the person it matters to, and it must never be hidden by default**.
 
 - A coverage gap appears in the JSON and on the terminal, and is never dropped from either.
-- A coverage gap and a weight-0 W rendering describe the same fact, and are one object: the analysis **boundary**. The JSON carries the unified `boundaries` list (Addendum 2 W1) beside `coverage_gaps`, and a non-empty boundary set - a gap, or a W-only rendering - is named to the reader rather than left to be inferred. A boundary that forbids a clean verdict is exactly a coverage gap.
+- A coverage gap and a weight-0 W rendering describe the same fact, and are one object: the analysis **boundary**. The JSON carries the unified `boundaries` list beside `coverage_gaps`, and a non-empty boundary set - a gap, or a W-only rendering - is named to the reader rather than left to be inferred. A boundary that forbids a clean verdict is exactly a coverage gap.
 - A result that could not be examined fully is not shown as a bare "Low": for a human render the band is qualified, e.g. `High (incomplete analysis)`, and for machines `risk` and `coverage_gaps` are separate fields (see [report schema](reference/report-schema.md)).
 - An analysis that failed for a tracked package is reported as "this package was NOT vetted", so a skipped package cannot read as an unflagged one.
 - A result reports the changes it examined, not only the rules that fired. An update with no findings still tells you what moved, so "nothing fired" cannot read as "nothing happened".

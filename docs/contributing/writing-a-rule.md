@@ -159,7 +159,7 @@ the shipped one, or if the id is absent from the quick-reference table.
 | Logic spans multiple fields / conditions       | C-series |
 | Needs a structural or multi-condition invariant | C-series |
 
-## The three axes: mechanism, subject, layer (Addendum 5 §5)
+## The three axes: mechanism, subject, layer
 
 A proposed rule names three things, and the intake review checks all three:
 

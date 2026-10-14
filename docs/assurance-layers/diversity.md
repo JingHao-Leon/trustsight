@@ -103,7 +103,7 @@ argument belongs.
 ## The H intake freeze
 
 New heuristic (H) rule ids are frozen while the H series is above its
-reduction target (Addendum 3). New detections must be an instance of an
+reduction target. New detections must be an instance of an
 existing family (a C-series invariant, an X-series refusal, an E-series
 statistic, ...) rather than another H id. See
 [Rule Nature](../reference/rules/nature.md).

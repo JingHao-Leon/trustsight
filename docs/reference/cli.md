@@ -704,7 +704,7 @@ Use `--export` to produce a shareable baseline that other TrustSight instances c
 trustsight full-aur verify [--package NAME ...] [--limit N] [--json]
 ```
 
-The batch L9 lane (Addendum 5 §12.2) for corpus operators: it runs the optional artifact inspection over the corpus (or the named packages) and lands the results in the corpus DB as artifact properties, feeding future reproducibility comparison. The static core never runs package code - the build that produces a manifest runs outside TrustSight. With `[verify] enabled = false` (the default) or no sandbox container, every package reports `l9_unavailable`, a weight-0 boundary rather than a verdict.
+The batch L9 lane for corpus operators: it runs the optional artifact inspection over the corpus (or the named packages) and lands the results in the corpus DB as artifact properties, feeding future reproducibility comparison. The static core never runs package code - the build that produces a manifest runs outside TrustSight. With `[verify] enabled = false` (the default) or no sandbox container, every package reports `l9_unavailable`, a weight-0 boundary rather than a verdict.
 
 ### What one cycle does
 
@@ -798,7 +798,7 @@ trustsight ioc export [<dir>] [--source SOURCE] [--json]
 | `--source` | Override or filter by baseline source name. |
 | `--allow-unsigned` | Import a baseline whose signature is missing or cannot be verified. Use only for local baselines. |
 | `--path` | Baseline directory to re-import with `ioc update`. Can be repeated. |
-| `--federation` | Base URL of a publisher's signed indicator set. `manifest.json` and `iocs.jsonl` (each with a detached `.sig`) are fetched and verified against `--publisher-key` before import (Addendum 5 §10, hashed indicators only). |
+| `--federation` | Base URL of a publisher's signed indicator set. `manifest.json` and `iocs.jsonl` (each with a detached `.sig`) are fetched and verified against `--publisher-key` before import (hashed indicators only). |
 | `--publisher-key` | Path to the Ed25519 public key pinning a federation publisher. Required with `--federation`. |
 | `--type` | Filter `ioc list` by indicator type (`package`, `domain`, `hash`, `file_path`, or `pkgbuild_pattern`). |
 | `--include-expired` | Include expired entries in `ioc list`. |
@@ -940,7 +940,7 @@ ladder (`FATAL`/`CRITICAL` → `error`, `HIGH`/`MEDIUM` → `warning`, else
 
 ## trustsight verify-build
 
-Run the optional L9 build lane (Addendum 5 §12). Off by default; with
+Run the optional L9 build lane. Off by default; with
 `[verify] enabled = false` or no sandbox container it reports
 `l9_unavailable` - a weight-0 boundary, never a clean or malicious verdict.
 The static core never executes package code.

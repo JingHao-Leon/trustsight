@@ -24,20 +24,20 @@ python scripts/security_gates.py
 | `every stream read is bounded` | A4, A14 | source-wide AST scan for a `read()` with no size |
 | `artifact reads are bounded before verification` | A4 | `db.py`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
-| `H-series intake is frozen` | Addendum 3 Phase 0 | `categories.RULE_CATEGORIES` |
-| `H-series reduction residue` | Addendum 3 Phase 6 | `categories.RULE_CATEGORIES`, target 55-65 |
-| `retired ids resolve to live survivors` | Addendum 3 Phase 5 | `rule_id_history.RETIRED_RULE_IDS` |
-| `docs layer mapping matches the registry` | Addendum 5 §11 (docs) | `scripts/build_layers_doc.py`, `trustsight.layers` |
-| `layer detection and coverage are independent` | Addendum 5 §3 (reporting) | `trustsight.layers._layer_coverage` |
-| `every rule names its shared dependencies` | Addendum 5 §5 (diversity) | `trustsight.detectors`, `SERIES_DEPENDENCIES` |
-| `layer overrides stay within the closed set` | Addendum 5 §2 | `trustsight.layers.parse_overrides`, `LAYER_VALUES` |
-| `boundaries are the coverage view` | Addendum 2 W1, B2 | `trustsight.boundaries`, `coverage.GAPS` |
+| `H-series intake is frozen` | internal | `categories.RULE_CATEGORIES` |
+| `H-series reduction residue` | internal | `categories.RULE_CATEGORIES`, target 55-65 |
+| `retired ids resolve to live survivors` | internal | `rule_id_history.RETIRED_RULE_IDS` |
+| `docs layer mapping matches the registry` | internal | `scripts/build_layers_doc.py`, `trustsight.layers` |
+| `layer detection and coverage are independent` | internal | `trustsight.layers._layer_coverage` |
+| `every rule names its shared dependencies` | internal | `trustsight.detectors`, `SERIES_DEPENDENCIES` |
+| `layer overrides stay within the closed set` | internal | `trustsight.layers.parse_overrides`, `LAYER_VALUES` |
+| `boundaries are the coverage view` | B2 | `trustsight.boundaries`, `coverage.GAPS` |
 | `every report body key is documented` | B11, report schema | `reporting.REPORT_KEYS`, `docs/reference/report-schema.md` |
-| `transcendence table names real series` | Addendum 5 §5 | `docs/assurance-layers/diversity.md`, `layers.SERIES_LAYER` |
-| `every rule carries exactly one layer` | Addendum 5 §2 | `trustsight.layers.layer_of`, `categories.RULE_CATEGORIES` |
-| `boundaries forbid clean exactly when coverage gaps exist` | Addendum 2 W1, B2 | `trustsight.boundaries`, `coverage_gaps` |
-| `the indicator tier mirrors ioc_matches` | Addendum 5 §6.4, B1 | `reporting.report_body`, `PackageFact.ioc_matches` |
-| `the layer profile is gap-precise and additive` | Addendum 5 §3 | `trustsight.layers.layer_profile` |
+| `transcendence table names real series` | internal | `docs/assurance-layers/diversity.md`, `layers.SERIES_LAYER` |
+| `every rule carries exactly one layer` | internal | `trustsight.layers.layer_of`, `categories.RULE_CATEGORIES` |
+| `boundaries forbid clean exactly when coverage gaps exist` | B2 | `trustsight.boundaries`, `coverage_gaps` |
+| `the indicator tier mirrors ioc_matches` | B1 | `reporting.report_body`, `PackageFact.ioc_matches` |
+| `the layer profile is gap-precise and additive` | internal | `trustsight.layers.layer_profile` |
 | `differ hostile input is bounded` | A4b | `differ` parser limits and hostile extraction gate |
 | `generated diff is bounded before assembly` | A4b, B2 | `sandbox/git_project.generate_diff_bounded`, `MAX_DIFF_PATCHES`, `MAX_PATCH_BYTES` |
 | `companion reads are bounded before data` | A4b | `sandbox/git_project.companion_source_hunks`, `MAX_PKG_BUILD_BYTES`, `MAX_COMPANION_TREE_ENTRIES` |

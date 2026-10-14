@@ -50,7 +50,7 @@ dev = [
     "ruff",
     "tree-sitter>=0.23",
     "tree-sitter-bash>=0.23",
-    # Property-based parser tests (spec §12): the locked corpus proves
+    # Property-based parser tests: the locked corpus proves
     # equivalence; Hypothesis explores the contract itself.
     "hypothesis",
 ]

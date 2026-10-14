@@ -302,11 +302,11 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `enabled` | bool | `false` | Enable the optional L9 build lane (Addendum 5 §12). When false, `trustsight verify-build` reports `l9_unavailable`. When true, the lane may build the package inside the project's rootless, networkless container and inspect the artifact; L9 findings are never blended into the static score. |
+| `enabled` | bool | `false` | Enable the optional L9 build lane. When false, `trustsight verify-build` reports `l9_unavailable`. When true, the lane may build the package inside the project's rootless, networkless container and inspect the artifact; L9 findings are never blended into the static score. |
 
 ### `[layers]`
 
-Override a rule's evidence category (its "layer"), Addendum 5 §2. The category
+Override a rule's evidence category (its "layer"). The category
 names the kind of evidence the rule's findings represent, `L1` (structural
 coherence) to `L8` (campaign correlation). The shipped per-series default and
 per-rule overrides apply unless a rule id is named here.
@@ -451,7 +451,7 @@ behaviour is a config key or a command flag.
 | `NO_COLOR` | Any non-empty value | Disables Rich output; terminal and pipe both get the plain renderer. |
 | `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |
-| `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache (spec §4) stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
+| `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
 | `XDG_CACHE_HOME` | A directory path | Base for the document cache when `TRUSTSIGHT_DOC_CACHE` is unset. |
 | `TRUSTSIGHT_SQLITE_SYNCHRONOUS` | `OFF`, `NORMAL`, `FULL`, `EXTRA` (case-insensitive); an unknown value falls back to `NORMAL` | SQLite commit durability. `NORMAL` (the default) keeps WAL's crash-safety without an fsync per commit; `FULL` is the old behaviour. |
 

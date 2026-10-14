@@ -22,7 +22,7 @@ makedepends=(
   'python-wheel'
   'python-hatchling'
   'python-pytest'
-  # The property-based parser tests (spec §12) import hypothesis; the
+  # The property-based parser tests import hypothesis; the
   # package's own check() runs the suite.
   'python-hypothesis'
 )

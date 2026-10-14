@@ -78,7 +78,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **When it fires:** When two or more structural conditions co-occur in a way that violates an invariant.
 
-**Filing rule.** New invariant-shaped detections default to C-series even when the ID sequence has to skip: a C rule with a fresh ID beats another H misfile (Addendum 3's intake freeze). C014-C025 arrived this way.
+**Filing rule.** New invariant-shaped detections default to C-series even when the ID sequence has to skip: a C rule with a fresh ID beats another H misfile (the intake freeze). C014-C025 arrived this way.
 
 ## D-series: **Dependency** Graph Analysis
 
@@ -358,7 +358,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 - **M fires at the category of its inputs and owns none**: a claims contradiction (M001) or a weak-signal span (M002) has no evidence category of its own; it records which inputs composed. P (claims) and W (boundaries) are render surfaces, not evidence-category layers either.
 - **A is the reserved L9 layer, not an L1-L8 rule layer**: it inspects the built artifact, only in the optional build lane, and its findings are never blended into the static score. The series is an artifact of execution, not of text analysis - the one mechanism that cannot be a static rule.
 - **A rule whose mechanism later proves to belong to another series is documented here**, not renumbered.
-- **The H-series is under an intake freeze** (Addendum 3): no new H id is added while the live count is above the reduction target. Overlapping ids are merged in the survivor's favour once the co-fire audit is measured, and a retired id stays readable as an alias of its survivor forever (`trustsight.rule_id_history`). The freeze is enforced in `tests/test_h_reduction.py`.
+- **The H-series is under an intake freeze**: no new H id is added while the live count is above the reduction target. Overlapping ids are merged in the survivor's favour once the co-fire audit is measured, and a retired id stays readable as an alias of its survivor forever (`trustsight.rule_id_history`). The freeze is enforced in `tests/test_h_reduction.py`.
 
 ## Summary Table
 

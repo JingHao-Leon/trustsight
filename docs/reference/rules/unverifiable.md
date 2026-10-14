@@ -199,7 +199,7 @@ Fires when D001/D002 would have judged an added dependency but abstained
 because the dependency corpus holds no observations. Without the corpus
 guard every name looks novel and D001 fires on every package a fresh
 install sees, so the rules stand down - and the stand-down is reported
-rather than left as silence (Addendum 2, D2).
+rather than left as silence.
 
 Names the abstaining rules and the observation count. It never changes the
 score; it is the same honesty contract as a coverage gap, moved to the

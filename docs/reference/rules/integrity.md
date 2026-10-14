@@ -527,7 +527,7 @@ Zero occurrences in the 3,739-diff benign corpus.
 - **Condition:** `.SRCINFO` and the PKGBUILD disagree on the `install=` hook,
   a checksum array, or `depends`, with both documents stating the field and
   neither carrying an unresolved variable; or their `source` arrays differ
-  (Addendum 4, G8). The source comparison is directional: the PKGBUILD-only
+  The source comparison is directional: the PKGBUILD-only
   direction is the executable/metadata split and scores HIGH, the
   `.SRCINFO`-only direction is stale metadata and is INFO. Both directions
   cite the two documents in the evidence.
