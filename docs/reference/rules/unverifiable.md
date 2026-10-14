@@ -61,6 +61,7 @@ rules, because a W is weight-0 by construction:
 | [W007](#w007) | Dependency Novelty Declined For Insufficient Observations | INFO |
 | [W008](#w008) | Unresolved Construct In A Recipe | INFO |
 | [W009](#w009) | Upstream Manifests Not Examined | INFO |
+| [W010](#w010) | Alert Volume Capped | INFO |
 <!-- /generated: page-index -->
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}
@@ -234,3 +235,18 @@ It forbids nothing by itself and never changes the score. It exists so a
 quiet result never implies "dependency surface reviewed": the layer's edge
 is part of the output. Absence of even the archive listing (the cgit
 fallback) is reported separately as `tree_not_analyzed`.
+
+### W010: Alert Volume Capped {#w010}
+
+**INFO** (weight 0) · category `unverifiable`
+
+Fires when a run produces more findings than `[alerts] max_rendered_findings`
+(default 50) and the terminal therefore groups the remainder. The per-band
+counts travel with it, so grouping is reported rather than silent; the JSON
+report is never filtered and carries every finding.
+
+It exists so a campaign that raises the noise floor cannot train a reviewer
+to skim unnoticed: the boundary names the saturation the way a coverage gap
+names a missing read. Unlike a gap, nothing was left unexamined, so it never
+forbids a clean verdict (`forbids_clean` is false) and never changes the
+score. Volume is a statement about the run, not about any single package.

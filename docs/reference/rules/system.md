@@ -102,7 +102,7 @@ be a script the recipe executes.
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
-| Reported, not scored | W001-W009 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
+| Reported, not scored | W001-W010 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
 
 The U-series reads the dependency manifests committed beside a recipe: U003 (a new remote source) and U004 (a redirected resolver) score at MEDIUM; U001, U002, U005 and U006 are weight-0 ledger entries.
 
@@ -1188,6 +1188,10 @@ See [W008: Unresolved Construct In A Recipe](unverifiable.md#w008).
 
 See [W009: Upstream Manifests Not Examined](unverifiable.md#w009).
 
+### W010 {#w010}
+
+See [W010: Alert Volume Capped](unverifiable.md#w010).
+
 ### U001 {#u001}
 
 See [U001: Manifest Added Or Removed](upstream-manifests.md#u001).
@@ -1223,6 +1227,14 @@ See [M002: Weak Signal Across Layers](meta.md#m002).
 ### M003 {#m003}
 
 See [M003: Composition Not Owned Elsewhere](meta.md#m003).
+
+### M004 {#m004}
+
+See [M004: Expected Co-fire Absent](meta.md#m004).
+
+### M005 {#m005}
+
+See [M005: Licensor Absent On Licensed Shape](meta.md#m005).
 
 ### E001 {#e001}
 
@@ -1267,6 +1279,10 @@ See [G004: Shared Upstream Dependency](correlation.md#g004).
 ### G005 {#g005}
 
 See [G005: Impersonation Campaign](correlation.md#g005).
+
+### G006 {#g006}
+
+See [G006: Neighborhood Under Campaign Alert](correlation.md#g006).
 
 ### A001 {#a001}
 

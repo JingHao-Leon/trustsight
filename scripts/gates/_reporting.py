@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from scripts.gates._core import Gate, ROOT, SRC, _ANALYSIS_FETCH_ALLOWED, _BOUND_CONSTANTS, _INLINE_CODE_RE, _MD_LINK_RE, _PERMISSION_PHRASES, _PERMISSION_REGEXES, _anchor, _call_name, _demo_fact, _python_files, _rel, _render_inspect_text
 
-__all__ = ['gate_a_baseline_supplies_state_not_rules', 'gate_a_gap_is_always_shown_with_the_band', 'gate_change_entries_carry_no_severity', 'gate_content_findings_carry_a_location', 'gate_declared_findings_fire_under_shipped_config', 'gate_doc_cross_references_resolve', 'gate_every_input_bound_is_a_source_constant', 'gate_every_json_report_carries_the_fingerprint', 'gate_every_render_ends_with_a_direction', 'gate_flag_threshold_is_derived', 'gate_no_git_filters_or_hooks', 'gate_no_template_grants_permission', 'gate_positive_evidence_cannot_lower_a_fatal', 'gate_positive_evidence_never_scores', 'gate_reserved_names_are_refused_everywhere', 'gate_result_reports_what_changed', 'gate_score_is_deterministic_under_a_fingerprint', 'gate_source_urls_are_never_fetched', 'gate_suppression_is_never_hidden_by_a_flag', 'gate_the_default_output_is_not_headline_shaped']
+__all__ = ['gate_alert_counts_reconcile', 'gate_alert_grouping_is_reported', 'gate_a_baseline_supplies_state_not_rules', 'gate_a_gap_is_always_shown_with_the_band', 'gate_change_entries_carry_no_severity', 'gate_content_findings_carry_a_location', 'gate_declared_findings_fire_under_shipped_config', 'gate_doc_cross_references_resolve', 'gate_every_input_bound_is_a_source_constant', 'gate_every_json_report_carries_the_fingerprint', 'gate_every_render_ends_with_a_direction', 'gate_flag_threshold_is_derived', 'gate_no_git_filters_or_hooks', 'gate_no_template_grants_permission', 'gate_positive_evidence_cannot_lower_a_fatal', 'gate_positive_evidence_never_scores', 'gate_reserved_names_are_refused_everywhere', 'gate_result_reports_what_changed', 'gate_score_is_deterministic_under_a_fingerprint', 'gate_source_urls_are_never_fetched', 'gate_suppression_is_never_hidden_by_a_flag', 'gate_the_default_output_is_not_headline_shaped']
 
 def gate_a_gap_is_always_shown_with_the_band() -> Gate:
     """A reviewer never sees a bare band for an incomplete analysis.
@@ -730,3 +730,65 @@ def gate_doc_cross_references_resolve() -> Gate:
     checked = sum(len(v) for v in anchors.values())
     return Gate("doc cross-references resolve", not broken,
                 broken or f"{checked} anchors across {len(anchors)} files")
+
+
+def gate_alert_grouping_is_reported() -> Gate:
+    """§1: a capped render is reported, never silent (B5/B11).
+
+    When a run produces more findings than the terminal shows, the boundary
+    W010 must appear and become a SATURATED boundary; a silent grouping is
+    the "computing and hiding" failure the alert-budget guard exists to
+    prevent.
+    """
+    from trustsight.analysis.meta import alert_volume_finding
+    from trustsight.boundaries import BoundaryKind, boundaries_from_fact
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    problems: list[str] = []
+    cap = 5
+    rules = [{"rule_id": f"C{i:03d}", "severity": "HIGH", "category": "x"}
+             for i in range(cap + 3)]
+    config = {"alerts": {"max_rendered_findings": cap},
+              "severity_weights": {"HIGH": 25, "INFO": 0}}
+    finding = alert_volume_finding(rules, config)
+    if not finding or finding.get("rule_id") != "W010":
+        return Gate("alert grouping is reported", False,
+                    "no W010 above the render cap")
+
+    entry = ScoreEntry(rule_id="W010", severity="INFO", weight=0,
+                       reason=finding.get("match", ""))
+    fact = PackageFact(package_name="demo", score_breakdown=[entry])
+    kinds = {b.kind for b in boundaries_from_fact(fact)}
+    if BoundaryKind.SATURATED not in kinds:
+        problems.append("W010 did not become a SATURATED boundary")
+    if any(b.kind == BoundaryKind.SATURATED and b.forbids_clean
+           for b in boundaries_from_fact(fact)):
+        problems.append("the saturation boundary forbade a clean verdict")
+    return Gate("alert grouping is reported", not problems,
+                problems or ["W010 + SATURATED boundary"])
+
+
+def gate_alert_counts_reconcile() -> Gate:
+    """§1: grouping is bounded and reconciles; below the cap nothing fires."""
+    from trustsight.analysis.meta import alert_volume_finding
+
+    problems: list[str] = []
+    for cap in (1, 5, 50):
+        config = {"alerts": {"max_rendered_findings": cap},
+                  "severity_weights": {"HIGH": 25, "INFO": 0}}
+        for n in (0, cap, cap + 1, cap + 7):
+            rules = [{"rule_id": f"C{i:03d}", "severity": "HIGH"}
+                     for i in range(n)]
+            finding = alert_volume_finding(rules, config)
+            if n <= cap:
+                if finding is not None:
+                    problems.append(f"W010 fired at {n} <= cap {cap}")
+            else:
+                if finding is None:
+                    problems.append(f"no W010 at {n} > cap {cap}")
+                    continue
+                p = finding["params"]
+                if p["shown"] + p["grouped"] != p["rendered"]:
+                    problems.append(f"counts do not reconcile at {n}/{cap}")
+    return Gate("alert counts reconcile", not problems,
+                problems or "shown + grouped == rendered")

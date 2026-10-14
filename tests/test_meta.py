@@ -134,3 +134,51 @@ def test_no_escalation_without_an_meta_rule():
 
     assert _escalate_for_meta("Low", []) == "Low"
     assert _escalate_for_meta("Inconclusive", []) == "Inconclusive"
+
+
+def test_alert_volume_finding_counts_and_groups():
+    from trustsight.analysis.meta import alert_volume_finding
+
+    rules = [{"rule_id": f"C{i:03d}", "severity": "HIGH", "category": "x"}
+             for i in range(60)]
+    config = {"alerts": {"max_rendered_findings": 50},
+              "severity_weights": {"HIGH": 25, "INFO": 0}}
+    finding = alert_volume_finding(rules, config)
+    assert finding["rule_id"] == "W010"
+    assert finding["severity"] == "INFO"
+    assert finding["params"]["shown"] == 50
+    assert finding["params"]["grouped"] == 10
+    # Under the cap: no finding at all.
+    assert alert_volume_finding(rules[:40], config) is None
+    # A cap of 0 disables it.
+    assert alert_volume_finding(rules, {"alerts": {"max_rendered_findings": 0}}) is None
+
+
+def test_escalation_fires_when_a_declared_licensor_also_fired(monkeypatch):
+    """A rule declaring `escalates_when` moves the band one notch only."""
+    import trustsight.scoring as scoring
+    from trustsight.schema import ScoreEntry
+
+    monkeypatch.setattr(
+        "trustsight.config.load_rules",
+        lambda: [{"id": "R001", "escalates_when": ["R002"]}],
+    )
+    licensor = ScoreEntry(rule_id="R002", severity="LOW", weight=5, reason="y")
+    licensed = ScoreEntry(rule_id="R001", severity="HIGH", weight=25, reason="x")
+    assert scoring._escalate_for_meta("Medium", [licensed, licensor]) == "High"
+    # Without the licensor: the bump is lost, the finding is not.
+    assert scoring._escalate_for_meta("Medium", [licensed]) == "Medium"
+    # Never to FATAL: Critical stays Critical.
+    assert scoring._escalate_for_meta(
+        "Critical", [licensed, licensor]) == "Critical"
+
+
+def test_m005_reports_a_licensed_shape_without_its_licensor():
+    from trustsight.analysis.meta import m_tool_health
+
+    rules = [{"id": "R001", "escalates_when": ["R002"]}]
+    fired = [{"rule_id": "R001", "severity": "HIGH"}]
+    rows = m_tool_health(fired, rules)
+    assert [r["rule_id"] for r in rows] == ["M005"]
+    # With the licensor present: no tool-health note.
+    assert m_tool_health(fired + [{"rule_id": "R002"}], rules) == []

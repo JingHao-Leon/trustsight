@@ -34,6 +34,65 @@ _CONFIG_SECTION = "notify"
 _CONFIG_KEY = "webhook"
 
 
+def _cycle_alert_cap() -> int:
+    """``[alerts] max_cycle_alerts``: flagged packages a webhook names before
+    it degrades to top-K.  0 disables the cap."""
+    try:
+        from .config import load_config
+
+        alerts = (load_config().get("alerts", {}) or {})
+        return int(alerts.get("max_cycle_alerts", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
+    """A short, deterministic name for the cycle, naming the top signal.
+
+    Same inputs give the same string: every choice is ordered explicitly
+    (score, count, then id), so the title never depends on dict iteration or
+    arrival order. It names the most significant thing that happened - an
+    impersonation campaign, an IOC match, a campaign cluster, an
+    over-threshold package, or a rule firing - instead of only counting
+    events, and stays short enough for a phone notification header.
+    """
+    if impersonation:
+        camp = max(impersonation, key=lambda c: (c["count"], c["maintainer"]))
+        who = camp["maintainer"] or "one submitter"
+        return f"impersonation campaign by {who} ({camp['count']} name-clones)"
+
+    if iocs:
+        packages = sorted({entry["package"] for entry in iocs})
+        if len(iocs) == 1:
+            return f"IOC match on {packages[0]}"
+        return f"{len(iocs)} IOC matches ({packages[0]} first)"
+
+    if campaign_cluster:
+        top = max(campaign_cluster, key=lambda c: (c["count"], c["rule_id"]))
+        return f"campaign across {top['count']} packages ({top['rule_id']})"
+
+    if cycle.over_threshold:
+        ranked = sorted(cycle.over_threshold, key=lambda item: (-item[1], item[0]))
+        package, score = ranked[0]
+        rules = (detail.get(package) or {}).get("rules") or []
+        lead = f" ({rules[0]})" if rules else ""
+        extra = len(ranked) - 1
+        tail = f" +{extra} more" if extra else ""
+        return f"{package} scored {score}{lead}{tail}"
+
+    if cycle.new_alerts:
+        counts: dict[str, int] = {}
+        for _, rule in cycle.new_alerts:
+            counts[rule] = counts.get(rule, 0) + 1
+        rule = sorted(counts, key=lambda r: (-counts[r], r))[0]
+        packages = sorted({package for package, rid in cycle.new_alerts if rid == rule})
+        extra = len(cycle.new_alerts) - 1
+        tail = f" +{extra} more" if extra else ""
+        return f"{rule} on {packages[0]}{tail}"
+
+    return "watcher cycle"
+
+
 def alert_payload(cycle) -> dict:
     """The JSON document for one cycle's new alerts.
 
@@ -64,12 +123,21 @@ def alert_payload(cycle) -> dict:
         if d.get("rules"):
             entry["rules"] = d["rules"]
         over.append(entry)
+    # A single noisy cycle must not become an unbounded notification: past
+    # ``[alerts] max_cycle_alerts`` the document keeps the top-K by score
+    # and reports how many it grouped.  Nothing is dropped from the stored
+    # record; only the webhook is bounded (A4 volume variant).
+    cycle_cap = _cycle_alert_cap()
+    over_grouped = 0
+    if cycle_cap > 0 and len(over) > cycle_cap:
+        over.sort(key=lambda entry: entry.get("score", 0), reverse=True)
+        over_grouped = len(over) - cycle_cap
+        over = over[:cycle_cap]
     iocs = [
         {"package": package, "indicator": indicator,
          "aur": f"https://aur.archlinux.org/packages/{package}"}
         for package, indicator in getattr(cycle, "ioc_hits", [])
     ]
-    n_alerts = len(cycle.new_alerts)
     # the G-series campaign clusters, as member triples.
     # The same document shape as over_threshold, so notify plumbing is reused.
     # Only the correlation family belongs here: the sweep also returns
@@ -98,22 +166,8 @@ def alert_payload(cycle) -> dict:
         for finding in (getattr(cycle, "cluster_findings", None) or ())
         if finding.get("rule_id") == "G005"
     ]
-    parts = []
-    for campaign in impersonation:
-        who = campaign["maintainer"] or "one submitter"
-        parts.append(
-            f"IMPERSONATION CAMPAIGN: {who} "
-            f"({campaign['count']} name-clones)"
-        )
-    if iocs:
-        parts.append(f"{len(iocs)} IOC match(es)")
-    if campaign_cluster:
-        parts.append(f"{len(campaign_cluster)} campaign cluster(s)")
-    if cycle.over_threshold:
-        parts.append(f"{len(cycle.over_threshold)} package(s) over threshold")
-    if n_alerts:
-        parts.append(f"{n_alerts} new alert(s)")
-    title = "TrustSight: " + ", ".join(parts)
+    headline = _headline(cycle, detail, iocs, campaign_cluster, impersonation)
+    title = f"TrustSight: {headline}"
     if day:
         title += f" ({day})"
     payload = {
@@ -132,6 +186,7 @@ def alert_payload(cycle) -> dict:
             for package, rule_id in cycle.new_alerts
         ],
         "over_threshold": over,
+        "over_threshold_grouped": over_grouped,
         "ioc_matches": iocs,
         "campaign_cluster": campaign_cluster,
         "impersonation": impersonation,

@@ -18,6 +18,8 @@ python scripts/security_gates.py
 | `declared source URLs are never fetched` | A2 | no raw transport in `src/trustsight/analysis/`, and every fetch helper it imports is name-keyed |
 | `every JSON report carries the fingerprint` | B1 | `schema.fact_to_dict`, `reporting.report_body` |
 | `suppression is never hidden by a flag` | B5 | `suppressed_rules` outside any verbosity branch in `cli/review.py` |
+| `alert grouping is reported` | B5, B11 | `analysis/meta.alert_volume_finding`; W010 becomes a SATURATED boundary |
+| `alert counts reconcile` | B5 | `shown + grouped == rendered`; the JSON is never filtered |
 | `the default output is not headline-shaped` | Guarantees | the default inspect render volunteers no score |
 | `one network host, declared` | A3 | endpoint constants: `aur.archlinux.org` everywhere, `api.github.com` and `github.com` only in `release.py` |
 | `every request has a timeout` | A4 | `urlopen` call sites |

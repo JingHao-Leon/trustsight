@@ -72,3 +72,12 @@ def test_unknown_gap_is_ignored_not_misreported():
 
 def test_w007_is_a_no_history_boundary():
     assert boundary_kind_for_w_rule("W007") == BoundaryKind.NO_HISTORY
+
+
+def test_w010_is_a_saturated_boundary_that_does_not_forbid_clean():
+    """Alert-volume capping says the sensor was saturated, not missing."""
+    assert boundary_kind_for_w_rule("W010") == BoundaryKind.SATURATED
+    fact = _fact(rules=["W010"])
+    boundaries = boundaries_from_fact(fact)
+    assert [b.kind for b in boundaries] == [BoundaryKind.SATURATED]
+    assert forbids_clean(boundaries) is False

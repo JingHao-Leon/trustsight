@@ -33,6 +33,7 @@ __all__ = [
     "claim_contradictions",
     "cofire_absence",
     "weak_layer_span",
+    "alert_volume_finding",
 ]
 
 #: (claim id, contradicting finding, message) for M001.  The claim is a P
@@ -103,6 +104,55 @@ def cofire_absence(triggered: list[dict], pairs) -> list[str]:
             notes.append(
                 f"{precursor} fired without expected co-fire {expected}")
     return notes
+
+
+def licensor_absent(triggered: list[dict], rules: list[dict]) -> list[dict]:
+    """M005: a licensed rule fired and none of its declared licensors did.
+
+    The mirror of escalation licensing.  A rule that declares
+    ``escalates_when`` was written expecting a partner signal; if it fired
+    alone, that is a **tool-health** observation - the detector travelled
+    without its usual company - not evidence about the package.  Weight 0,
+    routed to the harness, never scored.
+    """
+    fired = {r.get("rule_id") for r in triggered}
+    by_id = {str(r.get("id", "")): r for r in rules or ()}
+    out: list[dict] = []
+    for rule in triggered:
+        rid = str(rule.get("rule_id", ""))
+        licensors = (by_id.get(rid, {}) or {}).get("escalates_when") or ()
+        if licensors and not (set(licensors) & fired):
+            out.append({
+                "rule_id": "M005",
+                "name": "Licensor Absent On Licensed Shape",
+                "severity": "INFO", "category": "meta",
+                "match": (f"{rid} fired without its licensor(s): "
+                          f"{', '.join(str(x) for x in licensors)}"),
+                "params": {"rule": rid,
+                           "licensors": ", ".join(str(x) for x in licensors)},
+            })
+    return out
+
+
+def m_tool_health(
+    triggered: list[dict], rules: list[dict] | None = None, pairs=None
+) -> list[dict]:
+    """M004 + M005: instrument health, never the package's finding set.
+
+    Kept separate from :func:`m_series_findings` on purpose: these describe
+    the *tool*, and feeding them into the package's breakdown would let a
+    detector-health note move a verdict.  They ride on the fact's
+    ``cofire_health`` and are consumed by the harness/calibration.
+    """
+    out: list[dict] = []
+    for note in cofire_absence(triggered, pairs or ()):
+        out.append({
+            "rule_id": "M004", "name": "Expected Co-fire Absent",
+            "severity": "INFO", "category": "meta",
+            "match": note, "params": {"detail": note},
+        })
+    out.extend(licensor_absent(triggered, rules or []))
+    return out
 
 
 def weak_layer_span(triggered: list[dict], config) -> list[dict]:
@@ -176,3 +226,67 @@ def m_series_findings(triggered: list[dict], config=None, claims=None) -> list[d
     out.extend(weak_layer_span(triggered, config))
     out.extend(composition_not_owned(triggered, config))
     return out
+
+
+#: Rule ids that render even at weight 0 (kept in sync with
+#: ``reporting.ALWAYS_SHOWN_ANNOTATIONS``).  The alert-volume count must see
+#: the same set the renderer does, or the cap and the count disagree.
+_ALWAYS_SHOWN = frozenset({"H043", "H065"})
+
+
+def _renders(rule: dict, weights: dict) -> bool:
+    """True when *rule* appears in the rendered finding list."""
+    rid = rule.get("rule_id", "")
+    severity = rule.get("severity", "")
+    if rid.startswith("W") or rid in _ALWAYS_SHOWN:
+        return True
+    if severity in ("FATAL", "CRITICAL"):
+        return True
+    weight = rule.get("weight_override", weights.get(severity, 0))
+    try:
+        return int(weight or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def alert_volume_finding(triggered: list[dict], config=None) -> dict | None:
+    """W010: the terminal render was capped (superantigen control).
+
+    A campaign that makes every package moderately noisy trains a reviewer
+    to skim - the attack is the raised noise floor, not any single finding.
+    Past ``[alerts] max_rendered_findings`` the terminal groups the
+    remainder; this weight-0 boundary records that the sensor was
+    **saturated, not missing**, so ``forbids_clean`` stays False.  The
+    per-band counts travel with it, so grouping never drops content
+    silently (B5): the JSON is unfiltered and this names what it grouped.
+
+    Volume is never evidence about any one package, so the rule carries no
+    weight and is not a finding about the package - it is a statement about
+    the run.
+    """
+    alerts = (config or {}).get("alerts", {}) or {}
+    try:
+        cap = int(alerts.get("max_rendered_findings", 50) or 0)
+    except (TypeError, ValueError):
+        cap = 50
+    if cap <= 0:
+        return None
+    weights = (config or {}).get("severity_weights", {}) or {}
+    rendered = [rule for rule in triggered if _renders(rule, weights)]
+    if len(rendered) <= cap:
+        return None
+    by_severity: dict[str, int] = {}
+    for rule in rendered[cap:]:
+        severity = str(rule.get("severity", "") or "INFO")
+        by_severity[severity] = by_severity.get(severity, 0) + 1
+    from ..findings import stamp
+
+    grouped = len(rendered) - cap
+    return stamp({
+        "rule_id": "W010", "name": "Alert Volume Capped",
+        "severity": "INFO", "category": "unverifiable",
+        "match": (f"{len(rendered)} findings; the terminal shows the first "
+                  f"{cap} and groups {grouped} more"),
+        "params": {"rendered": len(rendered), "shown": cap,
+                   "grouped": grouped, "by_severity": by_severity},
+    })

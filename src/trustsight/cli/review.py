@@ -415,8 +415,15 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
         # commit has not moved still fires non-diff findings (H029, H003,
         # SOURCE_BUCKET, NOVELTY). Both renderers show them so the status
         # cannot read as "nothing was found".
-        for f in findings:
+        from ..reporting import render_cap
+
+        _cap = render_cap()
+        _shown = findings if _cap <= 0 else findings[:_cap]
+        for f in _shown:
             typer.echo(f"  {_finding_line(f)}")
+        if _cap > 0 and len(findings) > _cap:
+            typer.echo(
+                f"  ... and {len(findings) - _cap} more finding(s) (see --json)")
         if file_changes:
             for fc in file_changes:
                 status = fc.get("status", "")
@@ -525,7 +532,12 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
         # and the dependency card and `inspect` have always printed them.
         # Nesting this loop in the `else` made the status a claim that nothing
         # was found, which is not what the status says.
-        for f in r.get("findings", []):
+        from ..reporting import render_cap
+
+        _findings = r.get("findings", [])
+        _cap = render_cap()
+        _shown = _findings if _cap <= 0 else _findings[:_cap]
+        for f in _shown:
             # The description already ends with `[R001]` - `verdict._render`
             # puts it there, and the JSON body and the plain renderer both
             # carry it that way. Adding a second copy in front printed
@@ -534,6 +546,10 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
             # and made this renderer disagree with the plain one about the
             # same finding.
             table.add_row("", Text(clean(_finding_line(f))))
+        if _cap > 0 and len(_findings) > _cap:
+            table.add_row(
+                "", f"  [dim]... and {len(_findings) - _cap} more finding(s) "
+                    "(see --json)[/]")
 
         file_changes = r.get("file_changes", [])
         if file_changes:

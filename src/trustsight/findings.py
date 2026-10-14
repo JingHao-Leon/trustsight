@@ -153,6 +153,7 @@ TEMPLATES: dict[str, str] = {
     "W007": "dependency novelty declined: {rule} abstained because the corpus holds {observed} observation(s), so {count} added dependency name(s) were not judged",
     "W008": "{match}",
     "W009": "{match}",
+    "W010": "{match}",
     # --- Upstream manifests (U series) ---
     "U001": "{match}",
     "U002": "{match}",

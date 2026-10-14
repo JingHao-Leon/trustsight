@@ -75,6 +75,8 @@ def run_gates() -> list[Gate]:
         gate_differ_output_is_deterministic(),
         gate_api_inputs_are_bounded_before_initialization(),
         gate_a_gap_is_always_shown_with_the_band(),
+        gate_alert_grouping_is_reported(),
+        gate_alert_counts_reconcile(),
         gate_every_producer_accounts_for_coverage(),
         gate_maturity_numbers_are_not_duplicated(),
         gate_fatal_rules_cannot_be_removed(),
@@ -297,6 +299,8 @@ from scripts.gates._parity import (
     gate_unpinned_build_deps_is_a_declared_gap,
 )
 from scripts.gates._reporting import (
+    gate_alert_counts_reconcile,
+    gate_alert_grouping_is_reported,
     gate_a_baseline_supplies_state_not_rules,
     gate_a_gap_is_always_shown_with_the_band,
     gate_change_entries_carry_no_severity,

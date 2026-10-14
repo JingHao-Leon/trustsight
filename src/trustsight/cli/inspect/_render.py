@@ -170,7 +170,11 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     if fact.score_breakdown:
         inside.add_row("", "")
         inside.add_row("[underline]Rules Triggered[/]", "")
-        for entry in fact.score_breakdown:
+        from ...reporting import render_cap
+
+        _cap = render_cap()
+        _shown = fact.score_breakdown if _cap <= 0 else fact.score_breakdown[:_cap]
+        for entry in _shown:
             # Declared practices have their own group above; repeating them
             # here would undo the point of showing a default subset.
             if entry.rule_id.startswith("P") and entry.rule_id[1:].isdigit():
@@ -188,6 +192,11 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
                 segs.append(Text(where + "  "))
             segs.append(Text(clean(entry.reason)))
             inside.add_row("", Text.assemble(*segs))
+
+        _grouped = len(fact.score_breakdown) - len(_shown)
+        if _grouped > 0:
+            inside.add_row(
+                "", f"  [dim]... and {_grouped} more finding(s) (see --json)[/]")
 
         if show_risk:
             for entry in fact.score_breakdown:
@@ -348,7 +357,11 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
             print(f"    ... {extra} more")
     if fact.score_breakdown:
         print("  Rules Triggered:")
-        for e in fact.score_breakdown:
+        from ...reporting import render_cap
+
+        cap = render_cap()
+        shown = fact.score_breakdown if cap <= 0 else fact.score_breakdown[:cap]
+        for e in shown:
             segs = [f"    [{clean(e.rule_id)}]"]
             if show_score:
                 segs.append(f"{e.weight:+d}")
@@ -358,6 +371,9 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
             where = finding_where(e.file, e.line)
             segs.append(f"{where}  {clean(e.reason)}" if where else clean(e.reason))
             print(" ".join(segs))
+        grouped = len(fact.score_breakdown) - len(shown)
+        if grouped > 0:
+            print(f"    ... and {grouped} more finding(s) (see --json)")
     if verbose:
         coverage = getattr(fact, "resolution_coverage", {}) or {}
         if coverage:

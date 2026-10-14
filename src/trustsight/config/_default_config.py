@@ -86,6 +86,28 @@ prefetch_timeout = 120
 watch_interval = 3600
 watch_min_interval = 60
 
+[alerts]
+# How many findings the terminal renders in full before it groups the
+# remainder.  The JSON is never filtered - nothing is dropped - but a
+# campaign that makes every package noisy can train a reviewer to skim, and
+# the attack is the raised noise floor, not any single finding.  Beyond the
+# cap the render shows a `...and N more findings (see --json)` line per
+# severity band and a weight-0 W010 (Alert Volume Capped) boundary.
+max_rendered_findings = 50
+# How many flagged packages a single watch-cycle webhook names before it
+# degrades to counts-per-band plus the top-K by score.  The full list is in
+# the stored record; 0 disables the cycle cap.
+max_cycle_alerts = 0
+# Campaign alert mode: how many campaigns may be active at once.  A new
+# activation beyond the cap evicts the oldest only if its TTL has also
+# lapsed; a live TTL is never shortened.
+max_active_campaigns = 8
+# Campaign alert mode: how long a corroborated campaign stays primed, in
+# observations (recorded analyses), not seconds.  Small on purpose - expiry
+# measured in observations is what keeps a primed state from becoming
+# chronic.
+campaign_ttl_observations = 40
+
 [verify]
 # The optional L9 build lane. When enabled, `trustsight
 # verify-build` may build the package inside the project's rootless,

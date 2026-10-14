@@ -43,6 +43,9 @@ class BoundaryKind(str):
     ANALYSIS_INCOMPLETE = "analysis_incomplete"
     REGISTRY_RESOLUTION = "registry_resolution"
     BUILD_ONLY_PATH = "build_only_path"
+    # The alert-volume boundary (W010): the sensor was saturated, not
+    # missing.  Nothing was left unread, so it never forbids a clean verdict.
+    SATURATED = "saturated"
 
 
 #: Coverage-gap id -> boundary kind.  Kept in step with ``coverage.GAPS``.
@@ -84,6 +87,9 @@ _W_RULE_KIND: dict[str, str] = {
     # an unresolved construct is an analysis boundary; X026/X027
     # report the suspicion, W008 reports the boundary (weight-0).
     "W008": BoundaryKind.UNRESOLVED,
+    # The render was capped: a volume statement, not a coverage gap, so
+    # forbids_clean is False (a W-only boundary carries no gap).
+    "W010": BoundaryKind.SATURATED,
 }
 
 
