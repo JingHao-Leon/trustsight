@@ -829,8 +829,13 @@ def config_fingerprint() -> str:
     try:
         from ..override import load_overrides
 
+        # TTL and the indicator cross-check change the effective ruleset (an
+        # expired override no longer suppresses), so they belong in the
+        # fingerprint beside the rule id and scope.
         material["overrides"] = sorted(
-            (o.rule_id, o.package or "") for o in load_overrides()
+            (o.rule_id, o.package or "", int(o.ttl_observations or 0),
+             bool(o.requires_clear_indicators))
+            for o in load_overrides()
         )
     except Exception:
         material["overrides"] = []

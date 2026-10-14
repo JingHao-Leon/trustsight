@@ -794,3 +794,16 @@ def test_sync_rules_stamps_the_current_generation(tmp_path, monkeypatch):
 
     config.sync_rules()
     assert config.local_ruleset_version() == config.SHIPPED_RULESET_VERSION
+
+
+def test_fingerprint_covers_override_ttl(monkeypatch):
+    from trustsight import config
+    from trustsight.override import RuleOverride
+
+    base = config.config_fingerprint()
+    monkeypatch.setattr(
+        "trustsight.override.load_overrides",
+        lambda: [RuleOverride(rule_id="H029", reason="r", package="p",
+                              ttl_observations=10)],
+    )
+    assert config.config_fingerprint() != base
