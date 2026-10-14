@@ -8,7 +8,7 @@ rules X001-X033, integrity-change rules C001-C031, dependency rules
 D001-D004, temporal rules T001-T003, correlation rules G001-G003, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M003, committed-manifest
 rules U001-U005, artifact rules A001-A008, declared-practice rules P001-P008 (P004 skipped), and
-unverifiable rules W001-W009.
+unverifiable rules W001-W010.
 
 Each rule contributes according to its severity weight, match target and
 scope, except the P and W series and the weight-0 M annotations, which are
@@ -53,10 +53,10 @@ generated from it by `scripts/build_rules_index.py`.
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
 | [Crossfire](crossfire.md) | `crossfire` | 33 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
-| [Unverifiable](unverifiable.md) | `unverifiable` | 9 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
-| [Meta and Confluence](meta.md) | `meta` | 3 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
+| [Unverifiable](unverifiable.md) | `unverifiable` | 10 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
+| [Meta and Confluence](meta.md) | `meta` | 5 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
-| [Correlation](correlation.md) | `correlation` | 5 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
+| [Correlation](correlation.md) | `correlation` | 6 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
 | [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 | [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
 | [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 6 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
@@ -144,6 +144,7 @@ is deliberately non-contiguous; see
 | [G003](correlation.md#g003) | Coordinated Adoption | Correlation | MEDIUM | [Correlation](correlation.md) |
 | [G004](correlation.md#g004) | Shared Upstream Dependency | Correlation | HIGH | [Correlation](correlation.md) |
 | [G005](correlation.md#g005) | Impersonation Campaign | Correlation | HIGH | [Correlation](correlation.md) |
+| [G006](correlation.md#g006) | Neighborhood Under Campaign Alert | Correlation | INFO | [Correlation](correlation.md) |
 | [H001](integrity.md#h001) | Checksum Disabled | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H002](integrity.md#h002) | Checksum Emptied | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H003](fetch-and-execution.md#h003) | Insecure Download Protocol | Heuristic | LOW | [Fetch and Execution](fetch-and-execution.md) |
@@ -251,6 +252,8 @@ is deliberately non-contiguous; see
 | [M001](meta.md#m001) | Claim Contradicted By Structure | Meta | HIGH | [Meta and Confluence](meta.md) |
 | [M002](meta.md#m002) | Weak Signal Across Layers | Meta | MEDIUM | [Meta and Confluence](meta.md) |
 | [M003](meta.md#m003) | Composition Not Owned Elsewhere | Meta | MEDIUM | [Meta and Confluence](meta.md) |
+| [M004](meta.md#m004) | Expected Co-fire Absent | Meta | INFO | [Meta and Confluence](meta.md) |
+| [M005](meta.md#m005) | Licensor Absent On Licensed Shape | Meta | INFO | [Meta and Confluence](meta.md) |
 | [R001](fetch-and-execution.md#r001) | Remote Script Execution | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R002](fetch-and-execution.md#r002) | Wget Pipe to Shell | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R003](obfuscation.md#r003) | Base64 Decode and Execute | Regex | CRITICAL | [Obfuscation](obfuscation.md) |
@@ -314,6 +317,7 @@ is deliberately non-contiguous; see
 | [W007](unverifiable.md#w007) | Dependency Novelty Declined For Insufficient Observations | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W008](unverifiable.md#w008) | Unresolved Construct In A Recipe | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W009](unverifiable.md#w009) | Upstream Manifests Not Examined | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
+| [W010](unverifiable.md#w010) | Alert Volume Capped | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
 | [X002](crossfire.md#x002) | Non-Literal Executable Name | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
 | [X003](crossfire.md#x003) | Obfuscated Command Argument | Crossfire | HIGH | [Crossfire](crossfire.md) |
