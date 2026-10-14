@@ -95,6 +95,14 @@ def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
         top = max(campaign_cluster, key=lambda c: (c["count"], c["rule_id"]))
         return f"campaign across {top['count']} packages ({top['rule_id']})"
 
+    refusals = getattr(cycle, "refusals", None) or []
+    if refusals:
+        pkgs = sorted(refusals)
+        if len(pkgs) == 1:
+            return f"analysis could not fully read {pkgs[0]}"
+        return (f"{len(pkgs)} packages the analysis could not fully read "
+                f"({pkgs[0]} first)")
+
     if cycle.over_threshold:
         ranked = sorted(
             cycle.over_threshold,
@@ -102,7 +110,17 @@ def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
                               str(item[0]) if item else ""),
         )
         package, score = ranked[0]
-        rules = (detail.get(package) or {}).get("rules") or []
+        d = detail.get(package) or {}
+        # Lead with the heaviest finding, not the first rule in the list: the
+        # list now carries zero-weight declared practices too, and a headline
+        # reading "scored 45 (P001)" would name a declaration, not the risk.
+        findings = d.get("findings") or []
+        ranked_findings = sorted(
+            findings,
+            key=lambda f: (-_as_int(f.get("weight")), str(f.get("rule_id", ""))),
+        )
+        rules = ([ranked_findings[0]["rule_id"]] if ranked_findings
+                 else (d.get("rules") or []))
         lead = f" ({rules[0]})" if rules else ""
         extra = len(ranked) - 1
         tail = f" +{extra} more" if extra else ""
@@ -150,6 +168,12 @@ def alert_payload(cycle) -> dict:
                 "%Y-%m-%d %H:%M UTC", time.gmtime(d["last_modified"]))
         if d.get("rules"):
             entry["rules"] = d["rules"]
+        # The located evidence: rule, file, line, severity and rendered
+        # reason.  Lets the feed show what line triggered what rule without
+        # a second request, and explains tool-emitted pseudo-rules
+        # (NOVELTY, SOURCE_BUCKET) that have no published catalog entry.
+        if d.get("findings"):
+            entry["findings"] = d["findings"]
         over.append(entry)
     # A single noisy cycle must not become an unbounded notification: past
     # ``[alerts] max_cycle_alerts`` the document keeps the top-K by score
@@ -221,6 +245,11 @@ def alert_payload(cycle) -> dict:
         "ioc_matches": iocs,
         "campaign_cluster": campaign_cluster,
         "impersonation": impersonation,
+        "refusals": [
+            {"package": package,
+             "aur": f"https://aur.archlinux.org/packages/{package}"}
+            for package in sorted(getattr(cycle, "refusals", None) or [])
+        ],
     }
     if day:
         payload["day"] = day
@@ -304,7 +333,8 @@ def maybe_notify(cycle, url: str | None = None) -> bool:
     receiver) is quiet by design: the watcher's job is the next cycle.
     """
     if not cycle.new_alerts and not cycle.over_threshold \
-            and not getattr(cycle, "ioc_hits", []):
+            and not getattr(cycle, "ioc_hits", []) \
+            and not getattr(cycle, "refusals", []):
         return False
     url = url if url is not None else notify_url()
     if not url:

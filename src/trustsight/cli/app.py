@@ -28,7 +28,15 @@ def _main(
         help="Show program's version number and exit",
     ),
 ):
-    pass
+    # Every command warns when a newer release exists, so a version behind
+    # cannot silently miss a detection.  Skipped for `--help`/`-h` (help
+    # must not touch the network or create config) and for `-v`/`--version`
+    # (handled eagerly above).
+    argv = sys.argv[1:]
+    if not any(token in argv for token in ("-h", "--help", "-v", "--version")):
+        from .updates import check_and_warn
+
+        check_and_warn()
 
 
 # Register all command modules

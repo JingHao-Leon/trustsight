@@ -957,23 +957,33 @@ def test_campaign_mode_activates_expires_and_caps(db):
                              max_active=3, now_obs=now + 2) is True
 
 
-def test_campaign_corroboration_adds_a_bounded_attributed_bonus(db):
+def test_campaign_corroboration_is_attributed_and_unscored(db):
     from trustsight.db import activate_campaign, observation_seq
     from trustsight.analysis.pipeline._analyze import _campaign_corroboration
 
-    activate_campaign("g005:m", ["yyay", "yau"], "g005", ttl_obs=50,
+    activate_campaign("g005:m", {"package_names": ["yyay", "yau"],
+                                 "targets": ["yay"]}, "G005", ttl_obs=50,
                       now_obs=observation_seq())
+    # A campaign member is corroborated: one attributed INFO entry, weight 0,
+    # and the score does not move.
     score, breakdown = _campaign_corroboration(10, [], "yyay", [])
-    assert score == 12  # +min(5, 2)
+    assert score == 10
     assert breakdown[-1].rule_id == "G007"
-    assert breakdown[-1].weight == 2
+    assert breakdown[-1].weight == 0
     assert breakdown[-1].evidence["campaign_id"] == "g005:m"
 
-    # Not in scope: untouched.
+    # The impersonated target is not corroboration: reviewing `yay` does not
+    # stand in the campaign, it is what the campaign imitates.
+    assert _campaign_corroboration(10, [], "yay", []) == (10, [])
+    # An unrelated package is untouched.
     assert _campaign_corroboration(10, [], "other", []) == (10, [])
-    # A gained host in scope corroborates instead of the name.
-    score2, breakdown2 = _campaign_corroboration(10, [], "other", ["https://yau/x"])
-    assert score2 == 12 and breakdown2[-1].rule_id == "G007"
+
+    # A gained host in a host campaign corroborates instead of the name.
+    activate_campaign("g001:new.cdn", {"hosts": ["new.cdn"]}, "G001",
+                      ttl_obs=50, now_obs=observation_seq())
+    score2, breakdown2 = _campaign_corroboration(10, [], "other",
+                                                 ["https://new.cdn/x"])
+    assert score2 == 10 and breakdown2[-1].rule_id == "G007"
 
 
 def test_bump_observation_seq_advances_the_clock(db):

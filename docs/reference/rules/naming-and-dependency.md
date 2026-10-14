@@ -37,7 +37,7 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [D001](#d001) | Novel Dependency Added | HIGH |
+| [D001](#d001) | Novel Dependency Added | MEDIUM |
 | [D002](#d002) | Typosquatted Dependency | HIGH |
 | [D003](#d003) | New Network-Using Makedepends | MEDIUM |
 | [D004](#d004) | Dependency Hijack Via Provides | HIGH |
@@ -86,9 +86,11 @@ Symmetric edit-distance is a census generator: `foo-git`, `foo-bin`, `foo-lts`, 
 
 ### D001: Novel Dependency Added {#d001}
 
-- **Severity:** HIGH (weight 25)
+- **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency`
 - **Description:** A dependency name appears that has never been observed anywhere in the AUR. Either a typo or a package created specifically to be pulled in.
+
+MEDIUM rather than HIGH: "never observed in the AUR" reads accumulated instrument history, so it is a prior - a quiet or cold corpus can make an ordinary new dependency look novel - and it is evidence to weigh, not a high-severity finding on its own. It stays scored, so poisoning the corpus can quiet it but never silence the structural rules.
 
 The corpus of known names is seeded from every `depends`/`makedepends`/`optdepends`/`checkdepends` entry in the AUR, **plus every package name and `provides` alias**. Without the latter, a real package that simply nothing else depends on would read as novel.
 

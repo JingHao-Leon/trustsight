@@ -1,7 +1,7 @@
 {
   "D001-depends-plus-eq.diff": {
-    "description": "A dependency appended with += that the warm corpus has never seen. D001 fires only when the corpus is loaded, and the cold scan of the same fixture must stay silent, which is the half the evasion corpus cannot test",
-    "min_score": 25,
+    "description": "A dependency appended with += that the warm corpus has never seen. D001 fires only when the corpus is loaded, and the cold scan of the same fixture must stay silent, which is the half the evasion corpus cannot test. D001 is MEDIUM (15), so a D001-only fixture scores 15",
+    "min_score": 15,
     "must_fire": [
       "D001"
     ]

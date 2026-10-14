@@ -120,6 +120,39 @@ def test_the_payload_carries_what_fired_and_when():
     }]
 
 
+def test_the_payload_carries_the_line_that_triggered_each_rule():
+    """A reader should be able to point at the exact line: each over-threshold
+    entry carries the located findings, and the rule-only list is derived from
+    them so the two cannot disagree."""
+    cycle = CycleResult(
+        over_threshold=[("hot-pkg", 45)],
+        detail={
+            "hot-pkg": {
+                "score": 45,
+                "rules": ["R001"],
+                "findings": [
+                    {"rule_id": "R001", "severity": "HIGH", "weight": 30,
+                     "file": "PKGBUILD", "line": 12,
+                     "reason": "Remote Script Execution: curl | bash"},
+                    {"rule_id": "NOVELTY", "severity": "MEDIUM", "weight": 15,
+                     "file": "", "line": None,
+                     "reason": "Source URL first seen globally: https://evil.sh"},
+                ],
+            }
+        },
+    )
+    payload = alert_payload(cycle)
+    entry = payload["over_threshold"][0]
+    assert entry["rules"] == ["R001"]
+    assert entry["findings"][0] == {
+        "rule_id": "R001", "severity": "HIGH", "weight": 30,
+        "file": "PKGBUILD", "line": 12,
+        "reason": "Remote Script Execution: curl | bash",
+    }
+    assert entry["findings"][1]["rule_id"] == "NOVELTY"
+    assert entry["findings"][1]["line"] is None
+
+
 def test_the_title_and_tags_reach_the_headers(receiver):
     cycle = CycleResult(over_threshold=[("hot-pkg", 45)],
                         backfill_day="2026-05-01")

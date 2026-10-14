@@ -66,7 +66,7 @@ the selected policy too.
 
 | Profile | Default threshold | Intended use |
 |---------|-------------------|--------------|
-| `default` | `20` | Historical behavior; about 9.7% of locked benign-corpus diffs enter the review queue. |
+| `default` | `20` | Historical behavior; about 9.6% of locked benign-corpus diffs enter the review queue. |
 | `quiet` | `40` | Smaller queue; it does not claim the same labelled-fixture coverage as `default`. |
 | `strict` | `10` | Broader queue for operators who prefer sensitivity over review volume. |
 
@@ -451,12 +451,13 @@ HIGH. The shipped file is empty, and a miss is uninformative.
 
 ## Environment variables
 
-TrustSight reads seven environment variables. Everything else that changes
+TrustSight reads eight environment variables. Everything else that changes
 behaviour is a config key or a command flag.
 
 | Variable | Values | Effect |
 |----------|--------|--------|
 | `TRUSTSIGHT_OFFLINE` | `1`, `true`, `yes` (case-insensitive, surrounding whitespace ignored); anything else is off | Forbids outbound requests to the release channel. |
+| `TRUSTSIGHT_NO_UPDATE_CHECK` | `1`, `true`, `yes` (case-insensitive); anything else is off | Disables the once-a-command "a newer release exists" notice. |
 | `NO_COLOR` | Any non-empty value | Disables Rich output; terminal and pipe both get the plain renderer. |
 | `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |

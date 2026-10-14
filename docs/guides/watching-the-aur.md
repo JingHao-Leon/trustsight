@@ -78,8 +78,9 @@ The document carries the cycle counts and the alerts. Every
 version transition, the AUR change date and the rules that fired. While a
 `--since` replay runs, `day` names the AUR day being analysed. The
 alerting bar is `--over-threshold N` (the `over_threshold` argument on
-`refresh_corpus`/`watch`); the default is 30, the benign corpus's 95th
-percentile.
+`refresh_corpus`/`watch`); the default is 35, the benign corpus's measured
+95th percentile (`calibration.benign_p95`), and a package alerts when its
+score is **strictly above** it.
 
 ```json
 {

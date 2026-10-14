@@ -844,3 +844,22 @@ def test_popular_candidates_drive_the_corpus_typosquat_check():
     assert ("tiny", 3) not in candidates  # below the popularity floor
     assert _impersonates("yyay", meta["yyay"], candidates) == "yay"
     assert _impersonates("tiny", meta["tiny"], candidates) == ""
+
+
+def test_the_alerting_bar_is_the_measured_benign_p95():
+    """The watcher alert bar must be the published benign p95, not a name
+    that merely claims to be.
+
+    The constant was 30 while the comment and guide called it the p95; the
+    measured p95 is 35.  Tying the value to the published figure means a
+    future recalibration moves both or fails here.
+    """
+    import json
+    from pathlib import Path
+
+    from trustsight.full_aur.pipeline import _OVER_BENIGN_P95
+
+    figures = json.loads(
+        (Path(__file__).parent / "fixtures" / "published-figures.json").read_text()
+    )
+    assert _OVER_BENIGN_P95 == figures["calibration"]["benign_p95"] == 35
