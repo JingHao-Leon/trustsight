@@ -1284,6 +1284,10 @@ See [G005: Impersonation Campaign](correlation.md#g005).
 
 See [G006: Neighborhood Under Campaign Alert](correlation.md#g006).
 
+### G007 {#g007}
+
+See [G007: Campaign Corroboration](correlation.md#g007).
+
 ### A001 {#a001}
 
 See [A001: Setuid File In Artifact](artifact.md#a001).

@@ -155,6 +155,58 @@ def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False,
     )
     return result
 
+
+def _campaign_corroboration(
+    score: int, breakdown, pkg_name: str, added_urls
+) -> tuple[int, list]:
+    """Add a bounded, attributed bonus for a run inside an active campaign.
+
+    Trained immunity: a corroborated campaign leaves its scope briefly
+    primed, so a run whose package - or a host it newly gained - stands in
+    that scope earns ``+min(5, corroboration_count)`` points, **once**, as a
+    single ``G007`` breakdown entry carrying ``campaign_id`` (B1: every
+    point attributable).  Bounded so a wide campaign cannot inflate, and
+    inert when no campaign is active (the corpus calibration carries none).
+    """
+    from ...db import active_campaigns
+
+    campaigns = active_campaigns()
+    if not campaigns:
+        return score, breakdown
+
+    from urllib.parse import urlsplit
+
+    hosts = set()
+    for url in added_urls or ():
+        try:
+            host = urlsplit(str(url)).hostname
+        except (ValueError, TypeError):
+            host = None
+        if host:
+            hosts.add(host)
+
+    for campaign in campaigns:
+        scope = set(campaign.get("scope", ()) or ())
+        if not scope:
+            continue
+        if pkg_name not in scope and not (hosts & scope):
+            continue
+        bonus = max(0, min(5, len(scope)))
+        if bonus == 0:
+            continue
+        from ...schema import ScoreEntry
+
+        enriched = list(breakdown)
+        enriched.append(ScoreEntry(
+            rule_id="G007", severity="INFO", weight=bonus,
+            reason=("corroborated against active campaign "
+                    f"{campaign['campaign_id']}"),
+            evidence={"campaign_id": campaign["campaign_id"]},
+        ))
+        return min(100, score + bonus), enriched
+    return score, breakdown
+
+
 def analyze_package(
     pkg_name: str,
     old_commit: str = "",
@@ -683,6 +735,9 @@ def analyze_package(
     ioc_matches = ioc_baseline_matches(
         diff_text, pkg_name, current_text=head_pkgbuild
     )
+
+    score, breakdown = _campaign_corroboration(
+        score, breakdown, pkg_name, source_changes.added_urls)
 
     # The installed version is a full [epoch:]pkgver-pkgrel built locally;
     # head_version is the bare pkgver the AUR PKGBUILD declares.  For a VCS

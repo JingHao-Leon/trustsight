@@ -955,3 +955,22 @@ def test_campaign_mode_activates_expires_and_caps(db):
     activate_campaign("stale", ["z"], "s", ttl_obs=1, now_obs=now)
     assert activate_campaign("new2", ["y"], "g005", ttl_obs=5,
                              max_active=3, now_obs=now + 2) is True
+
+
+def test_campaign_corroboration_adds_a_bounded_attributed_bonus(db):
+    from trustsight.db import activate_campaign, observation_seq
+    from trustsight.analysis.pipeline._analyze import _campaign_corroboration
+
+    activate_campaign("g005:m", ["yyay", "yau"], "g005", ttl_obs=50,
+                      now_obs=observation_seq())
+    score, breakdown = _campaign_corroboration(10, [], "yyay", [])
+    assert score == 12  # +min(5, 2)
+    assert breakdown[-1].rule_id == "G007"
+    assert breakdown[-1].weight == 2
+    assert breakdown[-1].evidence["campaign_id"] == "g005:m"
+
+    # Not in scope: untouched.
+    assert _campaign_corroboration(10, [], "other", []) == (10, [])
+    # A gained host in scope corroborates instead of the name.
+    score2, breakdown2 = _campaign_corroboration(10, [], "other", ["https://yau/x"])
+    assert score2 == 12 and breakdown2[-1].rule_id == "G007"

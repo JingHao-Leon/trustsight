@@ -227,4 +227,7 @@ NON_CONTENT_RULES = {
     "H098": "composite",
     "H103": "integrity",
     "H065": "reconstruction", "H079": "context",
+    # G007 is a per-run score attribution (a campaign bonus), not a located
+    # finding: its evidence names the campaign, not a line.
+    "G007": "correlation",
 }
