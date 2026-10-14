@@ -109,7 +109,7 @@ def test_the_payload_carries_what_fired_and_when():
     )
     payload = alert_payload(cycle)
     assert payload["day"] == "2026-05-01"
-    assert payload["title"] == "TrustSight: 1 package(s) over threshold (2026-05-01)"
+    assert payload["title"] == "TrustSight: hot-pkg scored 45 (H001) (2026-05-01)"
     assert payload["over_threshold"] == [{
         "package": "hot-pkg",
         "score": 45,
@@ -125,7 +125,7 @@ def test_the_title_and_tags_reach_the_headers(receiver):
                         backfill_day="2026-05-01")
     post_webhook(receiver.url, alert_payload(cycle))
     headers = receiver.headers_seen[0]
-    assert headers.get("Title") == "TrustSight: 1 package(s) over threshold (2026-05-01)"
+    assert headers.get("Title") == "TrustSight: hot-pkg scored 45 (2026-05-01)"
     assert headers.get("Tags") == "eye"
 
 
@@ -299,7 +299,7 @@ def test_context_cluster_findings_are_not_campaigns():
     assert payload["campaign_cluster"] == [
         {"rule_id": "G002", "members": ["a", "b"], "count": 2},
     ]
-    assert "1 campaign cluster" in payload["title"]
+    assert "campaign across 2 packages (G002)" in payload["title"]
 
 
 def test_payload_leads_with_an_impersonation_campaign():
@@ -318,4 +318,4 @@ def test_payload_leads_with_an_impersonation_campaign():
         "targets": ["yay", "paru"], "count": 3,
     }]
     assert payload["title"].startswith(
-        "TrustSight: IMPERSONATION CAMPAIGN: marchos1as")
+        "TrustSight: impersonation campaign by marchos1as")
