@@ -1,0 +1,222 @@
+"""Extracted from crossfire.py: _x17_x25."""
+
+from __future__ import annotations
+import re
+from ...config import (
+    NETWORK_CLIENT as _NETWORK_CLIENT,
+    SCRIPT_EXECUTOR,
+)
+from ._common import _EXEC_WRAPPER
+
+__all__ = ['X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough']
+
+_X017_FIND_RE = re.compile(
+    r"\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
+    r"(?:" + _EXEC_WRAPPER + r")?(?:/(?:usr/)?bin/)?"
+    r"(?P<x017executor>" + SCRIPT_EXECUTOR + r")\b",
+    re.IGNORECASE,
+)
+
+_X017_SCRIPT_DANGER_RE = re.compile(
+    r"\b(?:" + SCRIPT_EXECUTOR + r")\b"
+    r"|(?:" + _NETWORK_CLIENT + r")\b"
+    r"|\beval\b|\bsource\b|\bbase64\b|\bxxd\b",
+    re.IGNORECASE,
+)
+
+X017_RE = re.compile(
+    r"--checkpoint-action\s*=\s*[\"']?exec"
+    r"|--to-command\s*="
+    r"|(?:\A\s*|[;&|(]\s*|&&\s*)enable\s+(?:-\w+\s+)*-f\b"
+    r"|(?:\A\s*|[;&|(]\s*|&&\s*)hash\s+(?:-\w+\s+)*-p\b",
+    re.IGNORECASE,
+)
+
+def _x017_find_runs_a_script(
+    body: str, match: re.Match, lines: list[str], index: int
+) -> bool:
+    """Whether a `find ... -exec` hands the executor something that runs.
+
+    Reads the command string after `-c`; a quoted argument is allowed to
+    span lines (it is not a backslash continuation), so the following
+    lines are read to the closing quote.  When the spelling is unreadable
+    the rule fires toward looking.  Without `-c` the executor is running a
+    file, which is the shape the rule names.
+    """
+    rest = body[match.end():]
+    if not re.match(r"\s*-c\b", rest):
+        return True
+    quoted = re.match(r"\s*-c\s+'([^']*)'", rest, re.DOTALL) or \
+        re.match(r'\s*-c\s+"([^"]*)"', rest, re.DOTALL)
+    if quoted is not None:
+        script = quoted.group(1)
+    else:
+        opener = re.match(r"\s*-c\s+(['\"])", rest)
+        if opener is None:
+            token = re.match(r"\s*-c\s+(\S+)", rest)
+            if token is None:
+                return True
+            script = token.group(1)
+        else:
+            quote = opener.group(1)
+            parts = [rest[opener.end():]]
+            for follower in lines[index + 1:index + 41]:
+                text = follower[1:] if follower[:1] in "+-" else follower
+                end = text.find(quote)
+                if end != -1:
+                    parts.append(text[:end])
+                    break
+                parts.append(text)
+            script = "\n".join(parts)
+    return bool(_X017_SCRIPT_DANGER_RE.search(script))
+
+_X021_SET_GLOB_RE = re.compile(r"(?:\A\s*|[;&|(]\s*|&&\s*)set\s+--\s+[^\n;&|]*\*")
+
+_X021_RUN_POSITIONAL_RE = re.compile(
+    r"(?:\A\s*|[;&|(]\s*|&&\s*)(?:" + _EXEC_WRAPPER + r")?[\"']?\$[@*]")
+
+X021_RE = re.compile(
+    r"(?:\A\s*|[;&|(]\s*|&&\s*|\b(?:do|then|else)\s+)"
+    r"(?:" + _EXEC_WRAPPER + r")?(?:/(?:usr/)?bin/)?"
+    r"(?:" + SCRIPT_EXECUTOR + r"|eval|source)\s+"
+    r"[\"']?(?:"
+    r"\$[@*]"                        # $@  $*
+    r"|\$\{?[1-9]\}?"               # $1  ${1}
+    r"|\$\{\w+\[[^\]]*\]\}"        # ${A[0]}  ${A[@]}
+    r"|[\w./-]*\*[\w./-]*"          # *.sh  build/*.sh
+    r")",
+    re.IGNORECASE,
+)
+
+_X022_WRITE_RE = re.compile(
+    r"(?:\A\s*|[;&|(]\s*|&&\s*)(?:" + _EXEC_WRAPPER + r")?"
+    r"(?:printf|echo|cat|tee)\b")
+
+def _redirect_target(body: str) -> tuple[int, str] | None:
+    """``(index_of_redirect, destination)`` for the last unquoted `>`."""
+    depth_s = depth_d = False
+    cut = -1
+    for i, ch in enumerate(body):
+        if ch == "'" and not depth_d:
+            depth_s = not depth_s
+        elif ch == '"' and not depth_s:
+            depth_d = not depth_d
+        elif ch == ">" and not depth_s and not depth_d:
+            cut = i
+    if cut < 0:
+        return None
+    tail = body[cut + 1:].lstrip(">").strip()
+    dest = re.split(r"[\s;&|<>]", tail, maxsplit=1)[0]
+    return (cut, dest) if dest else None
+
+_X022_PAYLOAD_RE = re.compile(r"\$\{?(?:srcdir|startdir|PWD|BUILDDIR)\}?/")
+
+_X022_CONFIG_FLAG_RE = re.compile(
+    r"--?(?:c|conf|config|configdir|conf-dir|config-dir|conf-file"
+    r"|config-file|config-directory|configfile|rcfile|rc|include"
+    r"|settings|profile|f|file)[=\s]", re.IGNORECASE)
+
+def _normalise_dest(token: str) -> str:
+    """A destination as it will be written on the line that uses it."""
+    return token.replace('"', "").replace("'", "").strip()
+
+_HEREDOC_OPEN_RE = re.compile(r"<<(-)?\s*['\"]?(\w+)['\"]?")
+
+_CONTENT_WRITE_VERB_RE = re.compile(
+    r"(?:\A\s*|[;&|(]\s*|&&\s*)(?:" + _EXEC_WRAPPER + r")?"
+    r"(?:printf|echo|cat|tee)\b",
+    re.IGNORECASE,
+)
+
+_BUILD_MANIFEST_RE = re.compile(
+    r"(?:^|[\s\"'/])(?:build\.ninja|Makefile|makefile|GNUmakefile"
+    r"|BUILD(?:\.bazel)?|WORKSPACE|meson\.build|CMakeLists\.txt"
+    r"|SConstruct|SConscript|Justfile|justfile|Taskfile\.ya?ml"
+    r"|[\w.-]+\.(?:mk|ninja|bazel|bzl|cmake))\b",
+    re.IGNORECASE,
+)
+
+_MANIFEST_COMMAND_RE = re.compile(
+    r"(?:^|[\s;])(?:command|cmd|COMMAND|recipe|script|run|args|entrypoint)"
+    r"\s*(?:=|:)"
+    # A tab-indented Makefile recipe line, in both spellings: a real tab
+    # in a heredoc body, and the `\t` a `printf` writes to produce one.
+    r"|^\s*\t|\\t\s*\S"
+    r"|\bgenrule\s*\(",
+)
+
+_MANIFEST_ARG_RE = re.compile(
+    r"(?:\A\s*|[;&|(]\s*|&&\s*)(?:" + _EXEC_WRAPPER + r")?"
+    r"(?:g?make|ninja|samu|bazel|buck2?|pants|scons|waf|just|task)\b"
+    r"[^\n;&|]*?\s-(?:f|-file|-makefile)[=\s]+[\"']?"
+    r"([^\"'\s;&|]+)",
+    re.IGNORECASE,
+)
+
+_SENSITIVE_VAR_RE = re.compile(
+    r"(?P<x024var>DLAGENTS|COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)"
+    r"|PACMAN_AUTH|CFLAGS|CXXFLAGS|LDFLAGS|MAKEFLAGS|RUSTFLAGS"
+    r"|PATH|LD_PRELOAD|LD_LIBRARY_PATH|PYTHONPATH)"
+    r"\s*\+?=",
+    re.IGNORECASE,
+)
+
+_INDIRECT_VALUE_RE = re.compile(
+    r"\$\{?\w+[@\[\}]?|"   # ${var[@]}, ${var[}, ${var}, $var
+    r"\$\(|"                # $(
+    r"`"                     # backtick
+)
+
+X024_RE = re.compile(
+    r"(?:" + _SENSITIVE_VAR_RE.pattern + r")"
+    r"(?:\s*[\"'\(]*\s*)"  # optional quotes/parens between = and value
+    r"(?:" + _INDIRECT_VALUE_RE.pattern + r")",
+    re.IGNORECASE,
+)
+
+_X024_VALUE_VAR_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
+
+def _x024_is_passthrough(body: str, match: re.Match) -> bool:
+    """True when the indirect value is the assigned variable's own name.
+
+    `PATH="$PATH:$HOME/.cargo/bin"` appends to the existing value and
+    `CGO_CFLAGS="${CFLAGS}"` forwards the standard flags: both are the
+    value the reviewer already sees, not one hidden in another variable.
+    The sensitive-variable pattern has no left boundary, so `CGO_CFLAGS`
+    matches as `CFLAGS` and the comparison is against that tail name -
+    which is what lets the CGO family through.
+    """
+    var = match.group("x024var")
+    value = body[match.start():match.end()]
+    expansion = _X024_VALUE_VAR_RE.search(value)
+    return bool(expansion and expansion.group(1) == var)
+
+_FUNC_CONTINUATION_RE = re.compile(
+    r"^\s*(\w+)\s*\(\s*\)",
+    re.IGNORECASE,
+)
+
+_FUNC_CONTINUATION_BODY_RE = re.compile(
+    r"^\s*\{",
+)
+
+def _multiline_function_shadow_lines(lines):
+    """Yield line numbers where a shadowed function is defined across lines."""
+    from ..build import _SHADOWED_NAMES
+    i = 0
+    while i < len(lines) - 1:
+        line = lines[i]
+        if not line.startswith("+"):
+            i += 1
+            continue
+        body = line[1:].strip()
+        m = _FUNC_CONTINUATION_RE.match(body)
+        if m and m.group(1) in _SHADOWED_NAMES:
+            j = i + 1
+            while j < len(lines) and not lines[j].startswith("+"):
+                j += 1
+            if j < len(lines) and _FUNC_CONTINUATION_BODY_RE.match(lines[j][1:]):
+                yield i + 1  # 1-indexed
+                i = j + 1
+                continue
+        i += 1
