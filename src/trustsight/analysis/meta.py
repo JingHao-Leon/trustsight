@@ -97,7 +97,7 @@ def cofire_absence(triggered: list[dict], pairs) -> list[str]:
     the package finding set (a hit means the tool, not the package, needs
     attention).
     """
-    ids = {r.get("rule_id") for r in triggered}
+    ids = {r.get("rule_id") for r in (triggered or ()) if isinstance(r, dict)}
     notes: list[str] = []
     for precursor, expected in pairs or ():
         if precursor in ids and expected not in ids:
@@ -115,12 +115,17 @@ def licensor_absent(triggered: list[dict], rules: list[dict]) -> list[dict]:
     without its usual company - not evidence about the package.  Weight 0,
     routed to the harness, never scored.
     """
-    fired = {r.get("rule_id") for r in triggered}
-    by_id = {str(r.get("id", "")): r for r in rules or ()}
+    fired = {r.get("rule_id") for r in (triggered or ()) if isinstance(r, dict)}
+    by_id = {
+        str(r.get("id", "")): r
+        for r in (rules or ()) if isinstance(r, dict)
+    }
     out: list[dict] = []
-    for rule in triggered:
+    for rule in triggered or ():
+        if not isinstance(rule, dict):
+            continue
         rid = str(rule.get("rule_id", ""))
-        licensors = (by_id.get(rid, {}) or {}).get("escalates_when") or ()
+        licensors = _as_list((by_id.get(rid, {}) or {}).get("escalates_when"))
         if licensors and not (set(licensors) & fired):
             out.append({
                 "rule_id": "M005",
@@ -258,10 +263,24 @@ def m_series_findings(triggered: list[dict], config=None, claims=None) -> list[d
 _ALWAYS_SHOWN = frozenset({"H043", "H065"})
 
 
+def _as_list(value) -> list[str]:
+    """A declared rule-id list as strings; a bare string is one value."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    try:
+        return [str(v) for v in value]
+    except TypeError:
+        return []
+
+
 def _renders(rule: dict, weights: dict) -> bool:
     """True when *rule* appears in the rendered finding list."""
-    rid = rule.get("rule_id", "")
-    severity = rule.get("severity", "")
+    if not isinstance(rule, dict):
+        return False
+    rid = str(rule.get("rule_id") or "")
+    severity = str(rule.get("severity") or "")
     if rid.startswith("W") or rid in _ALWAYS_SHOWN:
         return True
     if severity in ("FATAL", "CRITICAL"):
@@ -269,7 +288,7 @@ def _renders(rule: dict, weights: dict) -> bool:
     weight = rule.get("weight_override", weights.get(severity, 0))
     try:
         return int(weight or 0) > 0
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return False
 
 
@@ -291,7 +310,7 @@ def alert_volume_finding(triggered: list[dict], config=None) -> dict | None:
     alerts = (config or {}).get("alerts", {}) or {}
     try:
         cap = int(alerts.get("max_rendered_findings", 50) or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         cap = 50
     if cap <= 0:
         return None

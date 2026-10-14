@@ -281,6 +281,25 @@ def _escalate_for_meta(level: str, breakdown) -> str:
     return _BAND_ORDER[min(idx + 1, len(_BAND_ORDER) - 1)]
 
 
+def _declared_licensors(rule) -> tuple[str, ...]:
+    """A rule's declared licensor ids, tolerating a malformed value.
+
+    A hand-edited `escalates_when` may be a bare string, a non-iterable, or
+    a list of non-strings; none of those should raise out of scoring.
+    """
+    if not isinstance(rule, dict):
+        return ()
+    value = rule.get("escalates_when")
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    try:
+        return tuple(str(v) for v in value)
+    except TypeError:
+        return ()
+
+
 def _licensors_fired(fired: set[str]) -> bool:
     """True when a fired rule's declared licensors also fired this run."""
     try:
@@ -289,9 +308,10 @@ def _licensors_fired(fired: set[str]) -> bool:
         rules = load_rules()
     except Exception:  # noqa: BLE001 - an unreadable ruleset licenses nothing
         return False
-    for rule in rules:
-        licensors = rule.get("escalates_when") or ()
-        if rule.get("id") in fired and set(licensors) & fired:
+    for rule in rules or ():
+        if not isinstance(rule, dict):
+            continue
+        if rule.get("id") in fired and set(_declared_licensors(rule)) & fired:
             return True
     return False
 
@@ -529,13 +549,15 @@ def _annotate_licensed(breakdown) -> None:
         rules = load_rules()
     except Exception:  # noqa: BLE001 - an unreadable ruleset licenses nothing
         return
-    by_id = {str(rule.get("id", "")): rule for rule in rules}
+    by_id = {
+        str(rule.get("id", "")): rule
+        for rule in rules or () if isinstance(rule, dict)
+    }
     for entry in breakdown or ():
-        rule = by_id.get(getattr(entry, "rule_id", ""))
+        rule = by_id.get(str(getattr(entry, "rule_id", "")))
         if not rule:
             continue
-        licensors = rule.get("escalates_when") or ()
-        hits = tuple(str(lic) for lic in licensors if lic in fired)
+        hits = tuple(lic for lic in _declared_licensors(rule) if lic in fired)
         if hits:
             entry.licensed_by = hits
 

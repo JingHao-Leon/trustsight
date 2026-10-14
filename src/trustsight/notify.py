@@ -41,9 +41,33 @@ def _cycle_alert_cap() -> int:
         from .config import load_config
 
         alerts = (load_config().get("alerts", {}) or {})
-        return int(alerts.get("max_cycle_alerts", 0) or 0)
-    except (TypeError, ValueError):
+        return max(0, int(alerts.get("max_cycle_alerts", 0) or 0))
+    except (TypeError, ValueError, OverflowError):
         return 0
+
+
+def _as_int(value, default: int = 0) -> int:
+    """*value* as an int, or *default* when it is absent or nonsensical."""
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _member_list(finding, key: str) -> list:
+    """A finding's ``params[key]`` as a list; tolerant of malformed data."""
+    if not isinstance(finding, dict):
+        return []
+    params = finding.get("params", {})
+    if not isinstance(params, dict):
+        params = {}
+    value = params.get(key)
+    if isinstance(value, str):
+        return [value]
+    try:
+        return list(value)
+    except TypeError:
+        return []
 
 
 def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
@@ -72,7 +96,11 @@ def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
         return f"campaign across {top['count']} packages ({top['rule_id']})"
 
     if cycle.over_threshold:
-        ranked = sorted(cycle.over_threshold, key=lambda item: (-item[1], item[0]))
+        ranked = sorted(
+            cycle.over_threshold,
+            key=lambda item: (-_as_int(item[1] if len(item) > 1 else 0),
+                              str(item[0]) if item else ""),
+        )
         package, score = ranked[0]
         rules = (detail.get(package) or {}).get("rules") or []
         lead = f" ({rules[0]})" if rules else ""
@@ -110,7 +138,7 @@ def alert_payload(cycle) -> dict:
     day = getattr(cycle, "backfill_day", "") or ""
     over = []
     for package, score in cycle.over_threshold:
-        entry = {"package": package, "score": score,
+        entry = {"package": package, "score": _as_int(score),
                  "aur": f"https://aur.archlinux.org/packages/{package}"}
         d = detail.get(package) or {}
         if d.get("old_version") or d.get("new_version"):
@@ -146,11 +174,12 @@ def alert_payload(cycle) -> dict:
     campaign_cluster = [
         {
             "rule_id": finding.get("rule_id", ""),
-            "members": list(finding.get("params", {}).get("members", ())),
-            "count": len(finding.get("params", {}).get("members", ())),
+            "members": _member_list(finding, "members"),
+            "count": len(_member_list(finding, "members")),
         }
         for finding in (getattr(cycle, "cluster_findings", None) or ())
-        if str(finding.get("rule_id", "")).startswith("G")
+        if isinstance(finding, dict)
+        and str(finding.get("rule_id", "")).startswith("G")
     ]
     # An impersonation campaign (G005) is the one alert a reviewer must not
     # skim past: many typosquats of a popular package under one account.
@@ -158,13 +187,15 @@ def alert_payload(cycle) -> dict:
     # impersonated targets named.
     impersonation = [
         {
-            "maintainer": finding.get("params", {}).get("maintainer", ""),
-            "members": list(finding.get("params", {}).get("members", ())),
-            "targets": list(finding.get("params", {}).get("targets", ())),
-            "count": int(finding.get("params", {}).get("count", 0) or 0),
+            "maintainer": (finding.get("params", {}) or {}).get("maintainer", "")
+            if isinstance(finding.get("params", {}), dict) else "",
+            "members": _member_list(finding, "members"),
+            "targets": _member_list(finding, "targets"),
+            "count": _as_int((finding.get("params", {}) or {}).get("count")
+                             if isinstance(finding.get("params", {}), dict) else 0),
         }
         for finding in (getattr(cycle, "cluster_findings", None) or ())
-        if finding.get("rule_id") == "G005"
+        if isinstance(finding, dict) and finding.get("rule_id") == "G005"
     ]
     headline = _headline(cycle, detail, iocs, campaign_cluster, impersonation)
     title = f"TrustSight: {headline}"

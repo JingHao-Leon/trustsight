@@ -134,6 +134,8 @@ def _install_diff_text(install_text: str, name: str) -> str:
     - lets every content rule read it, including the unconditional
     root-fetch/write shapes a trojanised repackage hides there.
     """
+    if not isinstance(install_text, str) or not install_text:
+        return ""
     lines = split_lines(install_text)
     if not lines:
         return ""
