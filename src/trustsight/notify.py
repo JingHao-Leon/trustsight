@@ -11,6 +11,7 @@ The watcher must never die because a notification did: every failure here
 is logged and swallowed by :func:`maybe_notify`.
 """
 
+import copy
 import json
 import logging
 import time
@@ -23,6 +24,18 @@ log = logging.getLogger(__name__)
 #: Total wall-clock budget for one POST.  A hung receiver must not stall
 #: the next cycle.
 _TIMEOUT_S = 15
+
+#: ntfy.sh stores a message larger than its 4096-byte limit as a *file
+#: attachment*: the ``message`` field becomes "You received a file: ..." and
+#: the document is only reachable through a separate URL whose file expires
+#: in a few hours (sooner than the message).  A feed that reads ``message``
+#: then sees the placeholder, and the alert is lost.  The document is kept
+#: under the limit so it arrives as plain text; the budget leaves room for
+#: the connecting request and any receiver-added fields.
+_MAX_MESSAGE_BYTES = 4096
+_PAYLOAD_BUDGET_BYTES = 3800
+#: Findings kept per package before the payload is trimmed further.
+_MAX_FINDINGS_PER_PACKAGE = 12
 
 #: The response body is never read for its content; it is drained only so a
 #: slow receiver cannot hold the socket open.  64 KiB is far past any
@@ -253,7 +266,57 @@ def alert_payload(cycle) -> dict:
     }
     if day:
         payload["day"] = day
-    return payload
+    return _fit_payload(payload)
+
+
+def _payload_size(payload: dict) -> int:
+    """The UTF-8 byte length of *payload* as it is POSTed."""
+    return len(json.dumps(payload).encode("utf-8"))
+
+
+def _fit_payload(payload: dict) -> dict:
+    """Trim optional detail until the document fits ntfy's message limit.
+
+    A message over the limit is stored as a file attachment and the alert is
+    effectively lost to the feed, so the document is made to fit by shedding
+    the least essential detail, in order: the human ``reason`` strings (the
+    rule catalog already explains a rule id), then findings beyond a small
+    per-package cap, then findings entirely (``rules`` and the counts remain),
+    then the lowest-scoring over-threshold entries.  The headline, counts,
+    packages, rules, campaigns, IOCs and refusals always survive.
+    """
+    if _payload_size(payload) <= _PAYLOAD_BUDGET_BYTES:
+        return payload
+    out = copy.deepcopy(payload)
+
+    for entry in out.get("over_threshold", ()) or ():
+        for finding in entry.get("findings", ()) or ():
+            finding.pop("reason", None)
+    if _payload_size(out) <= _PAYLOAD_BUDGET_BYTES:
+        return out
+
+    for entry in out.get("over_threshold", ()) or ():
+        findings = entry.get("findings")
+        if isinstance(findings, list) and len(findings) > _MAX_FINDINGS_PER_PACKAGE:
+            entry["findings_truncated"] = len(findings) - _MAX_FINDINGS_PER_PACKAGE
+            entry["findings"] = findings[:_MAX_FINDINGS_PER_PACKAGE]
+    if _payload_size(out) <= _PAYLOAD_BUDGET_BYTES:
+        return out
+
+    for entry in out.get("over_threshold", ()) or ():
+        findings = entry.get("findings")
+        if findings:
+            entry["findings_truncated"] = len(findings)
+            del entry["findings"]
+    if _payload_size(out) <= _PAYLOAD_BUDGET_BYTES:
+        return out
+
+    # The over_threshold list is worst-first, so drop from the tail.
+    over = out.get("over_threshold", [])
+    while len(over) > 1 and _payload_size(out) > _PAYLOAD_BUDGET_BYTES:
+        over.pop()
+        out["over_threshold_grouped"] = int(out.get("over_threshold_grouped", 0)) + 1
+    return out
 
 
 def heartbeat_payload(cycle) -> dict:

@@ -310,6 +310,51 @@ def test_a_single_shot_cycle_notifies_too(receiver, monkeypatch):
     assert receiver.requests[0][1]["priority"] == "default"
 
 
+def test_a_modest_payload_keeps_located_findings_with_reasons():
+    from trustsight.notify import _payload_size, _PAYLOAD_BUDGET_BYTES
+
+    cycle = CycleResult(
+        over_threshold=[("hot-pkg", 45)],
+        detail={"hot-pkg": {"score": 45, "rules": ["R001"], "findings": [
+            {"rule_id": "R001", "severity": "HIGH", "weight": 30,
+             "file": "PKGBUILD", "line": 12, "reason": "curl | bash"}]}},
+    )
+    payload = alert_payload(cycle)
+    assert _payload_size(payload) <= _PAYLOAD_BUDGET_BYTES
+    assert payload["over_threshold"][0]["findings"][0]["reason"] == "curl | bash"
+
+
+def test_an_oversized_payload_is_trimmed_under_the_ntfy_limit():
+    """ntfy turns a >4096-byte message into a file attachment the feed cannot
+    read; the document must be trimmed to fit instead."""
+    from trustsight.notify import _payload_size, _MAX_MESSAGE_BYTES
+
+    names = [f"pkg-{i:02d}" for i in range(40)]
+    detail = {
+        name: {
+            "score": 50, "old_version": "1.0.0", "new_version": "1.0.1",
+            "last_modified": 1777593600,
+            "rules": [f"H{i:03d}" for i in range(30)],
+            "findings": [
+                {"rule_id": f"H{n:03d}", "severity": "HIGH", "weight": 25,
+                 "file": "PKGBUILD", "line": n, "reason": "x" * 120}
+                for n in range(30)
+            ],
+        }
+        for name in names
+    }
+    cycle = CycleResult(
+        over_threshold=[(name, 50) for name in names], detail=detail,
+        refusals=["refused-pkg"],
+    )
+    payload = alert_payload(cycle)
+    assert _payload_size(payload) <= _MAX_MESSAGE_BYTES
+    assert payload["event"] == "trustsight.alerts"
+    assert payload["title"].startswith("TrustSight:")
+    assert payload["over_threshold"]  # the top signal survives
+    assert payload["refusals"]  # the refusal tier survives
+
+
 def test_payload_carries_campaign_clusters():
     cycle = _cycle(cluster_findings=[
         {"rule_id": "G001", "params": {"members": ["a", "b", "c"]}},
