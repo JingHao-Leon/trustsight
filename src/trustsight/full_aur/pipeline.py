@@ -28,6 +28,8 @@ except ImportError:  # pragma: no cover - rich is a dependency, but degrade grac
 from ..analysis.base import _ensure_init
 from ..config import load_config, load_naming
 from ..db import (
+    activate_campaign,
+    active_campaigns,
     checkpoint_wal,
     get_connection,
     get_metadata,
@@ -86,7 +88,7 @@ _FLAGGED_REPORT_LIMIT = 10
 # H061 (a centrality hub) are weight-0 context, and a sweep emits hundreds of
 # H061 hubs at once.  Passing them to record_alerts made a routine sweep read
 # as "226 campaign cluster(s) ... 226 new alert(s)".
-_NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061"})
+_NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061", "G006"})
 
 #: Burst/share clusters that fire on legitimate variant families as readily
 #: as on a typosquat campaign.  They score and alert only when one of their
@@ -241,6 +243,90 @@ def _impersonates(
     return match[0] if match else ""
 
 
+def _campaign_identity(finding: dict) -> tuple[str, list[str]] | None:
+    """``(campaign_id, scope)`` for a corroborated cluster, or None.
+
+    Only G-series clusters corroborate a campaign.  A G005 impersonation
+    cluster keys on the maintainer and scopes to its member names and the
+    impersonated targets; the other G rules key on the value they join on
+    (host, literal, dependency, adopter) and scope to their members.
+    """
+    rule_id = str(finding.get("rule_id", ""))
+    if not rule_id.startswith("G"):
+        return None
+    params = finding.get("params", {}) or {}
+    members = [str(m) for m in params.get("members", ())]
+    if rule_id == "G005":
+        key = str(params.get("maintainer", "") or "unknown")
+        scope = sorted(set(members) | {str(t) for t in params.get("targets", ())})
+        return f"g005:{key}", scope
+    key = (params.get("host") or params.get("literal")
+           or params.get("dependency") or params.get("maintainer") or "")
+    return f"{rule_id}:{key}", members
+
+
+def _activate_campaigns(findings: list[dict], config: dict) -> None:
+    """Prime campaign state for every corroborated cluster this cycle.
+
+    A campaign is instrument state: it is written only by corroborated
+    findings on recorded cycles, never by a package, and it expires on the
+    observation clock (A11).  Bounded by ``[alerts] max_active_campaigns``;
+    a live TTL is never shortened.
+    """
+    alerts = config.get("alerts", {}) or {}
+    try:
+        max_active = int(alerts.get("max_active_campaigns", 8) or 0)
+    except (TypeError, ValueError):
+        max_active = 8
+    try:
+        ttl = int(alerts.get("campaign_ttl_observations", 40) or 40)
+    except (TypeError, ValueError):
+        ttl = 40
+    for finding in findings:
+        identity = _campaign_identity(finding)
+        if identity is None:
+            continue
+        campaign_id, scope = identity
+        activate_campaign(campaign_id, scope, str(finding.get("rule_id", "")),
+                          ttl_obs=ttl, max_active=max_active)
+
+
+def _neighborhood_elevation(records: list[dict]) -> list[dict]:
+    """G006: a package touches a host in an active campaign's scope (weight 0).
+
+    The cytokine effect: an alerted neighborhood raises the tissue's
+    readiness.  It is reported, never scored, in v1 - "touches an alerted
+    neighborhood" names a context, not a behavior - and never forbids a
+    clean verdict.  Only *gained* hosts count, so a package that already had
+    the host is not newly elevated.
+    """
+    campaigns = active_campaigns()
+    if not campaigns:
+        return []
+    host_to_campaign: dict[str, str] = {}
+    for campaign in campaigns:
+        for value in campaign.get("scope", ()):
+            host_to_campaign.setdefault(str(value), campaign["campaign_id"])
+    by_campaign: dict[str, set[str]] = {}
+    for record in records:
+        for host in record.get("hosts_gained", ()) or ():
+            campaign_id = host_to_campaign.get(str(host))
+            if campaign_id:
+                by_campaign.setdefault(campaign_id, set()).add(
+                    str(record.get("package", "")))
+    return [
+        {
+            "rule_id": "G006",
+            "name": "Neighborhood Under Campaign Alert",
+            "severity": "INFO", "category": "correlation",
+            "match": (f"{len(members)} package(s) gained a host in active "
+                      f"campaign {campaign_id}"),
+            "params": {"members": sorted(members), "campaign_id": campaign_id},
+        }
+        for campaign_id, members in sorted(by_campaign.items())
+    ]
+
+
 def _correlation_records(
     new_meta: dict,
     old_meta: Optional[dict],
@@ -337,9 +423,12 @@ def _run_corpus_sweep(
     # cycle's records (collective input, so it runs here and not per package).
     from ..analysis.correlation import correlate
 
-    findings.extend(correlate(
-        _correlation_records(new_meta, old_meta, processed, popular),
-        load_config()))
+    records = _correlation_records(new_meta, old_meta, processed, popular)
+    config = load_config()
+    findings.extend(correlate(records, config))
+
+    _activate_campaigns(findings, config)
+    findings.extend(_neighborhood_elevation(records))
 
     weights = load_config().get("severity_weights", {})
     for finding in findings:

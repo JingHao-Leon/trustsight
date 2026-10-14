@@ -36,6 +36,7 @@ This is a reference page. For how weight and scope work, see
 | [G003](#g003) | Coordinated Adoption | MEDIUM |
 | [G004](#g004) | Shared Upstream Dependency | HIGH |
 | [G005](#g005) | Impersonation Campaign | HIGH |
+| [G006](#g006) | Neighborhood Under Campaign Alert | INFO |
 <!-- /generated: page-index -->
 
 ### G001: Shared Gained Host {#g001}
@@ -82,3 +83,12 @@ The committed-manifest counterpart to G001: a dependency name and remote host th
 - **Condition:** One maintainer publishes at least `[thresholds] g_impersonation.min_members` (default 3) packages in the window whose names resemble a *far* more popular AUR package (the corpus H029 check over AUR vote counts).
 
 The registry-impersonation campaign shape: many near-identical name-clones of popular packages under a fresh account (`yyay`/`yay`, `parru`/`paru`, …). Where H029 reports one clone, G005 names the campaign - its maintainer, the member count, and the impersonated targets - so a flood of typosquats reads as one alert, not N. It fires only on the per-package impersonation evidence, so a maintainer updating their own legitimate variant family is not a campaign.
+
+### G006: Neighborhood Under Campaign Alert {#g006}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** INFO (weight 0)
+- **Category:** `correlation`
+- **Condition:** While a campaign is active (see [Campaign Alert Mode](../../explanation/campaign-alert-mode.md)), a package in the window *gains* a host or domain in that campaign's scope, without itself being corroborated.
+
+The cytokine effect: an alerted neighborhood raises the surrounding tissue's readiness. It is reported, never scored, in v1 - "touches an alerted neighborhood" names a context, not a behaviour - and it never forbids a clean verdict. Only *gained* hosts count.
