@@ -382,13 +382,22 @@ def filter_triggered_rules(
     if not overrides:
         return triggered_rules, []
 
+    def _clock(value) -> int | None:
+        """An observation count, or None when it cannot be read."""
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError, OverflowError):
+            return None
+
     if now_obs is None:
         try:
             from .db import observation_seq
 
-            now_obs = observation_seq()
+            now_obs = _clock(observation_seq())
         except Exception:  # noqa: BLE001 - an unreadable clock is no expiry
             now_obs = None
+    else:
+        now_obs = _clock(now_obs)
 
     active = [
         o for o in overrides
@@ -407,8 +416,11 @@ def filter_triggered_rules(
     def _expired(override: RuleOverride) -> bool:
         if override.ttl_observations is None or now_obs is None:
             return False
-        elapsed = int(now_obs) - int(override.created_at_obs or 0)
-        return elapsed >= int(override.ttl_observations)
+        ttl = _clock(override.ttl_observations)
+        if ttl is None:
+            return False
+        created = _clock(override.created_at_obs) or 0
+        return (now_obs - created) >= ttl
 
     kept: list[dict] = []
     suppressed: list[dict] = []
@@ -444,9 +456,9 @@ def apply_indicator_cross_check(
     rather than inside the filter itself; a row that requires clear
     indicators but whose run had none is unchanged.
     """
-    if not has_indicator_match:
+    if not has_indicator_match or not isinstance(suppressed_rows, list):
         return suppressed_rows
     for row in suppressed_rows:
-        if row.get("override_requires_clear_indicators"):
+        if isinstance(row, dict) and row.get("override_requires_clear_indicators"):
             row["indicator_corroborated"] = True
     return suppressed_rows

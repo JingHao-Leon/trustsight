@@ -521,14 +521,26 @@ def lint_escalation_chains(rules: list[dict]) -> list[LintFinding]:
     any ``escalates_when`` may not declare its own, so a single weak signal
     cannot cascade an entire run upward through a chain of "and therefore".
     """
+    def _licensors(rule) -> list[str]:
+        if not isinstance(rule, dict):
+            return []
+        value = rule.get("escalates_when")
+        if isinstance(value, str):
+            return [value]
+        try:
+            return [str(v) for v in (value or ())]
+        except TypeError:
+            return []
+
     licensed: set[str] = set()
-    for rule in rules:
-        for licensor in rule.get("escalates_when") or ():
-            licensed.add(str(licensor))
+    for rule in rules or ():
+        licensed.update(_licensors(rule))
     findings: list[LintFinding] = []
-    for rule in rules:
+    for rule in rules or ():
+        if not isinstance(rule, dict):
+            continue
         rid = str(rule.get("id", ""))
-        if rule.get("escalates_when") and rid in licensed:
+        if _licensors(rule) and rid in licensed:
             findings.append(LintFinding(
                 rid, SEVERITY_ERROR, "escalation-chain",
                 f"{rid} is itself licensed and cannot license a third rule",

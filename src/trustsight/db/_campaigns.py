@@ -32,6 +32,42 @@ __all__ = [
 #: real rather than a policy someone forgets to enforce.
 DEFAULT_TTL_OBSERVATIONS = 40
 
+#: Largest scope a campaign may store.  A scope comes from a corpus
+#: finding's members/targets, but bounding the stored row keeps a pathological
+#: finding from writing an unbounded JSON blob.
+MAX_CAMPAIGN_SCOPE = 10_000
+
+
+def _safe_int(value, default: int) -> int:
+    """*value* as an int, or *default* when it is absent or nonsensical.
+
+    Catches ``OverflowError`` too: ``int(float('inf'))`` and JSON's
+    ``Infinity``/``NaN`` raise rather than returning a number.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _scope_values(scope) -> list[str]:
+    """A campaign scope as a bounded, sorted list of strings.
+
+    A non-iterable scope (a hand-edited value) is empty rather than a crash;
+    a bare string is one value, not the character set it would otherwise
+    iterate into.
+    """
+    if scope is None:
+        return []
+    if isinstance(scope, str):
+        values = [scope]
+    else:
+        try:
+            values = list(scope)
+        except TypeError:
+            return []
+    return sorted({str(v) for v in values})[:MAX_CAMPAIGN_SCOPE]
+
 
 def _row_to_dict(row) -> dict:
     try:
@@ -68,7 +104,7 @@ def active_campaigns(now_obs: Optional[int] = None) -> list[dict]:
     never returned, so no code path can read an expired campaign and no
     sweep is needed to retire one.
     """
-    now = observation_seq() if now_obs is None else int(now_obs)
+    now = observation_seq() if now_obs is None else _safe_int(now_obs, observation_seq())
     try:
         with get_connection() as conn:
             rows = conn.execute(
@@ -88,7 +124,7 @@ def expired_unannounced(now_obs: Optional[int] = None) -> list[dict]:
     "a campaign ended": the caller reports each once, the way an expired
     indicator is reported rather than dropped.
     """
-    now = observation_seq() if now_obs is None else int(now_obs)
+    now = observation_seq() if now_obs is None else _safe_int(now_obs, observation_seq())
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM campaign_alerts"
@@ -125,9 +161,10 @@ def activate_campaign(
     a live TTL is never shortened, so a full set of live campaigns simply
     refuses the newcomer.  Returns True when the campaign is active.
     """
-    now = observation_seq() if now_obs is None else int(now_obs)
-    ttl = max(1, int(ttl_obs))
-    payload = json.dumps(sorted({str(s) for s in scope}), separators=(",", ":"))
+    now = observation_seq() if now_obs is None else _safe_int(now_obs, observation_seq())
+    ttl = max(1, _safe_int(ttl_obs, DEFAULT_TTL_OBSERVATIONS))
+    max_active = _safe_int(max_active, 0)
+    payload = json.dumps(_scope_values(scope), separators=(",", ":"))
     with get_connection() as conn:
         existing = conn.execute(
             "SELECT * FROM campaign_alerts WHERE campaign_id = ?", (campaign_id,)

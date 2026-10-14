@@ -251,14 +251,28 @@ def _campaign_identity(finding: dict) -> tuple[str, list[str]] | None:
     impersonated targets; the other G rules key on the value they join on
     (host, literal, dependency, adopter) and scope to their members.
     """
+    if not isinstance(finding, dict):
+        return None
     rule_id = str(finding.get("rule_id", ""))
     if not rule_id.startswith("G"):
         return None
     params = finding.get("params", {}) or {}
-    members = [str(m) for m in params.get("members", ())]
+    if not isinstance(params, dict):
+        params = {}
+
+    def _seq(value):
+        """A param's member/target list; a bare string is one value."""
+        if isinstance(value, str):
+            return [value]
+        try:
+            return list(value)
+        except TypeError:
+            return []
+
+    members = [str(m) for m in _seq(params.get("members"))]
     if rule_id == "G005":
         key = str(params.get("maintainer", "") or "unknown")
-        scope = sorted(set(members) | {str(t) for t in params.get("targets", ())})
+        scope = sorted(set(members) | {str(t) for t in _seq(params.get("targets"))})
         return f"g005:{key}", scope
     key = (params.get("host") or params.get("literal")
            or params.get("dependency") or params.get("maintainer") or "")
@@ -273,16 +287,16 @@ def _activate_campaigns(findings: list[dict], config: dict) -> None:
     observation clock (A11).  Bounded by ``[alerts] max_active_campaigns``;
     a live TTL is never shortened.
     """
-    alerts = config.get("alerts", {}) or {}
+    alerts = (config or {}).get("alerts", {}) or {}
     try:
         max_active = int(alerts.get("max_active_campaigns", 8) or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         max_active = 8
     try:
         ttl = int(alerts.get("campaign_ttl_observations", 40) or 40)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         ttl = 40
-    for finding in findings:
+    for finding in findings or ():
         identity = _campaign_identity(finding)
         if identity is None:
             continue
@@ -323,8 +337,13 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
         for value in campaign.get("scope", ()):
             host_to_campaign.setdefault(str(value), campaign["campaign_id"])
     by_campaign: dict[str, set[str]] = {}
-    for record in records:
-        for host in record.get("hosts_gained", ()) or ():
+    for record in records or ():
+        if not isinstance(record, dict):
+            continue
+        gained = record.get("hosts_gained") or ()
+        if isinstance(gained, str):
+            gained = [gained]
+        for host in gained:
             campaign_id = host_to_campaign.get(str(host))
             if campaign_id:
                 by_campaign.setdefault(campaign_id, set()).add(
