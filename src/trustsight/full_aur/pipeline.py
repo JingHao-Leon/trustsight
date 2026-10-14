@@ -291,6 +291,21 @@ def _activate_campaigns(findings: list[dict], config: dict) -> None:
                           ttl_obs=ttl, max_active=max_active)
 
 
+def _report_expired_campaigns(log) -> None:
+    """Report each lapsed campaign once, then mark it announced.
+
+    Silence about a campaign that ended is ambiguous between "no campaign"
+    and "a campaign lapsed": the lapse is named, the way an expired
+    indicator is, and never re-reported.
+    """
+    from ..db import expired_unannounced, mark_expiry_announced
+
+    for campaign in expired_unannounced():
+        log(f"campaign {campaign['campaign_id']} lapsed after "
+            f"{campaign['ttl_obs']} observation(s); no longer priming runs")
+        mark_expiry_announced(campaign["campaign_id"])
+
+
 def _neighborhood_elevation(records: list[dict]) -> list[dict]:
     """G006: a package touches a host in an active campaign's scope (weight 0).
 
@@ -986,6 +1001,7 @@ def _run_baseline_build(
     # the two used to leave the snapshot at the new state with the cycle's
     # events unrecorded, and the next run diffed the loss away.
     cluster_findings = _run_corpus_sweep(new_meta, old_meta, processed, scores, popular)
+    _report_expired_campaigns(_log)
     _record_cycle_feed(new_meta, old_meta, added, changed, removed)
     save_metadata(new_meta, _meta_snapshot_path())
     clear_resume_state()
