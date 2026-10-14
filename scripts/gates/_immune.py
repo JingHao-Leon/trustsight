@@ -24,6 +24,8 @@ __all__ = [
     "gate_escalation_never_reaches_fatal",
     "gate_escalation_chains_are_rejected",
     "gate_expired_overrides_are_reported",
+    "gate_corroborated_suppression_is_terminal_visible",
+    "gate_overrides_never_hide_indicator_corroboration",
 ]
 
 
@@ -210,3 +212,49 @@ def gate_expired_overrides_are_reported() -> Gate:
     return Gate("expired overrides are reported", ok,
                 ["a lapsed override stayed silent"] if not ok
                 else "the finding returned and the expiry was named")
+
+
+def gate_corroborated_suppression_is_terminal_visible() -> Gate:
+    """A suppression downgraded by an indicator still renders in the terminal.
+
+    The visible-only downgrade is worthless if it only reaches `--json`: a
+    reviewer reading the terminal must see the finding beside its override.
+    """
+    from trustsight.schema import PackageFact
+    from scripts.gates._core import _render_inspect_text
+
+    fact = PackageFact(
+        package_name="p", final_score=0,
+        suppressed_rules=[{
+            "rule_id": "C005", "severity": "HIGH",
+            "override_reason": "known", "override_package": "p",
+            "indicator_corroborated": True,
+        }],
+    )
+    text = _render_inspect_text(fact)
+    ok = "C005" in text
+    return Gate("corroborated suppression is terminal-visible", ok,
+                ["the suppressed finding did not render"] if not ok
+                else "the finding renders beside its override")
+
+
+def gate_overrides_never_hide_indicator_corroboration() -> Gate:
+    """A clear-indicator override cannot hide a match the run itself made."""
+    import trustsight.override as ov
+    from trustsight.override import RuleOverride, filter_triggered_rules
+
+    override = RuleOverride(rule_id="C005", reason="known", package="p",
+                            requires_clear_indicators=True)
+    saved = ov.load_overrides
+    ov.load_overrides = lambda: [override]
+    try:
+        kept, suppressed = filter_triggered_rules(
+            [{"rule_id": "C005", "severity": "HIGH"}],
+            package="p", indicator_corroborated=True)
+        ok = (bool(suppressed)
+              and suppressed[0].get("indicator_corroborated") is True)
+    finally:
+        ov.load_overrides = saved
+    return Gate("overrides never hide indicator corroboration", ok,
+                ["the corroboration was hidden"] if not ok
+                else "the row carries indicator_corroborated")

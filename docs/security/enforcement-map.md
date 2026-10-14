@@ -28,6 +28,8 @@ python scripts/security_gates.py
 | `escalation never reaches fatal` | B4/B10 | no escalation or bonus path reaches FATAL |
 | `escalation chains are rejected` | B10 | a rule that is itself licensed cannot license a third |
 | `expired overrides are reported` | B5 | a lapsed override stops suppressing and its id is named |
+| `corroborated suppression is terminal-visible` | B5 | a visible-only suppression renders in the terminal |
+| `overrides never hide indicator corroboration` | B5 | a clear-indicator override cannot hide a match the run made |
 | `the default output is not headline-shaped` | Guarantees | the default inspect render volunteers no score |
 | `one network host, declared` | A3 | endpoint constants: `aur.archlinux.org` everywhere, `api.github.com` and `github.com` only in `release.py` |
 | `every request has a timeout` | A4 | `urlopen` call sites |

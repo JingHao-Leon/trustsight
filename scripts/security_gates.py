@@ -85,6 +85,8 @@ def run_gates() -> list[Gate]:
         gate_escalation_never_reaches_fatal(),
         gate_escalation_chains_are_rejected(),
         gate_expired_overrides_are_reported(),
+        gate_corroborated_suppression_is_terminal_visible(),
+        gate_overrides_never_hide_indicator_corroboration(),
         gate_every_producer_accounts_for_coverage(),
         gate_maturity_numbers_are_not_duplicated(),
         gate_fatal_rules_cannot_be_removed(),
@@ -308,6 +310,7 @@ from scripts.gates._parity import (
 )
 from scripts.gates._immune import (
     gate_campaign_expiry_is_structural,
+    gate_corroborated_suppression_is_terminal_visible,
     gate_campaign_points_are_attributed,
     gate_campaign_state_is_instrument_state,
     gate_elevation_is_attributed,
@@ -315,6 +318,7 @@ from scripts.gates._immune import (
     gate_escalation_is_one_notch,
     gate_escalation_never_reaches_fatal,
     gate_expired_overrides_are_reported,
+    gate_overrides_never_hide_indicator_corroboration,
 )
 from scripts.gates._reporting import (
     gate_alert_counts_reconcile,
