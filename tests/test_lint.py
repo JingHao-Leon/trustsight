@@ -340,3 +340,17 @@ def test_lint_rules_file_covers_the_structural_table(tmp_path):
     result = CliRunner().invoke(app, ["lint-rules", "--file", str(path)])
     assert result.exit_code == 2
     assert "backtracking" in result.output
+
+
+def test_escalation_chains_are_rejected():
+    """Licensing is a star, not a ladder: a licensed rule cannot license."""
+    from trustsight.lint import lint_escalation_chains
+
+    rules = [
+        {"id": "R001", "escalates_when": ["R002"]},
+        {"id": "R002", "escalates_when": ["R003"]},
+        {"id": "R003"},
+    ]
+    errors = lint_escalation_chains(rules)
+    assert [f.rule_id for f in errors] == ["R002"]
+    assert errors[0].check == "escalation-chain"

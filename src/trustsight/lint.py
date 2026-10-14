@@ -512,3 +512,25 @@ def lint_rules(
             findings.extend(_check_reachability(rule, compiled))
 
     return findings
+
+
+def lint_escalation_chains(rules: list[dict]) -> list[LintFinding]:
+    """Reject an escalation chain: a licensed rule may not license another.
+
+    Licensing is a star, not a ladder.  A rule that is itself the target of
+    any ``escalates_when`` may not declare its own, so a single weak signal
+    cannot cascade an entire run upward through a chain of "and therefore".
+    """
+    licensed: set[str] = set()
+    for rule in rules:
+        for licensor in rule.get("escalates_when") or ():
+            licensed.add(str(licensor))
+    findings: list[LintFinding] = []
+    for rule in rules:
+        rid = str(rule.get("id", ""))
+        if rule.get("escalates_when") and rid in licensed:
+            findings.append(LintFinding(
+                rid, SEVERITY_ERROR, "escalation-chain",
+                f"{rid} is itself licensed and cannot license a third rule",
+            ))
+    return findings

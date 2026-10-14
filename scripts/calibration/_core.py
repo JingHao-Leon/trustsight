@@ -493,7 +493,9 @@ def _gap_detected_by_another_rule(result: dict) -> list[str]:
 
 _S_RULES = ("S001", "S002", "S003", "S004", "S005", "S006", "S007", "S008")
 
-_META_ESCALATORS = ("M002", "M003")
+#: One source of truth: the escalation set lives in the scorer, so the
+#: calibration cap and the runtime behaviour cannot disagree.
+from trustsight.scoring import _META_ESCALATORS  # noqa: E402
 
 X_RULES = tuple(f"X{i:03d}" for i in range(1, 32))
 

@@ -795,7 +795,8 @@ def config_fingerprint() -> str:
             k: rule.get(k) for k in
             ("id", "pattern", "severity", "category", "match_target",
              "scope", "added_only", "include_comments", "experimental",
-              "enabled", "weight_override", "exclude_if_matches")
+              "enabled", "weight_override", "exclude_if_matches",
+              "escalates_when")
         }
 
     def structural_key(rule: dict) -> dict:

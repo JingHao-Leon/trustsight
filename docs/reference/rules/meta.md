@@ -34,6 +34,8 @@ This is a reference page. For how weight and scope work, see
 | [M001](#m001) | Claim Contradicted By Structure | HIGH |
 | [M002](#m002) | Weak Signal Across Layers | MEDIUM |
 | [M003](#m003) | Composition Not Owned Elsewhere | MEDIUM |
+| [M004](#m004) | Expected Co-fire Absent | INFO |
+| [M005](#m005) | Licensor Absent On Licensed Shape | INFO |
 <!-- /generated: page-index -->
 
 ### M001: Claim Contradicted By Structure {#m001}
@@ -82,3 +84,26 @@ one step. Measured on the locked benign corpus: 316/3,739 (8.5%).
 Standing gate: the escalation passes the benign-corpus cap (`M escalation
 stays below the benign cap`, `MAX_BENIGN_FIRE_RATE`) before it ships, the
 cluster-rate gate the M constitution requires.
+
+### M004: Expected Co-fire Absent {#m004}
+
+- **Target:** programmatic (tool health)
+- **Severity:** INFO, weight 0
+- **Category:** `meta`
+
+A construct that historically co-fires with another rule appeared without
+it. A hit means the **tool**, not the package, needs attention, so this is
+never added to a package's finding list: it rides the report's
+`cofire_health` channel for the harness and calibration.
+
+### M005: Licensor Absent On Licensed Shape {#m005}
+
+- **Target:** programmatic (tool health)
+- **Severity:** INFO, weight 0
+- **Category:** `meta`
+
+A rule declaring `escalates_when` fired while none of its declared licensors
+did - the detector travelled without its usual company. Like M004 this is a
+sensor-health observation, not evidence about the package, so it goes to the
+`cofire_health` channel and never scores. See
+[Escalation Licensing](../../explanation/escalation-licensing.md).

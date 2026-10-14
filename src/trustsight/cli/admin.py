@@ -29,7 +29,12 @@ from ..db import (
     import_seed,
     set_metadata,
 )
-from ..lint import SEVERITY_ERROR, lint_rules, lint_structural_rules
+from ..lint import (
+    SEVERITY_ERROR,
+    lint_escalation_chains,
+    lint_rules,
+    lint_structural_rules,
+)
 from ..safe_text import clean
 from .display import (
     _print_colored,
@@ -276,6 +281,7 @@ def register_commands(app: typer.Typer):
         seen_ids: dict = {}
         findings = lint_rules(rules, seen_ids)
         findings.extend(lint_structural_rules(structural, seen_ids))
+        findings.extend(lint_escalation_chains(rules))
         total_rules = len(rules) + len(structural)
         missing = [] if file else missing_shipped_rules()
         outdated = [] if file else outdated_shipped_rules()

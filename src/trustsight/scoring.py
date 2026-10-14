@@ -256,16 +256,44 @@ _META_ESCALATORS = ("M002", "M003")
 
 
 def _escalate_for_meta(level: str, breakdown) -> str:
-    """Raise *level* one band when an M escalation rule fired."""
+    """Raise *level* one band when a licensed rule fired.
+
+    Two sources license an escalation:
+
+    * the M-series escalation rules (M002/M003), which ship as fixed band
+      escalations; and
+    * any rule declaring ``escalates_when`` in ``rules.toml`` whose listed
+      licensor also fired this run.
+
+    Licensing **amplifies, never authorizes**: it only ever moves the band
+    one notch (never to FATAL), and a missing licensor loses the bump but
+    never the finding.  The score arithmetic is untouched, so the calibrated
+    separation between the populations holds.
+    """
     if level not in _BAND_ORDER:
         return level
     fired = {
         getattr(e, "rule_id", "") for e in breakdown or ()
     }
-    if not fired.intersection(_META_ESCALATORS):
+    if not (fired.intersection(_META_ESCALATORS) or _licensors_fired(fired)):
         return level
     idx = _BAND_ORDER.index(level)
     return _BAND_ORDER[min(idx + 1, len(_BAND_ORDER) - 1)]
+
+
+def _licensors_fired(fired: set[str]) -> bool:
+    """True when a fired rule's declared licensors also fired this run."""
+    try:
+        from .config import load_rules
+
+        rules = load_rules()
+    except Exception:  # noqa: BLE001 - an unreadable ruleset licenses nothing
+        return False
+    for rule in rules:
+        licensors = rule.get("escalates_when") or ()
+        if rule.get("id") in fired and set(licensors) & fired:
+            return True
+    return False
 
 
 def calculate_score(
