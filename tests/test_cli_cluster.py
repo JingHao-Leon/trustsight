@@ -1,0 +1,737 @@
+"""CLI tests: snapshots, discovery, watch, deps, forget.
+
+Continuation of ``tests/test_cli.py``; duplicates its small ``help_text``
+helper so the two files stay independent.
+"""
+
+import json
+import shutil
+from unittest.mock import patch
+
+import pytest
+from typer.testing import CliRunner
+
+from trustsight.cli import app
+from trustsight.safe_text import clean
+
+pytestmark = pytest.mark.skipif(
+    not shutil.which("pacman"),
+    reason="pacman not available (non-Arch system)",
+)
+
+
+_HOUR = 3600
+
+
+def help_text(*args) -> str:
+    """The help output for *args*, with the styling removed."""
+    result = CliRunner().invoke(app, list(args))
+    assert result.exit_code == 0, result.output
+    return clean(result.output)
+
+def _stale_discovery(mock_installed, mock_config, snapshot_time, ttl=60):
+    """Wire the mocks these tests share: one installed package, one snapshot."""
+    mock_config.return_value = {"discovery": {"metadata_ttl_minutes": ttl}}
+    mock_installed.return_value = [{"name": "zen-browser-bin", "current_version": "1.21.10b-1"}]
+    return ({"zen-browser-bin": {"Version": "1.21.10b-1"}}, snapshot_time)
+
+
+@patch("trustsight.review.get_installed_packages")
+@patch("trustsight.review.load_config")
+@patch("trustsight.full_aur.metadata.load_snapshot")
+@patch("trustsight.full_aur.metadata.fetch_metadata")
+@patch("trustsight.full_aur.metadata.save_metadata")
+def test_stale_snapshot_is_refreshed_before_comparison(
+    mock_save, mock_fetch, mock_load, mock_config, mock_installed
+):
+    """A snapshot past the TTL is refetched, so the pending update is seen."""
+    import time
+
+    from trustsight.cli.review import _discover_packages
+
+    mock_load.return_value = _stale_discovery(
+        mock_installed, mock_config, int(time.time()) - 72 * _HOUR
+    )
+    mock_fetch.return_value = {"zen-browser-bin": {"Version": "1.21.14b-1"}}
+
+    result, total = _discover_packages(
+        repos=[], include_foreign=True, all_repos_flag=False,
+        all_packages=False, _warn=lambda msg: None,
+    )
+
+    mock_fetch.assert_called_once()
+    mock_save.assert_called_once()
+    assert [p["name"] for p in result] == ["zen-browser-bin"]
+    assert result[0]["latest_version"] == "1.21.14b-1"
+    assert total == 1
+
+
+@patch("trustsight.review.get_installed_packages")
+@patch("trustsight.review.load_config")
+@patch("trustsight.full_aur.metadata.load_snapshot")
+@patch("trustsight.full_aur.metadata.fetch_metadata")
+@patch("trustsight.full_aur.metadata.save_metadata")
+def test_fresh_snapshot_is_not_refetched(
+    mock_save, mock_fetch, mock_load, mock_config, mock_installed
+):
+    """Inside the TTL the snapshot is used as-is: no 60 MB download per review."""
+    import time
+
+    from trustsight.cli.review import _discover_packages
+
+    mock_load.return_value = _stale_discovery(
+        mock_installed, mock_config, int(time.time()) - 60
+    )
+
+    _discover_packages(
+        repos=[], include_foreign=True, all_repos_flag=False,
+        all_packages=False, _warn=lambda msg: None,
+    )
+
+    mock_fetch.assert_not_called()
+    mock_save.assert_not_called()
+
+
+@patch("trustsight.review.get_installed_packages")
+@patch("trustsight.review.load_config")
+@patch("trustsight.full_aur.metadata.load_snapshot")
+@patch("trustsight.full_aur.metadata.fetch_metadata")
+@patch("trustsight.full_aur.metadata.save_metadata")
+def test_snapshot_without_a_timestamp_is_refreshed(
+    mock_save, mock_fetch, mock_load, mock_config, mock_installed
+):
+    """Unknown age is stale: a snapshot written before the stamp existed."""
+    from trustsight.cli.review import _discover_packages
+
+    mock_load.return_value = _stale_discovery(mock_installed, mock_config, None)
+    mock_fetch.return_value = {"zen-browser-bin": {"Version": "1.21.14b-1"}}
+
+    _discover_packages(
+        repos=[], include_foreign=True, all_repos_flag=False,
+        all_packages=False, _warn=lambda msg: None,
+    )
+
+    mock_fetch.assert_called_once()
+
+
+@patch("trustsight.review.get_installed_packages")
+@patch("trustsight.review.load_config")
+@patch("trustsight.full_aur.metadata.load_snapshot")
+@patch("trustsight.full_aur.metadata.fetch_metadata")
+@patch("trustsight.full_aur.metadata.save_metadata")
+def test_refresh_failure_warns_instead_of_reporting_nothing(
+    mock_save, mock_fetch, mock_load, mock_config, mock_installed
+):
+    """A failed refresh keeps the old snapshot and says the answer may be stale."""
+    import time
+
+    from trustsight.cli.review import _discover_packages
+
+    mock_load.return_value = _stale_discovery(
+        mock_installed, mock_config, int(time.time()) - 72 * _HOUR
+    )
+    mock_fetch.side_effect = RuntimeError("cannot reach the AUR metadata dump")
+    warnings = []
+
+    result, _ = _discover_packages(
+        repos=[], include_foreign=True, all_repos_flag=False,
+        all_packages=False, _warn=warnings.append,
+    )
+
+    assert result == []
+    mock_save.assert_not_called()
+    assert len(warnings) == 1
+    assert "3 days old" in warnings[0]
+    assert "will not be reported as outdated" in warnings[0]
+
+
+@patch("trustsight.review.get_installed_packages")
+@patch("trustsight.review.load_config")
+@patch("trustsight.full_aur.metadata.load_snapshot")
+@patch("trustsight.full_aur.metadata.fetch_metadata")
+@patch("trustsight.full_aur.metadata.save_metadata")
+def test_empty_refresh_keeps_the_previous_snapshot(
+    mock_save, mock_fetch, mock_load, mock_config, mock_installed
+):
+    """An empty dump must not overwrite a usable snapshot with nothing."""
+    import time
+
+    from trustsight.cli.review import _discover_packages
+
+    mock_load.return_value = _stale_discovery(
+        mock_installed, mock_config, int(time.time()) - 72 * _HOUR
+    )
+    mock_fetch.return_value = {}
+    warnings = []
+
+    _discover_packages(
+        repos=[], include_foreign=True, all_repos_flag=False,
+        all_packages=False, _warn=warnings.append,
+    )
+
+    mock_save.assert_not_called()
+    assert any("keeping the snapshot" in w for w in warnings)
+
+
+@patch("trustsight.review.get_installed_packages")
+@patch("trustsight.review.load_config")
+@patch("trustsight.full_aur.metadata.load_snapshot")
+@patch("trustsight.full_aur.metadata.fetch_metadata")
+@patch("trustsight.full_aur.metadata.save_metadata")
+def test_ttl_of_zero_disables_the_refresh(
+    mock_save, mock_fetch, mock_load, mock_config, mock_installed
+):
+    """The opt-out: an offline machine can pin the snapshot it has."""
+    from trustsight.cli.review import _discover_packages
+
+    mock_load.return_value = _stale_discovery(mock_installed, mock_config, None, ttl=0)
+
+    _discover_packages(
+        repos=[], include_foreign=True, all_repos_flag=False,
+        all_packages=False, _warn=lambda msg: None,
+    )
+
+    mock_fetch.assert_not_called()
+
+
+@patch("trustsight.cli.review._discover_packages")
+@patch("trustsight.cli.display.console")
+def test_review_first_run_skips_no_outdated_message(
+    mock_console, mock_disc, tmp_path, monkeypatch
+):
+    """review() must not print 'No outdated packages found' on first metadata fetch."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    mock_disc.return_value = (None, 0)
+
+    result = CliRunner().invoke(app, ["review", "--limit", "5"])
+    assert result.exit_code == 0
+    assert "No outdated" not in result.stdout
+
+
+# --- _get_installed_packages ---
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_warns_repo_not_exist(mock_exists, mock_repo):
+    """Warning emitted when a named repo does not exist at all."""
+    from trustsight.cli.review import _get_installed_packages
+
+    mock_repo.return_value = []
+    mock_exists.return_value = False
+
+    warnings = []
+    result = _get_installed_packages(
+        repos=["nonexistent"], include_foreign=False,
+        all_repos=False, all_packages=False,
+        on_warn=lambda msg: warnings.append(msg),
+    )
+    assert len(warnings) == 1
+    assert "does not exist" in warnings[0]
+    assert result == []
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_warns_repo_empty(mock_exists, mock_repo):
+    """Warning emitted when a repo exists but nothing is installed from it."""
+    from trustsight.cli.review import _get_installed_packages
+
+    mock_repo.return_value = []
+    mock_exists.return_value = True
+
+    warnings = []
+    result = _get_installed_packages(
+        repos=["empty-repo"], include_foreign=False,
+        all_repos=False, all_packages=False,
+        on_warn=lambda msg: warnings.append(msg),
+    )
+    assert len(warnings) == 1
+    assert "exists but no packages" in warnings[0]
+    assert result == []
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_installed_foreign")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_foreign_only(mock_exists, mock_foreign, mock_repo):
+    """When no repos are specified, foreign packages are included by default."""
+    from trustsight.cli.review import _get_installed_packages
+
+    mock_repo.return_value = []
+    mock_foreign.return_value = [("foreign-a", "1.0"), ("foreign-b", "2.0")]
+
+    result = _get_installed_packages(
+        repos=[], include_foreign=True,
+        all_repos=False, all_packages=False,
+    )
+    assert len(result) == 2
+    names = {p["name"] for p in result}
+    assert names == {"foreign-a", "foreign-b"}
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_installed_foreign")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_repo_plus_foreign(mock_exists, mock_foreign, mock_repo):
+    """Repo packages and foreign packages both included when both flags are set."""
+    from trustsight.cli.review import _get_installed_packages
+
+    mock_repo.return_value = [("repo-pkg", "1.0")]
+    mock_foreign.return_value = [("foreign-pkg", "2.0")]
+    mock_exists.return_value = True
+
+    result = _get_installed_packages(
+        repos=["myrepo"], include_foreign=True,
+        all_repos=False, all_packages=False,
+        on_warn=lambda msg: None,
+    )
+    assert len(result) == 2
+    names = {p["name"] for p in result}
+    assert names == {"repo-pkg", "foreign-pkg"}
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_installed_foreign")
+@patch("trustsight.discovery.get_local_repos_from_pacman_conf")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_all_repos(
+    mock_exists, mock_conf, mock_foreign, mock_installed_repo
+):
+    """all_repos=True scans every custom repo found in pacman.conf."""
+    from trustsight.cli.review import _get_installed_packages
+
+    mock_conf.return_value = ["custom-a", "custom-b"]
+    mock_installed_repo.side_effect = [
+        [("pkg-a", "1.0")],
+        [("pkg-b", "2.0")],
+    ]
+
+    result = _get_installed_packages(
+        repos=[], include_foreign=False,
+        all_repos=True, all_packages=False,
+    )
+    assert len(result) == 2
+    names = {p["name"] for p in result}
+    assert names == {"pkg-a", "pkg-b"}
+    assert mock_installed_repo.call_count == 2
+    mock_installed_repo.assert_any_call("custom-a")
+    mock_installed_repo.assert_any_call("custom-b")
+    mock_foreign.assert_not_called()
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_installed_foreign")
+def test_get_installed_packages_deduplicates(mock_foreign, mock_repo):
+    """Same package in repo and foreign lists appears only once."""
+    from trustsight.cli.review import _get_installed_packages
+
+    mock_repo.return_value = [("shared-pkg", "1.0")]
+    mock_foreign.return_value = [("shared-pkg", "1.0")]
+
+    result = _get_installed_packages(
+        repos=["repo-x"], include_foreign=True,
+        all_repos=False, all_packages=False,
+        on_warn=lambda msg: None,
+    )
+    assert len(result) == 1
+    assert result[0]["name"] == "shared-pkg"
+
+
+# --- display_version contract ---
+
+def test_display_version_plausible():
+    from trustsight.cli.display import display_version
+    assert display_version("1.2.3") == "1.2.3"
+    assert display_version("2:1.0-1") == "2:1.0-1"
+    assert display_version("20240101") == "20240101"
+
+
+def test_display_version_raw_bash_is_unresolved():
+    """Raw bash like ${_ver//...} must never be shown as a version."""
+    from trustsight.cli.display import display_version
+    assert display_version("${_ver//.${_ver//[0-9.]/}}") == "unresolved"
+
+
+def test_display_version_none_is_em_dash():
+    """None or empty string renders as an em-dash, never 'None' or '?'."""
+    from trustsight.cli.display import display_version
+    assert display_version(None) == "-"
+    assert display_version("") == "-"
+
+
+def test_display_version_spaces_are_unresolved():
+    """A version string containing spaces is almost certainly unresolved."""
+    from trustsight.cli.display import display_version
+    assert display_version("1.0 beta") == "unresolved"
+
+
+# --- full-aur --watch wiring ---
+
+
+def test_full_aur_help_documents_watch():
+    out = help_text("full-aur", "--help")
+    for flag in ("--watch", "--interval", "--cycles"):
+        assert flag in out
+
+
+def test_full_aur_verify_reports_l9_unavailable_by_default():
+    """The batch L9 lane, gated off by default."""
+    result = CliRunner().invoke(
+        app, ["full-aur", "verify", "--package", "demo", "--json"])
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.stdout)
+    assert body["results"][0]["status"] == "l9_unavailable"
+
+
+def test_full_aur_watch_invokes_the_loop(monkeypatch):
+    # `full-aur` refuses to start when TRUSTSIGHT_OFFLINE is set, which the
+    # suite sets for every test. What is asserted here is the argument
+    # wiring, so the command has to be allowed to start; the loop it would
+    # enter is stubbed out below and nothing reaches the network.
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    seen = {}
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_watch",
+        lambda **kwargs: seen.update(kwargs) or [],
+    )
+    result = CliRunner().invoke(
+        app, ["full-aur", "--watch", "--interval", "120", "--cycles", "2"]
+    )
+    assert result.exit_code == 0, result.output
+    assert seen == {"interval": 120, "cycles": 2, "json_output": False,
+                    "notify_url": None, "over_threshold": None,
+                    "since": None}
+
+
+def test_full_aur_watch_ending_on_a_refusal_exits_2(monkeypatch):
+    """A watch that never analysed anything is 'could not run', not success:
+    the loop stops on a permanent refusal (no snapshot) and the exit code
+    says so."""
+    from trustsight.full_aur.pipeline import CycleResult
+
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_watch",
+        lambda **kwargs: [CycleResult(refused=True)],
+    )
+    result = CliRunner().invoke(app, ["full-aur", "--watch", "--cycles", "1"])
+    assert result.exit_code == 2
+
+
+def test_full_aur_watch_rejects_export(monkeypatch):
+    """--export/--sign describe one artifact; pairing them with a loop
+    would silently overwrite it every cycle."""
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_watch", lambda **kwargs: []
+    )
+    result = CliRunner().invoke(
+        app, ["full-aur", "--watch", "--export", "/tmp/baseline.tar.zst"]
+    )
+    assert result.exit_code == 2
+
+
+def test_full_aur_watch_rejects_export_as_json_under_the_flag(monkeypatch):
+    """Under --json the conflict error is still a JSON document: everything
+    printed under --json is parsed by scripts (tests/test_cli_json.py), and
+    this path printed plain text while the --cycles check right below it
+    honoured the flag.  TRUSTSIGHT_OFFLINE has to be lifted or the offline
+    refusal fires before the flag check is reached at all."""
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_watch", lambda **kwargs: []
+    )
+    result = CliRunner().invoke(
+        app, ["full-aur", "--watch", "--export", "/tmp/baseline.tar.zst", "--json"]
+    )
+    assert result.exit_code == 2
+    payload = json.loads(result.stdout)
+    assert "--watch" in payload["error"]
+
+
+# --- review --deps ---------------------------------------------------------
+
+
+class _FakeMetadata:
+    """A small AUR graph: two roots sharing one dependency, one level down."""
+
+    GRAPH = {
+        "app-a": ["libhelper", "libcommon"],
+        "app-b": ["libhelper"],
+        "libhelper": ["libdeep"],
+        "libcommon": [],
+        "libdeep": [],
+    }
+
+    @property
+    def packages(self):
+        return {name: {"Version": "1.0"} for name in self.GRAPH}
+
+    def deps_of(self, name):
+        return list(self.GRAPH.get(name, []))
+
+    def is_aur(self, name):
+        return name in self.GRAPH
+
+
+def test_the_closure_records_every_dependent_not_just_the_first():
+    """`walk_dependencies` attributes a shared dependency to one parent.
+
+    Its `already_seen` is shared across roots so a dependency twenty
+    packages need is analysed once, which is right for a per-package report
+    and wrong for the reverse question `--deps` asks: *who* needs this. The
+    closure walk keeps every edge.
+    """
+    from trustsight.depth import dependency_closure
+
+    closure = dependency_closure(
+        ["app-a", "app-b"], depth=2, metadata=_FakeMetadata())
+
+    assert closure.names == ["libcommon", "libhelper", "libdeep"]
+    assert closure.dependents["libhelper"] == ["app-a", "app-b"]
+    assert closure.dependents["libdeep"] == ["libhelper"]
+    assert closure.levels["libdeep"] == 2
+
+
+def test_the_closure_honours_the_depth_it_was_given():
+    from trustsight.depth import dependency_closure
+
+    meta = _FakeMetadata()
+    assert dependency_closure([], depth=1, metadata=meta).names == []
+    assert dependency_closure(["app-a"], depth=0, metadata=meta).names == []
+    assert dependency_closure(["app-a"], depth=1, metadata=meta).names == [
+        "libcommon", "libhelper"]
+    assert "libdeep" in dependency_closure(
+        ["app-a"], depth=-1, metadata=meta).names
+
+
+def test_a_root_is_not_reported_as_its_own_dependency():
+    """`--deps` means the dependencies; the roots are the no-flag view."""
+    from trustsight.depth import dependency_closure
+
+    class SelfReferential(_FakeMetadata):
+        GRAPH = {"app-a": ["app-b"], "app-b": ["app-a"]}
+
+    closure = dependency_closure(
+        ["app-a", "app-b"], depth=-1, metadata=SelfReferential())
+    assert closure.names == []
+
+
+def _deps_review(argv, batch):
+    """Run `review` with discovery and analysis stubbed, return the output."""
+    with patch("trustsight.cli.review._discover_packages",
+               return_value=([
+                   {"name": "app-a", "current_version": "1.0"},
+                   {"name": "app-b", "current_version": "2.0"},
+               ], 2)), \
+         patch("trustsight.cli.review._analyze_outdated_batch", batch), \
+         patch("trustsight.depth.default_metadata", return_value=_FakeMetadata()):
+        return CliRunner().invoke(app, argv)
+
+
+def _row_batch(pkgs, progress, verbose, depth=None, record=False):
+    return [{
+        "package": p["name"], "old_version": "1.0", "new_version": "1.1",
+        "score": 0, "risk": "Low", "risk_label": "Low", "verdict": "ok",
+        "findings": [], "changes": [], "first_seen": False,
+        "is_trivial": True, "failed": False, "coverage_gaps": [],
+        "dependencies": [], "file_changes": [],
+    } for p in pkgs]
+
+
+def test_deps_reviews_the_dependencies_and_names_what_requires_them():
+    result = _deps_review(["review", "--deps", "--depth", "2", "--quiet"],
+                          _row_batch)
+    assert result.exit_code == 0, result.output
+    out = result.output
+
+    # The dependencies are the subject...
+    for name in ("libhelper", "libcommon", "libdeep"):
+        assert name in out, f"{name} was not reviewed"
+    # ...the roots are not, because that is the no-flag view.
+    assert "app-a" in out, "the dependent must be named"
+    assert "Required by" in out
+    assert "AUR dependencies reviewed" in out
+
+
+def test_deps_carries_the_dependents_into_the_json_body():
+    """A field on the terminal and not in the JSON is the difference in
+    information B11 forbids."""
+    import json as _json
+
+    result = _deps_review(["review", "--deps", "--json", "--quiet"], _row_batch)
+    assert result.exit_code == 0, result.output
+    bodies = {b["package"]: b for b in _json.loads(result.output)}
+    assert bodies["libhelper"]["required_by"] == ["app-a", "app-b"]
+    assert bodies["libcommon"]["required_by"] == ["app-a"]
+
+
+def test_an_ordinary_review_carries_an_empty_dependents_list():
+    """The key is always present, so a consumer need not special-case it."""
+    import json as _json
+
+    result = _deps_review(["review", "--json", "--quiet"], _row_batch)
+    bodies = _json.loads(result.output)
+    assert all(b["required_by"] == [] for b in bodies)
+
+
+def test_deps_with_no_dependencies_says_so():
+    class Empty(_FakeMetadata):
+        GRAPH = {"app-a": [], "app-b": []}
+
+    with patch("trustsight.cli.review._discover_packages",
+               return_value=([{"name": "app-a", "current_version": "1.0"}], 1)), \
+         patch("trustsight.cli.review._analyze_outdated_batch", _row_batch), \
+         patch("trustsight.depth.default_metadata", return_value=Empty()):
+        result = CliRunner().invoke(app, ["review", "--deps", "--quiet"])
+    assert result.exit_code == 0, result.output
+    assert "No AUR dependencies found" in result.output
+
+
+def test_the_deps_hint_appears_only_where_it_helps():
+    """Advice about an empty set is noise, and so is advice you followed."""
+    from trustsight.cli.review import _DEPS_HINT, _deps_hint
+
+    with_deps = [{"package": "p", "dependencies": [{"name": "libhelper"}]}]
+    assert _deps_hint(with_deps, deps_only=False) == _DEPS_HINT
+    # Already there.
+    assert _deps_hint(with_deps, deps_only=True) == ""
+    # Nothing to point at.
+    assert _deps_hint([{"package": "p", "dependencies": []}], deps_only=False) == ""
+
+
+
+def test_cli_inspect_full_recipe_passes_through(tmp_path, monkeypatch):
+    """`inspect --full-recipe` asks the analysis for the whole recipe."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    with (
+        patch("trustsight.cli.inspect.commands.analyze_package") as mock_analyze,
+        patch("trustsight.discovery.get_aur_package_info") as mock_aur,
+    ):
+        from trustsight.schema import DiffSummary, PackageFact
+        mock_aur.return_value = {"example-pkg": {"Version": "1.0"}}
+        mock_analyze.return_value = PackageFact(
+            package_name="example-pkg", new_version="1.0",
+            diff_summary=DiffSummary(files_changed=["PKGBUILD"]),
+        )
+        result = CliRunner().invoke(
+            app, ["inspect", "example-pkg", "--full-recipe", "--allow-uninstalled"],
+        )
+        assert result.exit_code == 0, result.stdout
+        mock_analyze.assert_called_once_with("example-pkg", depth=None, record=False, full_recipe=True)
+
+
+def test_cli_inspect_full_recipe_refuses_last(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    result = CliRunner().invoke(app, ["inspect", "example-pkg", "--full-recipe", "--last", "2"])
+    assert result.exit_code == 2
+    assert "--last and --full-recipe" in result.output
+
+
+# --- forget --prune -------------------------------------------------------
+
+
+def _tracked_for_forget(tmp_path, monkeypatch, names):
+    """A database in *tmp_path* tracking *names*, with the AUR answer one
+    patch away."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    from trustsight.db import init_db, upsert_package
+    init_db()
+    for name in names:
+        upsert_package(name, "1.0")
+
+
+def test_forget_prune_removes_what_the_aur_confirms_is_gone(tmp_path, monkeypatch):
+    """A tracked package the AUR no longer lists is pruned; this used to
+    exit 2 on any such package because a short reply was misread as a
+    truncated one."""
+    _tracked_for_forget(tmp_path, monkeypatch, ["keep", "gone"])
+    monkeypatch.setattr(
+        "trustsight.cli.forget.get_existing_aur_package_names",
+        lambda names: {"keep"},
+    )
+
+    from trustsight.db import get_package_id
+    result = CliRunner().invoke(app, ["forget", "--prune", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert get_package_id("keep") is not None
+    assert get_package_id("gone") is None
+
+
+def test_forget_prune_refuses_when_the_aur_gives_no_answer(tmp_path, monkeypatch):
+    """No authoritative answer means no pruning: a network blip must not
+    empty the database."""
+    _tracked_for_forget(tmp_path, monkeypatch, ["keep", "gone"])
+    monkeypatch.setattr(
+        "trustsight.cli.forget.get_existing_aur_package_names",
+        lambda names: None,
+    )
+
+    from trustsight.db import get_package_id
+    result = CliRunner().invoke(app, ["forget", "--prune", "--yes"])
+    assert result.exit_code == 2
+    assert "cannot determine" in result.output
+    assert get_package_id("keep") is not None
+    assert get_package_id("gone") is not None
+
+
+def test_forget_prune_asks_before_deleting(tmp_path, monkeypatch):
+    """Without --yes the destructive prune confirms first, like the
+    per-package path does; a dry run never asks and never deletes."""
+    _tracked_for_forget(tmp_path, monkeypatch, ["keep", "gone"])
+    monkeypatch.setattr(
+        "trustsight.cli.forget.get_existing_aur_package_names",
+        lambda names: {"keep"},
+    )
+
+    from trustsight.db import get_package_id
+
+    result = CliRunner().invoke(app, ["forget", "--prune", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "Would remove" in result.output
+    assert "Are you sure?" not in result.output
+    assert get_package_id("gone") is not None
+
+    result = CliRunner().invoke(app, ["forget", "--prune"], input="n\n")
+    assert result.exit_code == 2, result.output
+    assert "Are you sure?" in result.output
+    assert get_package_id("gone") is not None
+
+    result = CliRunner().invoke(app, ["forget", "--prune"], input="y\n")
+    assert result.exit_code == 0, result.output
+    assert "Removed 1 package(s)" in result.output
+    assert get_package_id("keep") is not None
+    assert get_package_id("gone") is None
+
+
+def test_full_aur_since_rejects_a_bad_date(monkeypatch):
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    result = CliRunner().invoke(app, ["full-aur", "--watch", "--since", "yesterday"])
+    assert result.exit_code == 2
+    assert "YYYY-MM-DD" in result.output
+
+
+def test_full_aur_since_rejects_a_future_date(monkeypatch):
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    result = CliRunner().invoke(app, ["full-aur", "--watch", "--since", "2999-01-01"])
+    assert result.exit_code == 2

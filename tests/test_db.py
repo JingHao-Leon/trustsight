@@ -401,7 +401,7 @@ def test_auto_import_is_skipped_when_already_seeded(db, tmp_path, monkeypatch):
 
     seed = tmp_path / "seed.db"
     _make_seed(seed)
-    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
+    monkeypatch.setattr(dbmod._seed, "bundled_seed_path", lambda: seed)
     assert dbmod.maybe_auto_import_seed(quiet=True) is not None
     assert dbmod.maybe_auto_import_seed(quiet=True) is None
 
@@ -416,14 +416,14 @@ def test_auto_import_is_skipped_when_history_exists(db, tmp_path, monkeypatch):
                           raw_diff="", fact_json="{}", triggered_rules=[])
     seed = tmp_path / "seed.db"
     _make_seed(seed)
-    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
+    monkeypatch.setattr(dbmod._seed, "bundled_seed_path", lambda: seed)
     assert dbmod.maybe_auto_import_seed(quiet=True) is None
 
 
 def test_auto_import_is_a_noop_without_a_bundled_seed(db, tmp_path, monkeypatch):
     import trustsight.db as dbmod
 
-    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: tmp_path / "absent.db.gz")
+    monkeypatch.setattr(dbmod._seed, "bundled_seed_path", lambda: tmp_path / "absent.db.gz")
     assert dbmod.maybe_auto_import_seed(quiet=True) is None
 
 
@@ -438,7 +438,7 @@ def test_auto_import_tolerates_a_corrupt_bundled_seed(db, tmp_path, monkeypatch)
 
     seed = tmp_path / "seed.db.gz"
     seed.write_bytes(b"not gzip data at all")
-    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
+    monkeypatch.setattr(dbmod._seed, "bundled_seed_path", lambda: seed)
     assert dbmod.maybe_auto_import_seed(quiet=True) is None
 
 
@@ -451,7 +451,7 @@ def test_seeded_url_is_not_novel_after_version_bump(db, tmp_path, monkeypatch):
     url = "https://github.com/acme/tool/archive/v1.0.0.tar.gz"
     seed = tmp_path / "seed.db"
     _make_seed(seed, urls=(normalize_url(url),))
-    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
+    monkeypatch.setattr(dbmod._seed, "bundled_seed_path", lambda: seed)
     dbmod.maybe_auto_import_seed(quiet=True)
 
     pkg_id = dbmod.upsert_package("demo", "1.0")
@@ -467,7 +467,7 @@ def test_unseeded_domain_is_still_novel(db, tmp_path, monkeypatch):
 
     seed = tmp_path / "seed.db"
     _make_seed(seed)
-    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
+    monkeypatch.setattr(dbmod._seed, "bundled_seed_path", lambda: seed)
     dbmod.maybe_auto_import_seed(quiet=True)
 
     pkg_id = dbmod.upsert_package("demo", "1.0")

@@ -800,7 +800,10 @@ def test_a_timing_refusal_is_decided_once(monkeypatch):
         calls["n"] += 1
         return BACKTRACK_BUDGET_S * 10
 
-    monkeypatch.setattr(rules, "backtracking_risk", over_budget)
+    import importlib
+
+    compiled_mod = importlib.import_module("trustsight.rules._compiled")
+    monkeypatch.setattr(compiled_mod, "backtracking_risk", over_budget)
 
     assert rules._compiled(pattern) is None, "over-budget probe must refuse"
     assert pattern in rules._pattern_cache, "a timing refusal was not memoised"

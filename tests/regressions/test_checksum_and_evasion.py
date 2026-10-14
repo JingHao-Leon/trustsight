@@ -611,11 +611,11 @@ def test_a_first_analysis_reads_checksum_parity_from_the_recipe(monkeypatch):
     from trustsight.config import load_config
     from trustsight.schema import NoveltyContext
 
-    monkeypatch.setattr(pipeline, "_recent_update", lambda *a, **k: None)
-    monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline._analyze, "_recent_update", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline._analyze, "_package_is_new", lambda *a, **k: None)
     monkeypatch.setattr(git_project, "collect_tree_files", lambda repo, commit: ([], True))
-    monkeypatch.setattr(pipeline, "build_novelty_context", lambda *a, **k: NoveltyContext())
-    monkeypatch.setattr(pipeline, "get_maintainer_from_commit", lambda repo, commit: "")
+    monkeypatch.setattr(pipeline._analyze, "build_novelty_context", lambda *a, **k: NoveltyContext())
+    monkeypatch.setattr(pipeline._analyze, "get_maintainer_from_commit", lambda repo, commit: "")
 
     class _Project:
         def tree_files(self, commit):

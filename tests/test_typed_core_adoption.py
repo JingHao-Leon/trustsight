@@ -21,20 +21,24 @@ _LOOP_RE = re.compile(r"for\s+\w+\s+in\s+split_lines\(")
 PINNED_LOOPS = {
     "full_aur/properties.py": 5,   # .SRCINFO/PKGBUILD recipe-text extraction
     "analysis/build.py": 1,        # rebuilds a whole-file text as context lines
-    "analysis/delivery.py": 1,     # payload file content, not a diff
+    "analysis/delivery/_payloads.py": 1,  # payload file content, not a diff
     # H093 reads a committed file's payload text, moved from delivery.
     "analysis/persistence_engine.py": 1,
     "analysis/ioc.py": 1,          # whole-file text -> synthetic added lines
     "analysis/ioc_match.py": 1,    # same constructor
-    "differ.py": 3,                # local_source_names/urls_from_pkgbuild_text/companions
+    "differ/_sources.py": 2,       # local_source_names/urls_from_pkgbuild_text
     # Function bodies already read from RecipeDoc.functions; the loop is
     # over a body's lines (payload text), not a diff walk.
-    "analysis/structural.py": 2,
+    "analysis/structural/_checksums.py": 1,
+    "analysis/structural/_hooks.py": 1,
     # A local file the operator hands in, read whole; not a diff.
     "cli/lint.py": 2,
     # Hostile-input parsers over a manifest's own committed bytes (payload
     # text), not a diff walk; the diff is read through DiffDoc elsewhere.
-    "analysis/manifests.py": 13,
+    "analysis/manifests/_common.py": 2,
+    "analysis/manifests/_formats_a.py": 6,
+    "analysis/manifests/_formats_b.py": 1,
+    "analysis/manifests/_formats_c.py": 4,
     # Reads a committed companion file's payload text, not a diff.
     "sandbox/git_project.py": 1,
 }

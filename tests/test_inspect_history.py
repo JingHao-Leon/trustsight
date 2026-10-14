@@ -109,7 +109,7 @@ class TestValidation:
         _env(tmp_path, monkeypatch)
         _multi_commit_repo(tmp_path, monkeypatch, commits=2)
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
-            with patch("trustsight.cli.inspect.analyze_package") as mock_an:
+            with patch("trustsight.cli.inspect.commands.analyze_package") as mock_an:
                 from trustsight.schema import PackageFact, DiffSummary
                 mock_an.return_value = PackageFact(
                     package_name="testpkg", new_version="1.1",
@@ -281,7 +281,7 @@ class TestAllowUninstalled:
     def test_allows_analysis_when_flag_present(self, tmp_path, monkeypatch):
         _env(tmp_path, monkeypatch)
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
-            with patch("trustsight.cli.inspect.analyze_package") as mock_an:
+            with patch("trustsight.cli.inspect.commands.analyze_package") as mock_an:
                 from trustsight.schema import PackageFact, DiffSummary
                 mock_an.return_value = PackageFact(
                     package_name="testpkg", new_version="1.1",
@@ -315,7 +315,7 @@ class TestRecordFlag:
     def test_record_accepted_with_allow_uninstalled(self, tmp_path, monkeypatch):
         _env(tmp_path, monkeypatch)
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
-            with patch("trustsight.cli.inspect.analyze_package") as mock_an:
+            with patch("trustsight.cli.inspect.commands.analyze_package") as mock_an:
                 from trustsight.schema import PackageFact, DiffSummary
                 mock_an.return_value = PackageFact(
                     package_name="testpkg", new_version="1.1",
@@ -329,7 +329,7 @@ class TestRecordFlag:
         """--record is a persistence switch, not an uninstalled-only flag."""
         _env(tmp_path, monkeypatch)
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
-            with patch("trustsight.cli.inspect.analyze_package") as mock_an:
+            with patch("trustsight.cli.inspect.commands.analyze_package") as mock_an:
                 from trustsight.schema import PackageFact, DiffSummary
                 mock_an.return_value = PackageFact(
                     package_name="testpkg", new_version="1.1",

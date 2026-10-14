@@ -111,7 +111,7 @@ def test_scan_diff_records_the_binary_metadata_gap_and_finding():
     )
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
-            "trustsight.analysis.pipeline.binary_metadata_in_text",
+            "trustsight.analysis.pipeline._scan.binary_metadata_in_text",
             lambda text: ["PKGBUILD"],
         )
         fact = scan_diff(diff, package_name="demo")

@@ -467,7 +467,7 @@ _NOT_ATTACKER_TEXT = {"discovery.py", "seed_build.py", "srcinfo.py",
                       "ioc_baseline.py", "corpus.py", "temporal_engine.py",
                       "pivot.py", "export.py",
                       # pacman's own stdout, not a package's text.
-                      "db.py"}
+                      "db.py", "_dependencies.py"}
 
 
 def test_no_matching_module_splits_lines_the_python_way():

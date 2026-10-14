@@ -171,7 +171,7 @@ def _analyze(isolated, monkeypatch, srcinfo):
         {"PKGBUILD": _PKGBUILD_1},
         {"PKGBUILD": _PKGBUILD_2, ".SRCINFO": srcinfo},
     ])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
     return pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
 
 
@@ -260,7 +260,7 @@ def test_h102_fires_on_the_xz_shape(isolated, monkeypatch):
         {"PKGBUILD": _PKGBUILD_KEYS_1},
         {"PKGBUILD": _PKGBUILD_KEYS_2},
     ])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
     fact = pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
     ids = {e.rule_id for e in fact.score_breakdown}
     assert "H078" in ids, "the member must fire for the composition to see it"
@@ -277,7 +277,7 @@ def test_h102_silent_when_the_maintainer_stays(isolated, monkeypatch):
         {"PKGBUILD": _PKGBUILD_KEYS_1},
         {"PKGBUILD": same_maintainer},
     ])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
     fact = pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
     ids = {e.rule_id for e in fact.score_breakdown}
     assert "H078" in ids

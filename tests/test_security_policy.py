@@ -18,7 +18,10 @@ def _lock_gate(tmp_path, monkeypatch, script: str):
         "jobs:\n  x:\n    steps:\n"
         f"      - run: {script}\n"
     )
-    monkeypatch.setattr(sg, "ROOT", tmp_path)
+    import scripts.gates._core as gates_core
+    import scripts.gates._parity as gates_parity
+    monkeypatch.setattr(gates_parity, "ROOT", tmp_path)
+    monkeypatch.setattr(gates_core, "ROOT", tmp_path)
     return sg.gate_ci_installs_from_the_lock()
 
 
@@ -44,6 +47,9 @@ def test_lock_gate_allows_locked_install_and_check_only(tmp_path, monkeypatch):
         "      - run: uv lock --check\n"
         "      - run: uv sync --locked --extra dev\n"
     )
-    monkeypatch.setattr(sg, "ROOT", tmp_path)
+    import scripts.gates._core as gates_core
+    import scripts.gates._parity as gates_parity
+    monkeypatch.setattr(gates_parity, "ROOT", tmp_path)
+    monkeypatch.setattr(gates_core, "ROOT", tmp_path)
     gate = sg.gate_ci_installs_from_the_lock()
     assert gate.passed, gate.detail

@@ -67,7 +67,7 @@ def test_t002_silent_for_a_long_observed_domain(db):
 def test_key_ledger_is_bounded(db, monkeypatch):
     import trustsight.db as dbmod
 
-    monkeypatch.setattr(dbmod, "MAX_OBSERVED_KEYS", 5)
+    monkeypatch.setattr(dbmod._history, "MAX_OBSERVED_KEYS", 5)
     for i in range(10):
         record_observed_key(f"key-{i}", observed_at=f"2026-01-01 00:00:{i:02d}")
     assert observed_key_count() <= 5

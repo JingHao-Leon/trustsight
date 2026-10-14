@@ -147,7 +147,7 @@ def test_a_first_analysis_panel_closes_its_markup_and_says_status_once():
     )
 
     con = Console(record=True, width=200, force_terminal=False, no_color=True)
-    with patch.object(inspect_cli, "console", lambda: con):
+    with patch.object(inspect_cli._render, "console", lambda: con):
         inspect_cli._inspect_rich(fact)
     out = con.export_text()
 

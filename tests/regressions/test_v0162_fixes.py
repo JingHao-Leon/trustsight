@@ -88,7 +88,7 @@ def test_a_gap_unchanged_since_the_previous_review_is_marked_carried(isolated, m
     from trustsight.reporting import evaluate_fact, report_body
 
     repo, _head = _repo(isolated, [_RECIPE_1, _RECIPE_2])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
     # Force the same structural gap on every run: no readable file manifest.
     monkeypatch.setattr(git_project, "collect_tree_files", lambda repo, commit: ([], False))
 
@@ -110,7 +110,7 @@ def test_the_carried_marker_reaches_both_inspect_renderers(isolated, monkeypatch
     import trustsight.analysis.pipeline as pipeline
 
     repo, _head = _repo(isolated, [_RECIPE_1, _RECIPE_2])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
     monkeypatch.setattr(git_project, "collect_tree_files", lambda repo, commit: ([], False))
 
     pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
@@ -127,7 +127,7 @@ def test_a_new_gap_is_not_marked_carried(isolated, monkeypatch):
     import trustsight.analysis.pipeline as pipeline
 
     repo, _head = _repo(isolated, [_RECIPE_1, _RECIPE_2])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
     monkeypatch.setattr(git_project, "collect_tree_files", lambda repo, commit: ([], False))
 
     pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
@@ -146,7 +146,7 @@ def test_explicit_old_commit_and_full_recipe_runs_get_provenance(isolated, monke
     import trustsight.analysis.pipeline as pipeline
 
     repo, _head = _repo(isolated, [_RECIPE_1, _RECIPE_2])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
     monkeypatch.setattr(git_project, "collect_tree_files", lambda repo, commit: ([], False))
 
     pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
@@ -193,20 +193,20 @@ def test_a_review_rerun_reuses_the_recorded_analysis(isolated, monkeypatch):
     import trustsight.analysis.pipeline as pipeline
 
     repo, _head = _repo(isolated, [_RECIPE_1, _RECIPE_2])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
 
     first = pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
     assert first.cached is False
     rows_after_first = _analysis_row_count()
 
     real_diff = git_project.generate_diff_bounded
-    real_tokenize = pipeline.tokenize_and_resolve_indexed
+    real_tokenize = pipeline._scan.tokenize_and_resolve_indexed
 
     def _boom(*args, **kwargs):
         raise AssertionError("a cached run must not diff or tokenize")
 
     monkeypatch.setattr(git_project, "generate_diff_bounded", _boom)
-    monkeypatch.setattr(pipeline, "tokenize_and_resolve_indexed", _boom)
+    monkeypatch.setattr(pipeline._scan, "tokenize_and_resolve_indexed", _boom)
 
     second = pipeline.analyze_package(
         "demo", installed_version="1.0-1", record=True, allow_cached=True)
@@ -222,7 +222,7 @@ def test_a_review_rerun_reuses_the_recorded_analysis(isolated, monkeypatch):
 
     # inspect and the API keep the default: no cached facts, ever.
     monkeypatch.setattr(git_project, "generate_diff_bounded", real_diff)
-    monkeypatch.setattr(pipeline, "tokenize_and_resolve_indexed", real_tokenize)
+    monkeypatch.setattr(pipeline._scan, "tokenize_and_resolve_indexed", real_tokenize)
     third = pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
     assert third.cached is False
 
@@ -233,7 +233,7 @@ def test_a_depth_change_defeats_the_cache(isolated, monkeypatch):
     import trustsight.analysis.pipeline as pipeline
 
     repo, _head = _repo(isolated, [_RECIPE_1, _RECIPE_2])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
 
     pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
 
@@ -255,10 +255,10 @@ def test_a_ruleset_change_defeats_the_cache(isolated, monkeypatch):
     import trustsight.analysis.pipeline as pipeline
 
     repo, _head = _repo(isolated, [_RECIPE_1, _RECIPE_2])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
 
     pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
-    monkeypatch.setattr(pipeline, "config_fingerprint", lambda: "sha256:changed")
+    monkeypatch.setattr(pipeline._tree, "config_fingerprint", lambda: "sha256:changed")
 
     second = pipeline.analyze_package(
         "demo", installed_version="1.0-1", record=True, allow_cached=True)
@@ -270,7 +270,7 @@ def test_a_version_drift_defeats_the_cache(isolated, monkeypatch):
     import trustsight.analysis.pipeline as pipeline
 
     repo, _head = _repo(isolated, [_RECIPE_1, _RECIPE_2])
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: FakeGitProject(repo))
 
     pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
 

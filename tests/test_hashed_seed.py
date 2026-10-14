@@ -256,7 +256,8 @@ def test_maintainer_first_seen_for_package_uses_hashed_table(db, tmp_path, monke
     # mints the local salt (during the import's init_db) before the import
     # sees the seed, and a seed built under a *different* salt is now
     # skipped rather than allowed to orphan the rows just migrated.
-    monkeypatch.setattr("trustsight.db._generate_salt", lambda: "f" * 64)
+    monkeypatch.setattr("trustsight.db._connection._generate_salt", lambda: "f" * 64)
+    monkeypatch.setattr("trustsight.db._seed._generate_salt", lambda: "f" * 64)
     monkeypatch.setattr("trustsight.seed_build._generate_salt", lambda: "f" * 64)
 
     pkg_id = upsert_package("demo", "1.0")

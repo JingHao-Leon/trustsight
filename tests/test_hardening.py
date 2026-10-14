@@ -341,7 +341,7 @@ def test_a_seed_database_bomb_is_refused(tmp_path, monkeypatch):
     import trustsight.db as db
 
     monkeypatch.setattr(db, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(db, "MAX_SEED_BYTES", 4096)
+    monkeypatch.setattr(db._seed, "MAX_SEED_BYTES", 4096)
     bomb = tmp_path / "seed.db.gz"
     bomb.write_bytes(gzip.compress(b"\0" * 1_000_000))
 
@@ -368,7 +368,7 @@ def test_seed_archive_rejects_excessive_member_count(tmp_path, monkeypatch):
     import tarfile
     import trustsight.db as db
 
-    monkeypatch.setattr(db, "MAX_SEED_MEMBERS", 1)
+    monkeypatch.setattr(db._seed, "MAX_SEED_MEMBERS", 1)
     archive = tmp_path / "seed.tar.gz"
     with tarfile.open(archive, "w:gz") as tf:
         for name in ("trustsight-seed-v2/a", "trustsight-seed-v2/b"):

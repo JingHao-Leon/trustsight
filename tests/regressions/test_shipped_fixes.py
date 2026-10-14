@@ -224,11 +224,11 @@ def test_analyze_package_tolerates_a_repo_with_no_head(isolated, monkeypatch):
 
     import trustsight.analysis.pipeline as pipeline
 
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: object())
-    monkeypatch.setattr(pipeline, "get_head_commit", lambda repo: "")
-    monkeypatch.setattr(pipeline, "get_pkgver_from_head", lambda repo: "1.1")
-    monkeypatch.setattr(pipeline, "_recent_update", lambda *a, **k: None)
-    monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: object())
+    monkeypatch.setattr(pipeline._analyze, "get_head_commit", lambda repo: "")
+    monkeypatch.setattr(pipeline._analyze, "get_pkgver_from_head", lambda repo: "1.1")
+    monkeypatch.setattr(pipeline._analyze, "_recent_update", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline._analyze, "_package_is_new", lambda *a, **k: None)
 
     fact = pipeline.analyze_package("demo", installed_version="1.0")
 
@@ -258,15 +258,15 @@ def test_a_first_analysis_reports_what_it_found(isolated, monkeypatch):
     from trustsight.reporting import evaluate_fact
     from trustsight.schema import NoveltyContext
 
-    monkeypatch.setattr(pipeline, "_recent_update", lambda repo, commit: {
+    monkeypatch.setattr(pipeline._analyze, "_recent_update", lambda repo, commit: {
         "rule_id": "H020", "name": "Very Recent Update", "severity": "MEDIUM",
         "category": "temporal", "reason": "updated 2h ago", "weight": 10})
-    monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
-    monkeypatch.setattr(pipeline, "build_novelty_context", lambda *a, **k: NoveltyContext())
-    monkeypatch.setattr(pipeline, "insert_analysis", lambda **kw: kw)
-    monkeypatch.setattr(pipeline, "update_package_version", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline._analyze, "_package_is_new", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline._analyze, "build_novelty_context", lambda *a, **k: NoveltyContext())
+    monkeypatch.setattr(pipeline._analyze, "insert_analysis", lambda **kw: kw)
+    monkeypatch.setattr(pipeline._analyze, "update_package_version", lambda *a, **k: None)
     monkeypatch.setattr(
-        pipeline, "get_maintainer_from_commit", lambda repo, commit: "M <m@example.org>")
+        pipeline._analyze, "get_maintainer_from_commit", lambda repo, commit: "M <m@example.org>")
 
     class _Project:
         def tree_files(self, commit):
@@ -303,13 +303,13 @@ def test_a_first_analysis_decides_the_version_comparison(isolated, monkeypatch):
     from trustsight.analysis.version import COMPARISON_INCONCLUSIVE
     from trustsight.verdict import version_transition
 
-    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: object())
-    monkeypatch.setattr(pipeline, "get_head_commit", lambda repo: "")
+    monkeypatch.setattr(pipeline._analyze, "clone_or_fetch", lambda name, mtime=None: object())
+    monkeypatch.setattr(pipeline._analyze, "get_head_commit", lambda repo: "")
     monkeypatch.setattr(
-        pipeline, "get_pkgver_from_head", lambda repo: "1.93.1.r7966.7ccbff5e",
+        pipeline._analyze, "get_pkgver_from_head", lambda repo: "1.93.1.r7966.7ccbff5e",
     )
-    monkeypatch.setattr(pipeline, "_recent_update", lambda *a, **k: None)
-    monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline._analyze, "_recent_update", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline._analyze, "_package_is_new", lambda *a, **k: None)
 
     fact = pipeline.analyze_package(
         "oolite-git", installed_version="1:1.93.1.r7967.caea422f-2",
@@ -364,7 +364,7 @@ def test_inspect_omits_the_lines_row_on_a_zero_diff(monkeypatch):
     from trustsight.schema import DiffSummary, PackageFact
 
     out = Console(record=True, width=200)
-    monkeypatch.setattr(inspect_cli, "console", lambda: out)
+    monkeypatch.setattr(inspect_cli._render, "console", lambda: out)
 
     no_diff = PackageFact(
         package_name="p", old_version="1.0", new_version="1.1",
@@ -380,7 +380,7 @@ def test_inspect_omits_the_lines_row_on_a_zero_diff(monkeypatch):
     assert "Lines" not in rendered
 
     out2 = Console(record=True, width=200)
-    monkeypatch.setattr(inspect_cli, "console", lambda: out2)
+    monkeypatch.setattr(inspect_cli._render, "console", lambda: out2)
     inspect_cli._inspect_rich(with_diff)
     assert "Lines" in out2.export_text()
 

@@ -251,7 +251,10 @@ def test_release_commit_gate_rejects_drift(old, new, tmp_path, monkeypatch):
     (scripts / "verify_release.py").write_text(
         (ROOT / "scripts/verify_release.py").read_text(encoding="utf-8"), encoding="utf-8"
     )
-    monkeypatch.setattr(security_gates, "ROOT", tmp_path)
+    import scripts.gates._core as gates_core
+    import scripts.gates._layers as gates_layers
+    monkeypatch.setattr(gates_layers, "ROOT", tmp_path)
+    monkeypatch.setattr(gates_core, "ROOT", tmp_path)
     assert not security_gates.gate_release_artifacts_share_commit().passed
 
 

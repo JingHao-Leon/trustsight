@@ -639,7 +639,8 @@ def test_a_reference_nobody_declared_is_unresolved():
 def test_the_variable_table_refuses_past_the_byte_cap(monkeypatch):
     from trustsight import _tokenizer_engine as engine
 
-    monkeypatch.setattr(engine, "_MAX_TABLE_BYTES", 16)
+    from trustsight._tokenizer_engine import _variables as engine_variables
+    monkeypatch.setattr(engine_variables, "_MAX_TABLE_BYTES", 16)
     with pytest.raises(ValueError, match="variable table exceeds"):
         engine._variable_table_with_spans(["a=" + "x" * 64])
     with pytest.raises(ValueError, match="variable table exceeds"):
