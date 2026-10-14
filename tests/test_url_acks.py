@@ -150,3 +150,45 @@ def test_cli_add_url_requires_a_reason(overrides_file):
         "--reason", "   ",
     ])
     assert result.exit_code == 2
+
+
+def test_override_ttl_lapses_on_the_observation_clock(monkeypatch):
+    """Peripheral tolerance: a suppression without continuous signal lapses."""
+    import trustsight.override as ov
+    from trustsight.override import RuleOverride, filter_triggered_rules
+
+    override = RuleOverride(rule_id="H029", reason="noise", package="p",
+                            created_at_obs=10, ttl_observations=5)
+    monkeypatch.setattr(ov, "load_overrides", lambda: [override])
+    rules = [{"rule_id": "H029", "severity": "HIGH"}]
+
+    expired: list[str] = []
+    kept, suppressed = filter_triggered_rules(
+        rules, package="p", now_obs=14, expired_out=expired)
+    assert suppressed and not expired  # still within the TTL
+
+    kept, suppressed = filter_triggered_rules(
+        rules, package="p", now_obs=15, expired_out=expired)
+    assert not suppressed and expired == ["H029"]
+    assert kept[0].get("override_expired") is True
+
+
+def test_clear_indicator_override_is_downgraded_visible_only(monkeypatch):
+    import trustsight.override as ov
+    from trustsight.override import (
+        RuleOverride, apply_indicator_cross_check, filter_triggered_rules,
+    )
+
+    override = RuleOverride(rule_id="C005", reason="known", package="p",
+                            requires_clear_indicators=True)
+    monkeypatch.setattr(ov, "load_overrides", lambda: [override])
+    rules = [{"rule_id": "C005", "severity": "HIGH"}]
+
+    kept, suppressed = filter_triggered_rules(
+        rules, package="p", indicator_corroborated=True)
+    assert suppressed[0]["indicator_corroborated"] is True
+
+    # The post-hoc variant: no indicators until later.
+    kept, suppressed = filter_triggered_rules(rules, package="p")
+    apply_indicator_cross_check(suppressed, has_indicator_match=True)
+    assert suppressed[0]["indicator_corroborated"] is True

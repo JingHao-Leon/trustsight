@@ -444,8 +444,9 @@ def analyze_package_text(
                 "", current_text=clamp_text(new_pkgbuild), package_name=pkg_name
             )
         )
+        expired_overrides: list[str] = []
         triggered_rules, suppressed_rules = filter_triggered_rules(
-            triggered_rules, package=pkg_name
+            triggered_rules, package=pkg_name, expired_out=expired_overrides
         )
 
         if effective_observation_count() > 0:
@@ -477,6 +478,7 @@ def analyze_package_text(
             new_version=new_version,
             novelty_context=novelty,
             suppressed_rules=suppressed_rules,
+            overrides_expired=expired_overrides,
             # Known here and recorded two lines below by
             # `update_package_maintainer`, so leaving it off the fact meant
             # a first-seen corpus entry reported no maintainer while the
@@ -603,8 +605,9 @@ def analyze_package_text(
     triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
     if archive_trailer_finding:
         triggered_rules.append(archive_trailer_finding)
+    expired_overrides: list[str] = []
     triggered_rules, suppressed_rules = filter_triggered_rules(
-        triggered_rules, package=pkg_name
+        triggered_rules, package=pkg_name, expired_out=expired_overrides
     )
 
     triggered_rules.extend(
@@ -724,6 +727,7 @@ def analyze_package_text(
         ),
         novelty_context=novelty,
         suppressed_rules=suppressed_rules,
+        overrides_expired=expired_overrides,
         acknowledged_urls=acknowledged_url_rows(url_acks),
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,

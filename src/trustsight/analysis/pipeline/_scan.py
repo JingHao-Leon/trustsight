@@ -256,13 +256,16 @@ def scan_diff(
 
     # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
-    from ..meta import m_series_findings
+    from ..meta import alert_volume_finding, m_series_findings, m_tool_health
     from ...scoring import declared_claims
 
     triggered_rules.extend(m_series_findings(
         triggered_rules, config,
         claims=declared_claims(
             verification_evidence, aggregate_pinning, source_buckets)))
+    _volume = alert_volume_finding(triggered_rules, config)
+    if _volume:
+        triggered_rules.append(_volume)
     score, breakdown, risk = calculate_score(
         triggered_rules,
         {u: b for u, b in source_buckets.items() if u not in url_acks},
@@ -289,6 +292,7 @@ def scan_diff(
         source_buckets=source_buckets,
         execution_changes=exec_changes,
         novelty_context=novelty,
+        cofire_health=m_tool_health(triggered_rules, load_rules()),
         acknowledged_urls=acknowledged_url_rows(url_acks),
         pkgver_changed=pkgver_changed,
         version_moved=version_moved,

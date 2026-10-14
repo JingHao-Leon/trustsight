@@ -115,6 +115,14 @@ class PackageFact:
     # whole-history verdict, so the base travels with the fact.
     comparison_base: str = ""
     suppressed_rules: list[dict] = field(default_factory=list)
+    #: M-series tool-health observations about the *instrument*, not the
+    #: package: a rule that was expected to co-fire and did not.  Weight 0,
+    #: never part of the package's finding list, surfaced for the harness.
+    cofire_health: list[dict] = field(default_factory=list)
+    #: Rule ids whose override lapsed on the observation clock and so no
+    #: longer suppressed.  Reported so a quiet result cannot mean both "no
+    #: finding" and "a suppression silently expired".
+    overrides_expired: list[str] = field(default_factory=list)
 
     # Source URLs the operator explicitly acknowledged for this package
     # (`trustsight override add-url`).  They do not score SOURCE_BUCKET or
@@ -318,6 +326,8 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "comparison_base": fact.comparison_base,
         "recent_commit_burst": fact.recent_commit_burst,
         "suppressed_rules": fact.suppressed_rules,
+        "cofire_health": fact.cofire_health,
+        "overrides_expired": list(getattr(fact, "overrides_expired", ()) or ()),
         "acknowledged_urls": fact.acknowledged_urls,
         "diff_truncated": fact.diff_truncated,
         "scan_truncated": fact.scan_truncated,
@@ -391,6 +401,8 @@ _STORED_FACT_KEYS = (
     "first_seen",
     "recent_commit_burst",
     "suppressed_rules",
+    "cofire_health",
+    "overrides_expired",
     "acknowledged_urls",
     "diff_truncated",
     "scan_truncated",
@@ -485,6 +497,8 @@ def fact_from_dict(data: dict) -> PackageFact | None:
             comparison_base=data.get("comparison_base", ""),
             recent_commit_burst=data["recent_commit_burst"],
             suppressed_rules=list(data["suppressed_rules"]),
+            cofire_health=list(data.get("cofire_health", [])),
+            overrides_expired=list(data.get("overrides_expired", [])),
             # `.get`, not `[...]`: a fact stored before this field existed
             # is still a valid cache row, and a missing ack list is empty.
             acknowledged_urls=list(data.get("acknowledged_urls", [])),

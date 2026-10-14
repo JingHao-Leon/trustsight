@@ -482,8 +482,9 @@ def analyze_package(
         )
     from ..persistence import stand_down_committed_staging
     triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
+    expired_overrides: list[str] = []
     triggered_rules, suppressed_rules = filter_triggered_rules(
-        triggered_rules, package=pkg_name
+        triggered_rules, package=pkg_name, expired_out=expired_overrides
     )
     recent = _recent_update(project, head_commit)
     if recent:
@@ -660,13 +661,16 @@ def analyze_package(
 
     # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
-    from ..meta import m_series_findings
+    from ..meta import alert_volume_finding, m_series_findings, m_tool_health
     from ...scoring import declared_claims
 
     triggered_rules.extend(m_series_findings(
         triggered_rules, config,
         claims=declared_claims(
             verification_evidence, aggregate_pinning, source_buckets)))
+    _volume = alert_volume_finding(triggered_rules, config)
+    if _volume:
+        triggered_rules.append(_volume)
     score, breakdown, risk = calculate_score(
         triggered_rules,
         {u: b for u, b in source_buckets.items() if u not in url_acks},
@@ -717,6 +721,8 @@ def analyze_package(
         ),
         novelty_context=novelty,
         suppressed_rules=suppressed_rules,
+        cofire_health=m_tool_health(triggered_rules, load_rules()),
+        overrides_expired=expired_overrides,
         acknowledged_urls=acknowledged_url_rows(url_acks),
         recent_commit_burst=recent_commit_burst,
         diff_truncated=diff_truncated,
@@ -737,6 +743,14 @@ def analyze_package(
         final_score=score,
         ioc_matches=ioc_matches,
     )
+    # An override marked `requires_clear_indicators` is visible-only when an
+    # indicator matched this run: the finding renders (with the override and
+    # the corroboration noted) rather than being hidden.  Applied here
+    # because the indicator match is only known after the filter ran.
+    from ...override import apply_indicator_cross_check
+
+    fact.suppressed_rules = apply_indicator_cross_check(
+        fact.suppressed_rules, bool(fact.ioc_matches))
 
     # Dependency changes are part of the fact and of the change summary, so
     # they are settled before the history write: the stored fact_json is
@@ -890,9 +904,12 @@ def _make_fresh_analysis(
     # `calculate_score`, so it is not applied a second time here.
     # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
-    from ..meta import m_series_findings
+    from ..meta import alert_volume_finding, m_series_findings
 
     triggered_rules.extend(m_series_findings(triggered_rules, config))
+    _volume = alert_volume_finding(triggered_rules, config)
+    if _volume:
+        triggered_rules.append(_volume)
     score, breakdown, risk = calculate_score(
         triggered_rules, {}, novelty, config, coverage_gaps=gaps,
     )

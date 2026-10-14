@@ -18,6 +18,18 @@ class RuleOverride:
     reason: str
     package: str | None = None
     created_at: str = ""
+    #: Observation count when the override was written.  With
+    #: ``ttl_observations`` set, the override stops suppressing once that
+    #: many recorded observations have passed: tolerance without continuous
+    #: signal lapses, so a suppression cannot become a permanent
+    #: desensitization target.
+    created_at_obs: int = 0
+    #: Optional lifetime, in observations.  None means "no expiry".
+    ttl_observations: int | None = None
+    #: When true, an active indicator that matches the run downgrades this
+    #: override to visible-only: the finding renders (in the terminal) with
+    #: the override noted, rather than being hidden.
+    requires_clear_indicators: bool = False
 
 
 @dataclass
@@ -93,7 +105,10 @@ def _save_file(data: dict) -> None:
         raise
 
 
-_OVERRIDE_FIELDS = frozenset({"rule_id", "reason", "package", "created_at"})
+_OVERRIDE_FIELDS = frozenset({
+    "rule_id", "reason", "package", "created_at", "created_at_obs",
+    "ttl_observations", "requires_clear_indicators",
+})
 _URL_ACK_FIELDS = frozenset({"package", "url", "reason", "created_at"})
 
 
@@ -255,16 +270,34 @@ _OVERRIDE_SANITIZE = re.compile(r"[\x00-\x1F\x7F]")
 
 
 def add_override(
-    rule_id: str, reason: str, package: str | None = None
+    rule_id: str,
+    reason: str,
+    package: str | None = None,
+    ttl_observations: int | None = None,
+    requires_clear_indicators: bool = False,
 ) -> RuleOverride:
-    """Add a new override and persist it to disk"""
+    """Add a new override and persist it to disk.
+
+    *ttl_observations* sets an observation-clock expiry (see
+    :func:`filter_triggered_rules`); *requires_clear_indicators* makes the
+    override visible-only when an active indicator matches the run.
+    """
     _validate(rule_id, reason)
     overrides = load_overrides()
+    if ttl_observations is not None:
+        ttl_observations = int(ttl_observations)
+        if ttl_observations <= 0:
+            raise ValueError("ttl_observations must be a positive integer")
+    from .db import observation_seq
+
     override = RuleOverride(
         rule_id=rule_id.upper(),
         reason=_OVERRIDE_SANITIZE.sub(" ", reason.strip()),
         package=package,
         created_at=_now(),
+        created_at_obs=observation_seq(),
+        ttl_observations=ttl_observations,
+        requires_clear_indicators=bool(requires_clear_indicators),
     )
     # An identical override already present is replaced, not duplicated:
     # adding twice is idempotent and a stale reason cannot linger.
@@ -314,7 +347,11 @@ def get_active_overrides(
 
 
 def filter_triggered_rules(
-    triggered_rules: list[dict], package: str | None = None
+    triggered_rules: list[dict],
+    package: str | None = None,
+    indicator_corroborated: bool = False,
+    now_obs: int | None = None,
+    expired_out: list[str] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Drop overridden rules from *triggered_rules*.
 
@@ -327,10 +364,31 @@ def filter_triggered_rules(
     says.  :func:`add_override` refuses to create one, but the file is
     user-editable, and prompt injection and unicode deception are the
     two things an attacker would most want switched off.
+
+    Two expiry rules apply to a non-FATAL override:
+
+    * **Observation TTL.**  An override carrying ``ttl_observations``
+      stops suppressing once that many recorded observations have passed
+      since it was written.  The finding returns at full severity and its
+      id is appended to *expired_out*, so the report can say the
+      suppression lapsed rather than leaving it a silent disagreement.
+    * **Indicator cross-check.**  When ``requires_clear_indicators`` is set
+      and *indicator_corroborated* is true, the override is **visible
+      only**: the finding is returned in ``suppressed`` with
+      ``indicator_corroborated`` set, so it renders in the terminal, and it
+      can never hide a match the run itself made.
     """
     overrides = load_overrides()
     if not overrides:
         return triggered_rules, []
+
+    if now_obs is None:
+        try:
+            from .db import observation_seq
+
+            now_obs = observation_seq()
+        except Exception:  # noqa: BLE001 - an unreadable clock is no expiry
+            now_obs = None
 
     active = [
         o for o in overrides
@@ -346,6 +404,12 @@ def filter_triggered_rules(
         by_id.setdefault(override.rule_id, override)
         by_id.setdefault(survivor_id(override.rule_id), override)
 
+    def _expired(override: RuleOverride) -> bool:
+        if override.ttl_observations is None or now_obs is None:
+            return False
+        elapsed = int(now_obs) - int(override.created_at_obs or 0)
+        return elapsed >= int(override.ttl_observations)
+
     kept: list[dict] = []
     suppressed: list[dict] = []
     for rule in triggered_rules:
@@ -353,6 +417,36 @@ def filter_triggered_rules(
         if override is None or rule.get("severity") == "FATAL":
             kept.append(rule)
             continue
-        suppressed.append({**rule, "override_reason": override.reason,
-                           "override_package": override.package})
+        if _expired(override):
+            # Tolerance lapsed: the finding is no longer hidden, and the
+            # expiry is named so a quiet report cannot mean two things.
+            if expired_out is not None:
+                expired_out.append(rule["rule_id"])
+            kept.append({**rule, "override_expired": True})
+            continue
+        row = {**rule, "override_reason": override.reason,
+               "override_package": override.package}
+        if override.requires_clear_indicators:
+            row["override_requires_clear_indicators"] = True
+            if indicator_corroborated:
+                row["indicator_corroborated"] = True
+        suppressed.append(row)
     return kept, suppressed
+
+
+def apply_indicator_cross_check(
+    suppressed_rows: list[dict], has_indicator_match: bool
+) -> list[dict]:
+    """Mark a clear-indicator override visible-only when an indicator matched.
+
+    The review pipeline only knows whether the run had an indicator match
+    after it has filtered overrides, so the cross-check is applied here
+    rather than inside the filter itself; a row that requires clear
+    indicators but whose run had none is unchanged.
+    """
+    if not has_indicator_match:
+        return suppressed_rows
+    for row in suppressed_rows:
+        if row.get("override_requires_clear_indicators"):
+            row["indicator_corroborated"] = True
+    return suppressed_rows

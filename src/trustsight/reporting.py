@@ -57,6 +57,21 @@ def suppressed_rows(fact) -> list[dict]:
     return [dict(row) for row in (fact.suppressed_rules or ())]
 
 
+def render_cap(config: dict | None = None) -> int:
+    """``[alerts] max_rendered_findings``: findings the terminal shows in
+    full before grouping the rest.  0 means no cap.  The JSON is never
+    filtered - this only bounds the terminal render."""
+    try:
+        if config is None:
+            from .config import load_config
+
+            config = load_config()
+        alerts = (config or {}).get("alerts", {}) or {}
+        return int(alerts.get("max_rendered_findings", 50) or 0)
+    except (TypeError, ValueError):
+        return 50
+
+
 def is_trivial(fact, findings: Sequence[dict] | None = None) -> bool:
     """Apply the shared trivial-update definition."""
     if not fact.diff_summary.files_changed:
@@ -150,6 +165,8 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "layers": layer_profile(
             fact, findings, overrides=parse_overrides(load_config())),
         "suppressed_rules": suppressed_rows(fact),
+        "cofire_health": list(getattr(fact, "cofire_health", ()) or ()),
+        "overrides_expired": list(getattr(fact, "overrides_expired", ()) or ()),
         "acknowledged_urls": [dict(row) for row in (fact.acknowledged_urls or ())],
         "changes": list(fact.changes),
         "coverage_gaps": list(fact.coverage_gaps),
@@ -220,6 +237,8 @@ REPORT_KEYS = (
     "partial_files",
     "resolution_coverage",
     "suppressed_rules",
+    "cofire_health",
+    "overrides_expired",
     "acknowledged_urls",
     "ioc_matches",
     "indicators",
@@ -341,6 +360,8 @@ def report_body(
         # B5: unconditional.  A suppression behind a verbosity flag looks
         # exactly like a rule that never matched.
         "suppressed_rules": [dict(r) for r in evaluated.get("suppressed_rules", ())],
+        "cofire_health": [dict(r) for r in evaluated.get("cofire_health", ())],
+        "overrides_expired": list(evaluated.get("overrides_expired", ())),
         # B5 again: an acknowledged URL is a suppression the reader must
         # see, or it is indistinguishable from a URL that never existed.
         "acknowledged_urls": [

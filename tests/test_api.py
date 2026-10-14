@@ -921,6 +921,9 @@ _BODY_ONLY = {
     "suppressed_rules",
     # The verbose body's shape for `Report.findings`.
     "score_breakdown",
+    # Tool-health rides the body only; it is not a package finding.
+    "cofire_health",
+    "overrides_expired",
 }
 
 
