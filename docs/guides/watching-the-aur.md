@@ -174,6 +174,29 @@ to keep settings out of the image. The tokenizer's network-namespace
 isolation is not available in a default container; the process resource
 limits still apply, and the analysis itself needs no privileges.
 
+A compose file with the same settings - a fixed container name, log
+rotation, and the timestamped log format - ships as
+`docker-compose.watcher.yml`:
+
+```bash
+mkdir -p trustsight-config
+docker compose -f docker-compose.watcher.yml up -d
+docker compose -f docker-compose.watcher.yml logs -f trustsight-watch
+```
+
+### Reading the logs
+
+The watcher logs every cycle to stderr, so `docker logs -f trustsight-watch`
+(or the compose command above) is the watcher's whole history. A watch opens
+with a banner naming the build, the database path, the interval and whether an
+alert webhook is configured; each cycle then reports what moved, the packages
+over the alerting bar, and any new cluster alert. The output is unbuffered
+(`PYTHONUNBUFFERED=1` in the image), so lines appear as they are written.
+
+`TRUSTSIGHT_LOG_TIMESTAMPS=1` prefixes each line with a timestamp and level -
+useful when the container is the only record. `TRUSTSIGHT_LOG_LEVEL` raises or
+lowers verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
+
 The image runs rootless and ships no pacman, which makes it the
 cold-environment reference: every measurement inside it is the reproducible
 one.

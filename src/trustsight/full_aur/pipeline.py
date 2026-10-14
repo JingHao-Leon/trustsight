@@ -1251,10 +1251,26 @@ def run_watch(
     delay = watch_interval_seconds(interval)
     _log = _logger(json_output)
     results: list[CycleResult] = []
+    # A startup banner, so an unattended watcher's log opens with what build
+    # is running and where its state lives, not only the cycle interval.
+    from .. import __version__
+    from ..db import get_db_path
+
     _log(
-        f"Watching the AUR: one cycle every {delay}s"
+        f"trustsight {__version__} watching the AUR: one cycle every {delay}s"
         + (f", {cycles} cycle(s)" if cycles else ", until interrupted")
     )
+    try:
+        _log(f"  database: {get_db_path()}")
+    except Exception:  # noqa: BLE001 - the banner must never fail the watch
+        pass
+    try:
+        from ..notify import notify_url as _configured_notify_url
+
+        _log("  alert webhook: "
+             f"{'configured' if _configured_notify_url() else 'none'}")
+    except Exception:  # noqa: BLE001
+        pass
     attempts = 0
     last_heartbeat = 0.0
     try:

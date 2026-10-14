@@ -863,3 +863,27 @@ def test_the_alerting_bar_is_the_measured_benign_p95():
         (Path(__file__).parent / "fixtures" / "published-figures.json").read_text()
     )
     assert _OVER_BENIGN_P95 == figures["calibration"]["benign_p95"] == 35
+
+
+def test_the_watch_logs_a_startup_banner(monkeypatch, caplog):
+    """An unattended watcher's log must open with what build is running and
+    where its state lives, not only the cycle interval."""
+    import logging
+
+    import trustsight.full_aur.metadata as metadata
+    import trustsight.full_aur.pipeline as pipeline
+    from trustsight.full_aur.pipeline import CycleResult
+
+    monkeypatch.setattr(pipeline, "run_baseline_build",
+                        lambda **kwargs: CycleResult(refused=True))
+    # No snapshot on disk: the refused cycle breaks the loop instead of the
+    # transient-refusal retry path.
+    monkeypatch.setattr(metadata, "load_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "_since_cursor", lambda: None)
+    with caplog.at_level(logging.INFO, logger="trustsight.full_aur.pipeline"):
+        pipeline.run_watch(interval=60, cycles=1, sleep=lambda _s: None)
+
+    text = caplog.text
+    assert "watching the AUR" in text
+    assert "database:" in text
+    assert "alert webhook:" in text

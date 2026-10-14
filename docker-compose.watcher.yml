@@ -1,0 +1,36 @@
+# The AUR watcher as a long-lived container with a stable name and rotated
+# logs:
+#
+#   docker compose -f docker-compose.watcher.yml up -d
+#   docker compose -f docker-compose.watcher.yml logs -f trustsight-watch
+#
+# State (database, corpus snapshot, resume file) lives in the named volume, so
+# a restart or a new image continues where the last cycle ended.  Mount a
+# config directory carrying config.toml (and [notify] webhook) to keep settings
+# out of the image; create it first if it does not exist:
+#
+#   mkdir -p trustsight-config
+#
+services:
+  trustsight-watch:
+    image: ghcr.io/emiliano-go/trustsight:latest
+    container_name: trustsight-watch
+    command: ["full-aur", "--watch", "--interval", "1800"]
+    restart: unless-stopped
+    volumes:
+      - trustsight-data:/home/ts/.local/share/trustsight
+      - ./trustsight-config:/home/ts/.config/trustsight:ro
+    environment:
+      # Timestamp and level on every log line, so `docker logs` shows when a
+      # cycle ran, not only what it did.
+      TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      # TRUSTSIGHT_LOG_LEVEL: "INFO"
+      # TRUSTSIGHT_OFFLINE: "1"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  trustsight-data:

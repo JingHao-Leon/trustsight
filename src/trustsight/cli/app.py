@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 
 import typer
@@ -75,7 +76,17 @@ def main() -> None:
     # The corpus pipeline reports progress through logging; without a
     # handler those messages (including its refusal to bootstrap) would be
     # invisible.  Messages go to stderr so stdout stays machine-readable.
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    #
+    # `TRUSTSIGHT_LOG_LEVEL` raises or lowers the level, and
+    # `TRUSTSIGHT_LOG_TIMESTAMPS` adds a timestamp and level to each line, so
+    # an unattended watcher's `docker logs` (or journal) shows *when* a cycle
+    # ran.  `force=True` replaces any handler a library installed first.
+    level = getattr(logging, os.environ.get("TRUSTSIGHT_LOG_LEVEL", "").upper(),
+                    logging.INFO)
+    fmt = ("%(asctime)s %(levelname)s %(message)s"
+           if os.environ.get("TRUSTSIGHT_LOG_TIMESTAMPS", "").strip()
+           else "%(message)s")
+    logging.basicConfig(level=level, format=fmt, stream=sys.stderr, force=True)
     try:
         app()
     except typer.Exit:
