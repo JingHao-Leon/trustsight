@@ -43,6 +43,26 @@ def _synchronous_mode() -> str:
     value = os.environ.get("TRUSTSIGHT_SQLITE_SYNCHRONOUS", "NORMAL").strip().upper()
     return value if value in _SYNC_MODES else "NORMAL"
 
+_BUSY_TIMEOUT_DEFAULT_MS = 30_000
+
+def _busy_timeout_ms() -> int:
+    """Milliseconds a connection waits for a lock before raising.
+
+    A ``seed fetch`` and a corpus cycle are both large writers; with the old
+    5 s default the second writer to arrive gave up, and the watcher logged
+    ``Cycle failed (database is locked)`` on any overlap.  30 s rides out a
+    normal cycle.  ``TRUSTSIGHT_SQLITE_BUSY_TIMEOUT`` overrides it (a
+    non-negative integer of milliseconds; anything else keeps the default).
+    """
+    raw = os.environ.get("TRUSTSIGHT_SQLITE_BUSY_TIMEOUT", "").strip()
+    if not raw:
+        return _BUSY_TIMEOUT_DEFAULT_MS
+    try:
+        value = int(raw)
+    except ValueError:
+        return _BUSY_TIMEOUT_DEFAULT_MS
+    return value if value >= 0 else _BUSY_TIMEOUT_DEFAULT_MS
+
 def _new_connection(db_path: Path) -> sqlite3.Connection:
     # The parent may not exist yet on a path that never went through
     # `config.ensure_dirs` (a first import, or a test that points DATA_DIR at
@@ -65,7 +85,7 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute(_SYNC_SQL[_synchronous_mode()])
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute(f"PRAGMA busy_timeout={_busy_timeout_ms()}")
     return conn
 
 @contextmanager
@@ -82,6 +102,10 @@ def get_read_only_connection():
     uri = f"file:{db_path}?mode=ro"
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
+    # A reader in WAL still needs the busy handler: it waits on a checkpoint
+    # or a schema lock, and without a timeout a busy database reads as an
+    # error rather than a short wait.
+    conn.execute(f"PRAGMA busy_timeout={_busy_timeout_ms()}")
     try:
         yield conn
     finally:

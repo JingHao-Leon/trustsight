@@ -917,6 +917,51 @@ def test_an_unknown_synchronous_mode_falls_back_to_normal(tmp_path, monkeypatch)
         conn.close()
 
 
+def test_busy_timeout_default_is_generous(tmp_path, monkeypatch):
+    """A seed fetch and a corpus cycle can overlap; the default must be long
+    enough to ride out a write, not the old 5 s that failed instantly."""
+    monkeypatch.delenv("TRUSTSIGHT_SQLITE_BUSY_TIMEOUT", raising=False)
+    from trustsight.db import _new_connection
+
+    conn = _new_connection(tmp_path / "busy.db")
+    try:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 30_000
+    finally:
+        conn.close()
+
+
+def test_busy_timeout_can_be_overridden(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRUSTSIGHT_SQLITE_BUSY_TIMEOUT", "60000")
+    from trustsight.db import _new_connection
+
+    conn = _new_connection(tmp_path / "busy-override.db")
+    try:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 60_000
+    finally:
+        conn.close()
+
+
+def test_an_unknown_busy_timeout_falls_back_to_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRUSTSIGHT_SQLITE_BUSY_TIMEOUT", "not-a-number")
+    from trustsight.db import _new_connection
+
+    conn = _new_connection(tmp_path / "busy-bogus.db")
+    try:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 30_000
+    finally:
+        conn.close()
+
+
+def test_read_only_connection_has_a_busy_timeout(tmp_path, monkeypatch):
+    monkeypatch.delenv("TRUSTSIGHT_SQLITE_BUSY_TIMEOUT", raising=False)
+    from trustsight import db
+
+    monkeypatch.setattr(db, "DATA_DIR", tmp_path)
+    db.init_db()
+    with db.get_read_only_connection() as conn:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 30_000
+
+
 def test_the_observation_clock_advances_once_per_recorded_analysis(db):
     """Campaign/override TTLs count observations, so the clock must move with
     each recorded analysis and not at any other time."""

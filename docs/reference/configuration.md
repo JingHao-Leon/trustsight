@@ -464,6 +464,7 @@ behaviour is a config key or a command flag.
 | `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
 | `XDG_CACHE_HOME` | A directory path | Base for the document cache when `TRUSTSIGHT_DOC_CACHE` is unset. |
 | `TRUSTSIGHT_SQLITE_SYNCHRONOUS` | `OFF`, `NORMAL`, `FULL`, `EXTRA` (case-insensitive); an unknown value falls back to `NORMAL` | SQLite commit durability. `NORMAL` (the default) keeps WAL's crash-safety without an fsync per commit; `FULL` is the old behaviour. |
+| `TRUSTSIGHT_SQLITE_BUSY_TIMEOUT` | A non-negative integer of milliseconds; an invalid value falls back to `30000` | How long a connection waits for a locked database before erroring. `30000` (the default) lets a `seed fetch` and a corpus cycle overlap without a spurious "database is locked"; raise it if a single cycle writes for longer. |
 | `TRUSTSIGHT_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` (case-insensitive); an unknown value falls back to `INFO` | The level of the watcher's log on stderr. |
 | `TRUSTSIGHT_LOG_TIMESTAMPS` | Any non-empty value | Prefix each log line with a timestamp and level, for an unattended watcher whose `docker logs` is the only record. |
 
