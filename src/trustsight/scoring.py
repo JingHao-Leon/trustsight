@@ -509,7 +509,35 @@ def calculate_score(
             level = "Inconclusive"
     level = _escalate_for_meta(level, breakdown)
     level = fail_closed(level, coverage_gaps or [], breakdown)
+    _annotate_licensed(breakdown)
     return final, breakdown, level
+
+
+def _annotate_licensed(breakdown) -> None:
+    """B1: a finding raised by licensed help names its licensors.
+
+    Set on the licensed rule's own breakdown entry, naming the declared
+    licensors that fired this run.  The legacy M002/M003 escalation is
+    run-level and names no single finding, so it is left unannotated.
+    """
+    fired = {getattr(entry, "rule_id", "") for entry in breakdown or ()}
+    if not fired:
+        return
+    try:
+        from .config import load_rules
+
+        rules = load_rules()
+    except Exception:  # noqa: BLE001 - an unreadable ruleset licenses nothing
+        return
+    by_id = {str(rule.get("id", "")): rule for rule in rules}
+    for entry in breakdown or ():
+        rule = by_id.get(getattr(entry, "rule_id", ""))
+        if not rule:
+            continue
+        licensors = rule.get("escalates_when") or ()
+        hits = tuple(str(lic) for lic in licensors if lic in fired)
+        if hits:
+            entry.licensed_by = hits
 
 
 def stored_band(row: dict | None, score: int | None = None) -> tuple[str, bool]:

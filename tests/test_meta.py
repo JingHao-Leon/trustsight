@@ -193,3 +193,20 @@ def test_m004_fires_when_a_configured_cofire_pair_breaks(monkeypatch):
     # With the partner present: quiet.
     assert meta.m_tool_health(
         [{"rule_id": "X001"}, {"rule_id": "X002"}], []) == []
+
+
+def test_licensed_escalation_is_attributed(monkeypatch):
+    from trustsight.scoring import _annotate_licensed
+    from trustsight.schema import ScoreEntry
+
+    monkeypatch.setattr(
+        "trustsight.config.load_rules",
+        lambda: [{"id": "R001", "escalates_when": ["R002"]}],
+    )
+    breakdown = [
+        ScoreEntry(rule_id="R001", severity="HIGH", weight=25, reason="x"),
+        ScoreEntry(rule_id="R002", severity="LOW", weight=5, reason="y"),
+    ]
+    _annotate_licensed(breakdown)
+    assert breakdown[0].licensed_by == ("R002",)
+    assert breakdown[1].licensed_by == ()

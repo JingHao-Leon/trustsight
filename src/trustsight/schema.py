@@ -81,6 +81,9 @@ class ScoreEntry:
     evidence: dict = field(default_factory=dict)
     file: str = ""
     line: int | None = None
+    #: Licensor rule ids that fired and raised this finding's band (B1: a
+    #: finding amplified by licensed help names what helped it).
+    licensed_by: tuple = ()
 
 
 @dataclass
@@ -355,6 +358,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
                 "evidence": e.evidence,
                 "file": e.file,
                 "line": e.line,
+                "licensed_by": list(e.licensed_by),
             }
             for e in fact.score_breakdown
         ],
@@ -534,6 +538,7 @@ def fact_from_dict(data: dict) -> PackageFact | None:
                     evidence=dict(e.get("evidence") or {}),
                     file=e.get("file", ""),
                     line=e.get("line"),
+                    licensed_by=tuple(e.get("licensed_by") or ()),
                 )
                 for e in data["score_breakdown"]
             ],
