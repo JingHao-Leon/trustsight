@@ -1,4 +1,4 @@
-"""Addendum 3 Phase 3: the edge engine's shared context and predicates."""
+"""The edge engine's shared context and predicates."""
 
 from pathlib import Path
 
@@ -35,7 +35,7 @@ def test_edge_instances_register_h094():
         assert (ROOT / fixture).exists()
 
 
-#: The 14 traversal rules Addendum 3 Phase 3 migrates to edge predicates.
+# The 14 traversal rules migrates to edge predicates.
 _PHASE_3_IDS = {
     "H016", "H035", "H040", "H041", "H042", "H071", "H072",
     "H075", "H077", "H080", "H082", "H083", "H090", "H094",

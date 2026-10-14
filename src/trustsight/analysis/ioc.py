@@ -1,4 +1,4 @@
-"""Phase 7 - Class E indicator matching (plan §9).
+"""- Class E indicator matching.
 
 H056 is the only rule in TrustSight that recognises a *specific* artefact.
 Every other rule describes a shape - what the code structurally does - which

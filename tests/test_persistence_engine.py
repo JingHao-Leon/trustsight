@@ -1,4 +1,4 @@
-"""Phase 4: the persistence engine's table, dispatch and registry contract."""
+"""The persistence engine's table, dispatch and registry contract."""
 
 from pathlib import Path
 

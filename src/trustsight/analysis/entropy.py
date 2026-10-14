@@ -1,4 +1,4 @@
-"""E-series: entropy / distribution analysis (Addendum 5 §6.3).
+"""E-series: entropy / distribution analysis.
 
 The statistical twin of the X-series: an attacker who writes
 resolvable-but-obfuscated code defeats the refusal coupling, but a

@@ -1,4 +1,4 @@
-"""Phase 3 - network-surface rules (plan §5).
+"""- network-surface rules.
 
 H031/H033/H034/H071 share one question: does the PKGBUILD's declared or
 executed network surface carry an injection or a covert channel?  All four
@@ -124,7 +124,7 @@ def _exotic_protocol_findings(diff_text, config, add) -> None:
 _PKGVER_ASSIGN_RE = re.compile(
     r"^\s*(?:(?:local|export|readonly)\s+)?(_?pkgver)\s*=\s*(.+)"
 )
-# Version characters, per plan §5: anything else in an interpolated value is
+# Version characters: anything else in an interpolated value is
 # an injection candidate.
 _SAFE_VERSION_RE = re.compile(r"^[A-Za-z0-9._+\-]+$")
 

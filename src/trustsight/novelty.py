@@ -438,7 +438,7 @@ def build_novelty_context(
             if not ctx.url_first_seen_globally_url:
                 ctx.url_first_seen_globally_url = url
 
-    # Spec §11: the exact source-array query.  "Has this source-array tuple
+    # the exact source-array query. "Has this source-array tuple
     # appeared for this package before" becomes set membership over the
     # recipe index - exact where the per-URL estimate is statistical.
     if package_name and source_array is not None:

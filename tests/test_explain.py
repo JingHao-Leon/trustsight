@@ -1,4 +1,4 @@
-"""Spec §10: explain mode.
+"""Explain mode.
 
 The explanation re-reads the document and re-runs the rule's pattern, so
 the lines it shows are the lines the original run attributed (the same
@@ -71,7 +71,7 @@ def test_an_external_read_is_named_with_its_cached_value():
 
 
 def test_explanatory_fidelity_on_a_corpus_sample():
-    """Spec §10: for a sample of corpus findings, the line `explain` shows is
+    """For a sample of corpus findings, the line `explain` shows is
     exactly the line the original run attributed (same line map both times)."""
     import pathlib
 

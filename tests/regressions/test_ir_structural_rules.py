@@ -188,7 +188,7 @@ def test_h092_silent_when_metadata_and_recipe_agree(isolated, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Phase 3: H101 (pinning lost) and H102 (maintainer + keyring composition)
+# H101 (pinning lost) and H102 (maintainer + keyring composition)
 # ---------------------------------------------------------------------------
 
 def test_h101_fires_when_a_commit_pin_becomes_a_branch():

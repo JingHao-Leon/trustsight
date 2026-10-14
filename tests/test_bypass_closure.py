@@ -1,4 +1,4 @@
-"""Regression tests for the harness bypass closure (rounds 1-6).
+"""Regression tests for the harness bypass closure.
 
 Every shape here was a verified bypass at e3f4ffa: a fetch whose output
 grammar named no file (sftp/ftp/nc/ssh/git/rclone/ipfs/aws/gsutil/b2/cvs/

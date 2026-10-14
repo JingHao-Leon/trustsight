@@ -112,9 +112,9 @@ def _identity_key(value: str) -> str:
 def _hash_value(value: str, salt: str, algorithm: str = DEFAULT_HASH_ALGORITHM) -> str:
     """Return the salted hash of *value* as a hex string.
 
-    The input is normalised to ``strip().lower()`` before hashing (spec
-    §3.3.1): a maintainer whose name or email differs only in case or
-    surrounding whitespace must hash to the same value, or the novelty
+    The input is normalised to ``strip().lower()`` before hashing: a
+    maintainer whose name or email differs only in case or surrounding
+    whitespace must hash to the same value, or the novelty
     signal would read every casing as a new identity.  This is the single
     hashing chokepoint - ``db._hash_maintainer_value`` delegates here - so
     the seed, the plaintext migration and every lookup normalise identically

@@ -378,7 +378,7 @@ def register_commands(app: typer.Typer):
         drift = drifted_shipped_rules()
         stale_patterns = sorted({r for r, field, _a, _s in drift if field == "pattern"})
         missing = missing_shipped_rules()
-        # Addendum 2 R2: a ruleset more than one generation old gets a
+        # R2: a ruleset more than one generation old gets a
         # one-time sync suggestion.  Suppressed when drift or missing rules
         # already prompt (that note is the action), and shown at most once
         # per shipped generation (the anti-noise contract).
@@ -587,7 +587,7 @@ def register_commands(app: typer.Typer):
         limit: int = typer.Option(0, "--limit", help="Cap the number verified (0 = all)"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
-        """Batch L9 verification for corpus operators (Addendum 5 §12.2).
+        """Batch L9 verification for corpus operators.
 
         Results land in the corpus DB as artifact properties, feeding future
         reproducibility comparison.  The static core never runs package code:

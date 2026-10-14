@@ -1,4 +1,4 @@
-"""Generate the evasion recall fixtures (plan §14).
+"""Generate the evasion recall fixtures.
 
 Evasion recipe shapes, written down *before* they are closed and kept as the
 record of what the engine can and cannot yet see.

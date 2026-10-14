@@ -1,4 +1,4 @@
-"""Addendum 2 D2: a D-rule's statistical abstention is a first-class,
+"""D2: a D-rule's statistical abstention is a first-class,
 weight-0 boundary, not silence."""
 
 from trustsight.analysis.pipeline import scan_diff

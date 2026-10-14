@@ -1,4 +1,4 @@
-"""Property tests for the DiffDoc parser contract (spec §12).
+"""Property tests for the DiffDoc parser contract.
 
 The locked-corpus parity harness proves the parser equivalent to the
 legacy walkers; it cannot explore.  These tests assert the document
@@ -10,7 +10,7 @@ may escape the parser.
 
 The example tests beside these pin known shapes (``test_diffdoc.py``);
 these are the exploration layer that makes hunk-bookkeeping changes
-(§2, §6, §9) safe to land.
+safe to land.
 """
 
 from __future__ import annotations

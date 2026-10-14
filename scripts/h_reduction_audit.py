@@ -1,4 +1,4 @@
-"""Addendum 3 Phase 5, Step 1: the H-series overlap and zero-fire audit.
+"""The H-series overlap and zero-fire audit.
 
 Reads the locked benign corpus and the labelled malicious fixtures through the
 calibration scanner and computes, for every rule ID:
@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "tests" / "harness"))
 
 import calibration_gates as gates  # noqa: E402
 
-#: The audited candidate pairs from Addendum 3 Phase 5 Step 1.
+# The audited candidate pairs.
 CANDIDATES = (
     ("H026", "H044"), ("H045", "H073"), ("H022", "H060"),
     ("H074", "H088"), ("H053", "H059"), ("H016", "H042"),
@@ -47,7 +47,7 @@ def cofire_row(left: str, right: str,
     """The co-fire measurement for one candidate pair (pure, testable).
 
     Every dimension is "the inputs a rule fired on": benign diffs, malicious
-    fixtures, and (Addendum 3) the history cycles.  A pair co-fires when both
+    fixtures, and the history cycles. A pair co-fires when both
     sides fire on the *same* input in any dimension.
     """
     history_fired = history_fired or {}
@@ -105,8 +105,8 @@ def main(argv: list[str]) -> int:
     fired = _fired_sets()
     mal_counts, mal_sets = _malicious_sets()
 
-    # Addendum 3: the history cycles exercise the observation-history rules
-    # the stateless corpus cannot, so they join the co-fire measurement.
+    # The history cycles exercise the observation-history rules the
+    # stateless corpus cannot, so they join the co-fire measurement.
     from history_replay import replay as _history_replay
 
     history_rows = _history_replay()

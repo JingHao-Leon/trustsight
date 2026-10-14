@@ -1,4 +1,4 @@
-"""Addendum 3: the history-exercising corpus must replay as committed.
+"""The history-exercising corpus must replay as committed.
 
 The stateless benign corpus never fires the observation-history rules, so
 their detection had no test that exercised it.  Each history cycle asserts

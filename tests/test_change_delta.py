@@ -1,4 +1,4 @@
-"""Spec §1: the change-as-data API.
+"""The change-as-data API.
 
 ``ChangeDelta`` is the single query every consumer shares.  These tests
 prove the construction site's facts agree with the summary's established
@@ -211,7 +211,7 @@ def test_a_corpus_delta_has_typed_files(path):
 
 
 def test_dependency_facts_are_a_normalised_view_beside_the_raw_delta():
-    """Spec §1 divergence (recorded): the summary's dependency entry is the
+    """Divergence (recorded): the summary's dependency entry is the
     *normalised* `extract_dependency_changes` view; the delta's dependency
     arrays are the raw `source=`-style diff.  Rendering the raw delta changed
     119 corpus summaries, so the two are documented as distinct views rather

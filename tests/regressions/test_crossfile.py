@@ -76,7 +76,7 @@ def test_absent_metadata_is_silent():
 
 
 def test_a_source_the_recipe_fetches_but_metadata_never_names_fires():
-    """Addendum 4 G8: the executable/metadata split - a clean .SRCINFO for
+    """G8: the executable/metadata split - a clean.SRCINFO for
     review tooling, a dirty PKGBUILD for makepkg."""
     pkgbuild = PKGBUILD.replace(
         "source=('https://example.invalid/demo-1.0.tar.gz')",

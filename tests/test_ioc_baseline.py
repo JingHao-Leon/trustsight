@@ -1,4 +1,4 @@
-"""IOC Federation baseline system tests (v0.12.0 spec §2)."""
+"""IOC Federation baseline system tests."""
 
 from __future__ import annotations
 

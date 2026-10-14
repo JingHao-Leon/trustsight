@@ -1,4 +1,4 @@
-"""Phase 2 - July delivery stack (Class A) rules.
+"""- July delivery stack (Class A) rules.
 
 H067-H072 share a threat: the PKGBUILD carries or creates the payload it
 later executes.  The rules are code rather than rules.toml entries because
@@ -3048,11 +3048,11 @@ def _unread_patch_findings(diff_text, add, tree_manifest=None,
 def _delivery_findings(
     diff_text, config, add, tree_manifest=None, current_text=None, ctx=None
 ) -> None:
-    """Run the diff-text Phase 2 rules (H067-H069, H072, H081-H085) through *add*.
+    """Run the diff-text rules (H067-H069, H072, H081-H085) through *add*.
 
     *current_text* is the PKGBUILD as it now stands, used only to build the
     call graph: a helper added by this diff may be called from a ``build()``
-    that the hunk does not show.  *ctx* is the shared graph context (Phase 3);
+    that the hunk does not show. *ctx* is the shared graph context;
     it is built here only when the caller did not supply one.
     """
     from .edges import build_context, run_edge_instances

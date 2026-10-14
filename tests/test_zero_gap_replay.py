@@ -1,4 +1,4 @@
-"""Spec §2: the truncation gap never fires on healthy input.
+"""The truncation gap never fires on healthy input.
 
 The truncation check hardens every feature that trusts ``DiffDoc``
 completeness, so the property that matters is the negative one: a

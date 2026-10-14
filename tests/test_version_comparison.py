@@ -1,4 +1,4 @@
-"""Plan §13 - the VCS local-rebuild bug, and the version contract behind it.
+"""- the VCS local-rebuild bug, and the version contract behind it.
 
 Reported: ``trustsight inspect oolite-git`` printed
 

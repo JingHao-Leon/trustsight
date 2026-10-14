@@ -1,4 +1,4 @@
-"""Addendum 5 §7: typed file metadata and the L1 structural rules.
+"""Typed file metadata and the L1 structural rules.
 
 C018 / C019 / C026 read the typed ``DiffFile`` mode, rename and hunk facts -
 never a raw diff walk.  The parser extension that feeds them is also pinned

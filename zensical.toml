@@ -200,7 +200,7 @@ toc = { permalink = true }
   locale = "en_US",
   twitter_site = "@emiliano_go_",
   auto_generate_schema = true,
-  debug_dir = ".seo-debug",
+  debug_dir = ".zensical-debug",
 }
 
 [project.markdown_extensions.pymdownx]

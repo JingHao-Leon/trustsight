@@ -58,22 +58,22 @@ class RuleCategory(StrEnum):
     #: could not verify, on a surface too common to price. See
     #: `unverifiable.md` for why these carry no weight.
     UNVERIFIABLE = "unverifiable"
-    #: The M series. Predicates over the finding set itself (Addendum 5 §6.5):
+    # The M series. Predicates over the finding set itself:
     #: a declared practice contradicted by structure, or a composition of
     #: weak signals. Fires at the layer of its inputs.
     META = "meta"
-    #: The E series. Distribution/entropy of the added content (Addendum 5
-    #: §6.3): the statistical twin of the X-series. Suspicion, never a
-    #: verdict; thresholds ship empty and are corpus-calibrated.
+    #: The E series. Distribution/entropy of the added content (the
+    #: statistical twin of the X-series). Suspicion, never a verdict;
+    #: thresholds ship empty and are corpus-calibrated.
     ENTROPY = "entropy"
-    #: The G series. Cross-package correlation (Addendum 5 §6.2): joins
+    # The G series. Cross-package correlation: joins
     #: over the set of recent analyses, run at cycle end, never per package.
     CORRELATION = "correlation"
-    #: The A series. Artifact inspection (Addendum 5 §12): the optional L9
+    # The A series. Artifact inspection: the optional L9
     #: build lane.  Reads the built package manifest, never the diff, and
     #: is never blended into the static score.
     ARTIFACT = "artifact"
-    #: The I series. Indicator membership (Addendum 5 §6.4): a declared
+    # The I series. Indicator membership: a declared
     #: surface matches an entry in signed external data.  H056 and the IOC
     #: federation are the same mechanism, so H056 is filed here (its id is
     #: unchanged); new federation matches take ``I`` ids.

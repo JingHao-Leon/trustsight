@@ -1,4 +1,4 @@
-"""X026-X031: the refusal family (Addendum 1).
+"""X026-X031: the refusal family.
 
 X001-X025 detect *catalogued* hiding techniques; an unanticipated one
 passes.  These rules close the hole by widening what counts as a signal:
@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 
 #: The functions an unresolved assignment must be *referenced from* to be
-#: in an executable position (spec X026).  Top-level metadata is not.
+# in an executable position. Top-level metadata is not.
 _EXECUTABLE_FUNCTIONS = ("build", "prepare", "check", "package")
 
 #: A ``$name`` / ``${name}`` reference, including a subscript.
@@ -66,7 +66,7 @@ _DECODER_RE = re.compile(
     re.IGNORECASE,
 )
 
-#: A self-read piped into an executor (spec X031).  The middle segment
+# A self-read piped into an executor. The middle segment
 #: allows further pipes, so `grep … PKGBUILD | cut … | bash` is the shape.
 _SELF_READ_RE = re.compile(
     r"\b(?:cat|grep|cut|awk|sed|base64|strings|tail|head|sort|tr)\b"
@@ -125,7 +125,7 @@ def pattern_across_commits(previous_diff: str, diff_text: str, add,
     last push and whose sink is added now.  Gaps in history degrade to
     no-firing rather than guessing; the caller only passes the immediately
     preceding recorded review.  The two commit ids are cited in the
-    finding (spec X028) when the caller supplies them.
+    finding when the caller supplies them.
     """
     if not previous_diff:
         return
@@ -230,7 +230,7 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             octals = _OCTAL_ESCAPE_RE.findall(literal)
             controls = _CONTROL_ESCAPE_RE.findall(literal)
             escapes = len(hexes) + len(octals)
-            # Spec X030: fire on >=2 hex/octal escapes, OR a control escape,
+            # fire on >=2 hex/octal escapes, OR a control escape,
             # OR any single hex/octal escape spelling a byte outside
             # printable ASCII (a lone \x01 is as suspicious as two).
             nonprintable = any(
@@ -255,7 +255,7 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
 
     # --- X029: encoded material at rest ----------------------------------
     # A literal is "at rest" only when neither a decoder nor an executor
-    # references it in the same diff (spec X029).  The decoder arm is the
+    # References it in the same diff. The decoder arm is the
     # regex below; the executor arm is the crossfire ownership table's
     # decode-and-execute / output-executed families - when one of those
     # fired, that rule owns the line and X029 stands down.

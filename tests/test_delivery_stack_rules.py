@@ -1,4 +1,4 @@
-"""Behavioural tests for the Phase 2 July delivery stack (H066-H070, H072).
+"""Behavioural tests for the July delivery stack (H066-H070, H072).
 
 Each rule is asserted in both directions: the attack case fires, and the
 plan's declared must-not-fire surface stays silent.  H066-blob (an ELF blob

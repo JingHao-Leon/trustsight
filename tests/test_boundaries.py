@@ -1,4 +1,4 @@
-"""Addendum 2 W1: the unified analysis-boundary model.
+"""W1: the unified analysis-boundary model.
 
 A coverage gap and a W-series finding describe the same fact: a limit on
 what the analysis could conclude.  These tests pin that the two faces are

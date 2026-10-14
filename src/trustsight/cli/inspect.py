@@ -51,7 +51,7 @@ def analyze_package(*args, **kwargs):
 def _layers_and_boundaries_line(fact) -> str | None:
     """The assurance-layer profile and boundary count, for ``--verbose``.
 
-    Addendum 5 §3 / Addendum 2 W1: the same projection the JSON ``layers``
+     / W1: the same projection the JSON ``layers``
     and ``boundaries`` fields carry, rendered as one terminal line so the
     terminal is the same surface as the JSON (B11).
     """
@@ -132,7 +132,7 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         for entry in fact.changes:
             inside.add_row("", Text("  " + clean(entry)))
 
-    # Spec §8: the boundary of analysis, named.  An assignment the
+    # the boundary of analysis, named. An assignment the
     # tokenizer refused is "not seen" to every rule, and the reader must
     # see where that boundary sits rather than only a generic gap.
     unresolved = list(getattr(fact, "unresolved_assignments", ()) or ())
@@ -343,7 +343,7 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         print("  What changed:")
         for entry in fact.changes:
             print(f"    {clean(entry)}")
-    # Spec §8: the boundary of analysis, named (see the Rich render).
+    # the boundary of analysis, named (see the Rich render).
     unresolved = list(getattr(fact, "unresolved_assignments", ()) or ())
     if unresolved:
         print("  Unresolved constructs:")
@@ -822,7 +822,7 @@ def register_commands(app: typer.Typer):
         package: str = typer.Argument(..., help="Package name"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
-        """Run the optional L9 build lane (Addendum 5 §12).
+        """Run the optional L9 build lane.
 
         Off by default.  With ``[verify] enabled = false`` or no sandbox
         container, this reports ``l9_unavailable`` - a weight-0 boundary,
@@ -835,7 +835,7 @@ def register_commands(app: typer.Typer):
 
         ensure_default_configs()
         init_db()
-        # §12.2: review L1-L8 first, then offer the L9 lane.  The static
+        # review L1-L8 first, then offer the L9 lane. The static
         # result is passed only so a divergence between the two can be named;
         # it never changes the static verdict.
         try:
@@ -1003,7 +1003,7 @@ def _inspect_history(
         if HISTORY_TRUNCATED not in results[0]["coverage_gaps"]:
             results[0]["coverage_gaps"].insert(0, HISTORY_TRUNCATED)
 
-    # Exit 2 when zero results could be produced (per spec §6 exit code).
+    # Exit 2 when zero results could be produced (exit code).
     if not results:
         msg = f"No content-bearing diffs found for '{package}' (walked {commits_seen} commits)."
         if json_output:

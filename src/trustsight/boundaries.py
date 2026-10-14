@@ -1,4 +1,4 @@
-"""The unified analysis-boundary model (Addendum 2, W1).
+"""The unified analysis-boundary model.
 
 A boundary is one property of the *input* that limits what the analysis
 could conclude: a truncated diff, an unreadable script, a registry the
@@ -77,11 +77,11 @@ _W_RULE_KIND: dict[str, str] = {
     "W004": BoundaryKind.UNREADABLE_FILE,
     "W005": BoundaryKind.UNREADABLE_FILE,
     "W006": BoundaryKind.BUILD_ONLY_PATH,
-    # Addendum 2 D2: the D-series statistical abstention.  It is an
+    # D2: the D-series statistical abstention. It is an
     # absent-history fact ("the dependency corpus holds no observations"),
     # so it groups with NO_HISTORY, not W002's run-time registry.
     "W007": BoundaryKind.NO_HISTORY,
-    # Addendum 1: an unresolved construct is an analysis boundary; X026/X027
+    # an unresolved construct is an analysis boundary; X026/X027
     # report the suspicion, W008 reports the boundary (weight-0).
     "W008": BoundaryKind.UNRESOLVED,
 }

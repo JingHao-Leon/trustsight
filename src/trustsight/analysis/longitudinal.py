@@ -1,4 +1,4 @@
-"""Phase 5 - Class C longitudinal rules (plan §7).
+"""- Class C longitudinal rules.
 
 These rules consume ``PropertyBreak`` objects from
 ``full_aur/properties.py`` plus the diff.  The property layer runs on every

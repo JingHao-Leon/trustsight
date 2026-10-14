@@ -1,4 +1,4 @@
-"""Addendum 5 §6.5: the M-series meta/confluence predicates."""
+"""The M-series meta/confluence predicates."""
 
 from trustsight.analysis.meta import (
     claim_contradictions,

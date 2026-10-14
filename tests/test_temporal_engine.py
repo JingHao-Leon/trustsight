@@ -1,4 +1,4 @@
-"""Phase 2: the temporal engine's instance table and shared read layer."""
+"""The temporal engine's instance table and shared read layer."""
 
 from pathlib import Path
 
@@ -29,7 +29,7 @@ def db(tmp_path, monkeypatch):
     (tmp_path / "trustsight.db").unlink(missing_ok=True)
 
 
-#: The 16 history-backed ids the engine consolidates (Addendum 3 Phase 2).
+# The 16 history-backed ids the engine consolidates.
 _TARGET_IDS = {
     "H020", "H021", "H022", "H026", "H028", "H037", "H044", "H045",
     "H046", "H057", "H058", "H060", "H073", "H074", "H086", "H088",

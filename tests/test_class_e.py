@@ -1,4 +1,4 @@
-"""Phase 7 - Class E indicator matching (H056) and the corpus pivot.
+"""- Class E indicator matching (H056) and the corpus pivot.
 
 H056 is the one rule that names a specific artefact, so the tests are about
 exactness in both directions: it must fire on the artefact and it must stay

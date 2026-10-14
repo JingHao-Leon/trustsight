@@ -167,7 +167,7 @@ def metadata_divergence(new_pkgbuild: str, srcinfo: Optional[str]) -> list[str]:
 def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict[str, Any]:
     """Extract tracked properties from a PKGBUILD (and optionally .SRCINFO).
 
-    Returns a dict keyed by ``property_key`` (see §1.1 of the spec).
+    Returns a dict keyed by ``property_key`` (see of the spec).
     Values are normalised as specified in the tracking table.
     """
     props: dict[str, Any] = {}

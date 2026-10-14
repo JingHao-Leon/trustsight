@@ -1,4 +1,4 @@
-"""Phase 6 - Class D corpus sweep tests (H045/H052/H055/H073).
+"""- Class D corpus sweep tests (H045/H052/H055/H073).
 
 Covers the corpus.py detectors, the cycle_events adoption feed plumbing in
 db.py, the threshold/template registrations, and the pipeline wiring.
@@ -349,7 +349,7 @@ def test_h044_same_maintainer_is_quiet(thresholds):
 
 
 def test_h026_ships_with_h044_for_an_unseen_maintainer(thresholds):
-    """Plan §8: an ownership transition to an account the previous snapshot
+    """An ownership transition to an account the previous snapshot
     never saw carries H026 as well as H044."""
     thresholds({})
     old = _snapshot(["pkg", "other"], "alice")
@@ -428,7 +428,7 @@ def test_h074_stale_modify_outside_window_is_quiet(thresholds):
 
 
 def test_h074_fires_on_the_first_package_of_a_replayed_campaign(thresholds):
-    """Plan §10: H074 must fire on package *one* of a campaign timeline.
+    """H074 must fire on package *one* of a campaign timeline.
 
     A campaign is only recognisable as one by its third or fourth package;
     the whole point of H074 is that the shape - adopt a package, change it

@@ -1,4 +1,4 @@
-"""IOC Federation baseline match stage (v0.12.0 spec §2).
+"""IOC Federation baseline match stage.
 
 This stage runs after rule matching and produces :class:`IocMatch` objects
 that are attached to the :class:`PackageFact` for rendering.  Matches do not

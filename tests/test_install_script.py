@@ -1,4 +1,4 @@
-"""Spec §9: .install script analysis.
+""".install script analysis.
 
 A complete .install file is read as a RecipeDoc (hooks are its functions)
 and gets C016/C017 with the file's own line numbers.  A partial file is a

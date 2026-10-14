@@ -1,6 +1,6 @@
 """The assurance layers: which kind of evidence a rule represents.
 
-Addendum 5 introduces a second axis over the rule taxonomy.  ``category``
+ introduces a second axis over the rule taxonomy. ``category``
 (:mod:`trustsight.categories`) answers *what kind of claim* a rule makes;
 ``layer`` answers *where on the path from repository text to a running
 machine* the rule's evidence sits.  The two are independent by design: a
@@ -48,7 +48,7 @@ __all__ = [
 
 
 class Layer(StrEnum):
-    """The kind of evidence a finding represents (Addendum 5 §1).
+    """The kind of evidence a finding represents.
 
     A layer groups findings by the evidence category they belong to - the
     name answers "what kind of check produced this", not "how far an attacker
@@ -88,7 +88,7 @@ LAYER_ORDER: tuple[Layer, ...] = (
     Layer.L1, Layer.L2, Layer.L3, Layer.L4, Layer.L5, Layer.L6, Layer.L7, Layer.L8,
 )
 
-#: Default layer by series prefix (Addendum 5 §2).  A series that is not
+# Default layer by series prefix. A series that is not
 #: listed (M, whose findings fire *at* their inputs' layer) has no default.
 SERIES_LAYER: dict[str, Layer] = {
     "R": Layer.L3,
@@ -114,8 +114,8 @@ SERIES_LAYER: dict[str, Layer] = {
 #:   ecosystem-memory layer even though they are filed in H;
 #: * H056 is an indicator match, so it belongs with the I mechanism.
 #:
-#: The spec's own H099-H103 layer rows (Addendum 5 §2) referred to the
-#: *proposed* rules, which Addendum 3 Phase 0 re-filed as C014-C017 and which
+# The spec's own H099-H103 layer rows referred to the
+# *proposed* rules, which re-filed as C014-C017 and which
 #: are L1 by the C-series default.  The live H099/H101/H103 are different,
 #: unrelated rules; they are structural-coherence violations and are pinned to
 #: L1 here so the profile does not read them as generic L5 suspicion.
@@ -207,7 +207,7 @@ def rules_in_layer(layer: Layer, overrides: dict[str, Layer] | None = None) -> l
         rid for rid in RULE_CATEGORIES if layer_of(rid, overrides) is layer)
 
 
-#: Which layers a coverage gap can blind (Addendum 5 §3).
+# Which layers a coverage gap can blind.
 #:
 #: A gap is bounded evidence: content the run did not read.  "Unreadable" is
 #: reserved for the layers that actually depend on the missing evidence, so a
@@ -238,7 +238,7 @@ GAP_BLINDED_LAYERS: dict[str, frozenset[Layer]] = {
 
 
 def observed_layers(triggered, overrides: dict[str, Layer] | None = None) -> dict:
-    """Which evidence categories fired on one harness attempt (Addendum 5 §4).
+    """Which evidence categories fired on one harness attempt.
 
     Returns ``{"fired": [...], "fully_bypassed": bool}``: the layer ids whose
     rules actually fired, in evidence-category order.  This is a projection
@@ -350,7 +350,7 @@ def blinded_layers(gaps) -> frozenset[Layer]:
 
 def layer_profile(fact, findings, *, correlation_ran: bool = False,
                   overrides: dict[str, Layer] | None = None) -> dict[str, dict]:
-    """The report's ``layers`` object (Addendum 5 §3).
+    """The report's ``layers`` object.
 
     Per layer, ``{"status", "name", "findings"}``.  ``fired`` when a
     finding in that layer is present; otherwise ``passed`` when the run was

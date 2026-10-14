@@ -61,7 +61,7 @@ class NoveltyContext:
     url_first_seen_globally_url: str = ""
     maintainer_first_seen_for_this_package: bool = False
     observation_count: int = 0
-    #: Spec §11: whether this exact ``source=()`` tuple has been observed
+    #: : whether this exact ``source=`` tuple has been observed
     #: before for the package (exact set membership over the recipe index,
     #: not the statistical per-URL estimate).  The one v1 consumer of
     #: ``array_seen_before``.
@@ -132,7 +132,7 @@ class PackageFact:
     scan_truncated: bool = False
 
     # True when this analysis ran as part of a corpus correlation cycle
-    # (Addendum 5 §6.2 / remediation T4): the collective G-series pass ran,
+    # the collective G-series pass ran,
     # so L8 evidence was exercised.  False for a single-package review,
     # where L8 is genuinely not applicable.
     correlation_ran: bool = False
@@ -149,7 +149,7 @@ class PackageFact:
     # forbids a clean verdict: see coverage.fail_closed.
     coverage_gaps: list[str] = field(default_factory=list)
     unresolved_sources: list[str] = field(default_factory=list)
-    # Spec §8 v1: every assignment the tokenizer refused on the analysed
+    # every assignment the tokenizer refused on the analysed
     # surface, as {name, line, file}.  Additive: it names the boundary of
     # analysis to the reader and never changes a finding or a score.
     unresolved_assignments: list[dict] = field(default_factory=list)
@@ -159,15 +159,15 @@ class PackageFact:
     # category; these name the cut.
     partial_hunks: list[str] = field(default_factory=list)
     # Install-script files whose diff showed only part of the file, behind
-    # a PARTIAL_FILE_ANALYSIS gap (spec §9).
+    # A PARTIAL_FILE_ANALYSIS gap.
     partial_files: list[str] = field(default_factory=list)
 
-    # Spec §1: the typed change-as-data view, ``ChangeDelta.to_dict()``.
+    # the typed change-as-data view, ``ChangeDelta.to_dict``.
     # The prose summary and the JSON ``change`` object both render this, so
     # they cannot disagree.  Empty on facts stored before the field existed.
     change: dict = field(default_factory=dict)
 
-    # Addendum 2 R1: how much of the diff the tokenizer could read, and
+    # R1: how much of the diff the tokenizer could read, and
     # which resolution-coupled R-rules matched.  Additive.
     resolution_coverage: dict = field(default_factory=dict)
 

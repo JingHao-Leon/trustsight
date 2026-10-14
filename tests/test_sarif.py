@@ -1,4 +1,4 @@
-"""Spec §3: SARIF output and inline attribution.
+"""SARIF output and inline attribution.
 
 Formatting only, over solved attribution: rule IDs map directly, levels
 come from the severity ladder, removed-line findings anchor to the

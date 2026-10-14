@@ -1,4 +1,4 @@
-"""Addendum 5 §12: the A-series artifact inspection (pure, no execution)."""
+"""The A-series artifact inspection (pure, no execution)."""
 
 from trustsight.analysis.artifact import inspect_manifest
 

@@ -1,4 +1,4 @@
-"""Phase 3 - install-path persistence rules (plan §5).
+"""- install-path persistence rules.
 
 H032/H038/H039/H042/H062 share one question: where does a build/install
 function put a file?  They are code rules because each needs write-target
@@ -305,7 +305,7 @@ def _persistence_findings(diff_text, config, add, current_text=None, ctx=None) -
 
     if ctx is None:
         ctx = build_context(diff_text, config, current_text=current_text)
-    # Phase 4: the write-classification predicates share the graph context.
+    # the write-classification predicates share the graph context.
     run_persistence_instances(
         ctx, add, only=frozenset({"H039", "H062", "H032", "H038"}))
     run_edge_instances(ctx, add, only=frozenset({"H042"}))

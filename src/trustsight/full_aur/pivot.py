@@ -1,4 +1,4 @@
-"""Phase 7 - the corpus-side indicator pivot (plan §9).
+"""- the corpus-side indicator pivot.
 
 H056 answers "does *this* package carry a known indicator?".  The pivot
 answers the other direction: given one indicator, which AUR packages

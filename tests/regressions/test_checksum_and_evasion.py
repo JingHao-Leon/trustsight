@@ -1,4 +1,4 @@
-"""Red-team proposals (.seo-debug/PROPOSALS.md), rounds 1-6."""
+"""Checksum-parity and interpreter-evasion regression tests."""
 
 import pytest
 
@@ -7,7 +7,7 @@ from trustsight.sandbox import git_project
 from .helpers import _shipped_ids, _x
 
 # ---------------------------------------------------------------------------
-# Red-team proposals (.seo-debug/PROPOSALS.md), rounds 1-6
+# Checksum parity and interpreter evasion
 # ---------------------------------------------------------------------------
 
 

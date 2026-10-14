@@ -331,7 +331,7 @@ def init_db():
                 captured_at TEXT NOT NULL
             );
 
-            /* Spec §11: the corpus as documents.  Per observed package
+            /* the corpus as documents. Per observed package
                version, the RecipeDoc's scalars and arrays (never the full
                text) are stored so "has this exact source-array tuple
                appeared before" is set membership rather than a statistical
@@ -401,7 +401,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_ioc_entries_expires
                 ON ioc_entries(expires_at);
 
-            /* Addendum 5 §6.1 (T-series): the ecosystem index the temporal
+            /* (T-series): the ecosystem index the temporal
                rules read.  One row per signing key and per maintainer
                domain the corpus has ever observed, with its first-seen
                stamp, so "is this key/domain new to the ecosystem" is set
@@ -415,7 +415,7 @@ def init_db():
                 first_seen TEXT
             );
 
-            /* Addendum 5 §9: added literals per package, so G002 (Shared
+            /* added literals per package, so G002 (Shared
                Added Literal) can join across packages instead of scanning
                every package's diff in memory each cycle.  The literal is
                stored bounded; the join is over its content, so two packages
@@ -429,7 +429,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_added_literals_package
                 ON observed_added_literals(package_name);
 
-            /* Addendum 5 §9: three indexed views the G-series correlates
+            /* three indexed views the G-series correlates
                over at cycle end (O(cycle) queries, not O(packages^2)).
                equivalent tables exist - these are the queryable surfaces. */
             CREATE VIEW IF NOT EXISTS gained_hosts_window AS
@@ -1984,7 +1984,7 @@ def record_recipe_document(
     arrays: dict,
     observed_at: Optional[str] = None,
 ) -> None:
-    """Store one observed RecipeDoc's scalars and arrays (spec §11).
+    """Store one observed RecipeDoc's scalars and arrays.
 
     Not the full text: the index exists for exact tuple history, and a
     stored PKGBUILD would be another unbounded attacker-authored payload.
@@ -2044,7 +2044,7 @@ def record_recipe_document(
 
 
 def array_seen_before(package_name: str, array_name: str, entries) -> bool:
-    """True when this exact array tuple was observed before (spec §11)."""
+    """True when this exact array tuple was observed before."""
     with get_connection() as conn:
         row = conn.execute(
             """SELECT 1 FROM recipe_array_observations
@@ -2074,7 +2074,7 @@ MAX_OBSERVED_DOMAINS = 20_000
 
 
 def record_observed_key(key: str, observed_at: Optional[str] = None) -> None:
-    """Record a signing key as observed in the ecosystem (Addendum 5 §6.1)."""
+    """Record a signing key as observed in the ecosystem."""
     key = (key or "").strip()[:512]
     if not key:
         return
@@ -2146,7 +2146,7 @@ def domain_first_seen(domain: str) -> Optional[str]:
 def domain_seen_within(domain: str, days: int) -> bool:
     """True when *domain* was first observed within the last *days* days.
 
-    Addendum 5 §6.1: T002's window, not merely "never observed".  A domain
+T002's window, not merely "never observed". A domain
     first seen this week is as novel an adoption signal as one never seen at
     all; only the observation window distinguishes them.
     """
@@ -2170,7 +2170,7 @@ MAX_OBSERVED_LITERALS = 50_000
 
 
 def record_added_literals(package_name: str, literals, observed_at=None) -> None:
-    """Record a package's added encoded literals (Addendum 5 §9 / G002)."""
+    """Record a package's added encoded literals."""
     package_name = (package_name or "").strip()
     if not package_name or not literals:
         return
@@ -2209,7 +2209,7 @@ def record_property_transition(
     package_name: str, property_key: str,
     old_value, new_value, observed_at: Optional[str] = None,
 ) -> None:
-    """Append one property-value transition (Addendum 5 §9).
+    """Append one property-value transition.
 
     The same row shape ``full_aur.properties`` writes; exposed so the corpus
     sweep can record a maintainer transition and the ``adoption_events`` view
@@ -2238,7 +2238,7 @@ def record_property_transition(
 
 
 def correlation_feed(package_names) -> dict[str, dict]:
-    """Per-package G-series inputs, read from the Addendum 5 §9 views.
+    """Per-package G-series inputs, read from the views.
 
     ``{package: {hosts_gained, added_literals, maintainer,
     adoption_predicates}}``.  One pass over each view instead of a query per

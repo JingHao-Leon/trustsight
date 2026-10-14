@@ -1,4 +1,4 @@
-"""A-series: artifact inspection (Addendum 5 §12).
+"""A-series: artifact inspection.
 
 Mechanically distinct from every text-analysis series: an A rule inspects
 the built package manifest, not the diff.  It is the optional L9 layer -
@@ -7,7 +7,7 @@ container, and never blended into the static score.
 
 This module is the *inspection* half, and it is pure: it reads a manifest
 (file list, modes, types) and the recipe's declared surface.  The build
-lane that produces the manifest runs elsewhere (§12.4); when it is not
+lane that produces the manifest runs elsewhere; when it is not
 enabled or the container is unavailable, the caller reports
 ``l9_unavailable`` - a weight-0 boundary, never a negative verdict.
 

@@ -1,6 +1,6 @@
-"""Generate the campaign recall fixtures (plan §10).
+"""Generate the campaign recall fixtures.
 
-The §10 recall lines name three attack corpora - the June W1/W2 install-hook
+The recall lines name three attack corpora - the June W1/W2 install-hook
 campaign, its June W3 obfuscated re-release, and the July delivery stack -
 plus the synthetic payload paths.  The real diffs are not redistributable, so
 each fixture here is a *representative* rebuild of one delivery step, written
@@ -9,7 +9,7 @@ names and hosts.  ``fidelity`` records that.
 
 Unlike ``gen_malicious_fixtures.py`` this script owns exactly one directory
 and never deletes a file it did not write, so the hand-reconciled labels in
-``synthetic/`` (plan §15.3) cannot be clobbered by running it.
+``synthetic/`` cannot be clobbered by running it.
 
 Usage:
     python scripts/gen_campaign_fixtures.py [--out tests/fixtures/malicious/campaign]
@@ -252,7 +252,7 @@ add("aug-fsearch-bin-source-without-checksum",
     campaign="aug-adoption-lock", fidelity="representative",
     must_fire=["H091", "H004"], min_score=65)
 
-# ── Controls: the must-not-fire surface §10 names ──────────────────────────
+# ── Controls: the must-not-fire surface names ──────────────────────────
 
 add("control-arch-check-and-generated-desktop",
     diff(
@@ -310,7 +310,7 @@ def main() -> int:
     failures: list[str] = []
 
     # Labels are validated against the *shipped* config with a cold
-    # database, exactly as the gates measure them (plan §15): a developer
+    # Database, exactly as the gates measure them: a developer
     # box carries whatever defaults existed the day it was first run.
     with shipped_config():
         config = load_config()

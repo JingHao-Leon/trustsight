@@ -1,4 +1,4 @@
-"""``trustsight corpus`` - corpus-wide queries (plan §9).
+"""``trustsight corpus`` - corpus-wide queries.
 
 ``corpus pivot <ioc>`` inverts H056: instead of asking what one package
 carries, it asks which packages reference one indicator.  That is the shape

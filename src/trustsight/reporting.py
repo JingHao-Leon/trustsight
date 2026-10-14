@@ -70,7 +70,7 @@ def is_trivial(fact, findings: Sequence[dict] | None = None) -> bool:
 def _indexed_unresolved(fact) -> list[str]:
     """Unresolved-source lines with their ``unresolved_assignments`` index.
 
-    Spec §8: a gap that depended on a refused assignment cross-references
+A gap that depended on a refused assignment cross-references
     the structured list entry by index, so the reader can move between the
     two without re-matching text.
     """
@@ -144,7 +144,7 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "flagged": policy.flagged(fact.final_score),
         "verdict": verdict,
         "findings": findings,
-        # Addendum 5 §3: the layer profile, additive.  A finding carries
+        # the layer profile, additive. A finding carries
         # the layer where it caught, so this is a projection of `findings`.
         # A `[layers]` config override wins over the shipped table.
         "layers": layer_profile(
@@ -154,18 +154,18 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "changes": list(fact.changes),
         "coverage_gaps": list(fact.coverage_gaps),
         "coverage_gaps_carried": list(getattr(fact, "carried_coverage_gaps", ())),
-        # Addendum 2 W1: the unified boundary model, additive.  The same
+        # W1: the unified boundary model, additive. The same
         # facts as coverage_gaps + the W renderings, one object.
         "boundaries": [b.to_dict() for b in boundaries_from_fact(fact)],
-        # Spec §1: the typed change-as-data object, additive to the body.
+        # the typed change-as-data object, additive to the body.
         "change": dict(getattr(fact, "change", {}) or {}),
-        # Spec §8 v1: the structured boundary of analysis.
+        # the structured boundary of analysis.
         "unresolved_assignments": [
             dict(a) for a in getattr(fact, "unresolved_assignments", ()) or ()
         ],
-        # Spec §9: install scripts read only in part.
+        # install scripts read only in part.
         "partial_files": list(getattr(fact, "partial_files", ()) or ()),
-        # Addendum 2 R1: tokenizer resolution coverage, with the rule-level
+        # R1: tokenizer resolution coverage, with the rule-level
         # pointer: a resolved-target R-rule that fired zero times beside
         # unresolved lines points at X026 (the refusal family).
         "resolution_coverage": _resolution_coverage_rows(fact),
@@ -176,7 +176,7 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "version_comparison": fact.version_comparison,
         "is_trivial": is_trivial(fact, findings),
         "ioc_matches": list(fact.ioc_matches),
-        # Addendum 5 §6.4: the indicator tier, promoted.  Same facts as
+        # the indicator tier, promoted. Same facts as
         # `ioc_matches`, exposed as the first-class I-series surface.
         "indicators": list(fact.ioc_matches),
         "dependencies": list(getattr(fact, "dependencies", ())),
@@ -314,7 +314,7 @@ def report_body(
         "version_comparison": evaluated.get("version_comparison", ""),
         "verdict": evaluated.get("verdict", ""),
         "findings": findings,
-        # Addendum 5 §3: the layer profile, additive.
+        # the layer profile, additive.
         "layers": dict(evaluated.get("layers", {}) or {}),
         "file_changes": list(evaluated.get("file_changes", ())),
         # B7: what moved, whether or not a rule matched.
@@ -323,19 +323,19 @@ def report_body(
         "coverage_gaps": list(evaluated.get("coverage_gaps", ())),
         # #19: the subset of those gaps unchanged since the previous review.
         "coverage_gaps_carried": list(evaluated.get("coverage_gaps_carried", ())),
-        # Addendum 2 W1: the unified boundary list, additive.
+        # W1: the unified boundary list, additive.
         "boundaries": [
             dict(b) for b in evaluated.get("boundaries", ()) or ()
         ],
-        # Spec §1: ChangeDelta.to_dict(), additive.
+        # ChangeDelta.to_dict, additive.
         "change": dict(evaluated.get("change", {}) or {}),
-        # Spec §8 v1: the structured unresolved list, additive.
+        # the structured unresolved list, additive.
         "unresolved_assignments": [
             dict(a) for a in evaluated.get("unresolved_assignments", ()) or ()
         ],
-        # Spec §9: install scripts the diff showed only in part.
+        # install scripts the diff showed only in part.
         "partial_files": [str(p) for p in evaluated.get("partial_files", ())],
-        # Addendum 2 R1: tokenizer resolution coverage, additive.
+        # R1: tokenizer resolution coverage, additive.
         "resolution_coverage": dict(
             evaluated.get("resolution_coverage", {}) or {}),
         # B5: unconditional.  A suppression behind a verbosity flag looks
@@ -347,7 +347,7 @@ def report_body(
             dict(r) for r in evaluated.get("acknowledged_urls", ())
         ],
         "ioc_matches": [_ioc_row(m) for m in evaluated.get("ioc_matches", ())],
-        # Addendum 5 §6.4: the indicator tier, promoted (same rows as
+        # the indicator tier, promoted (same rows as
         # `ioc_matches`, additive for one release).
         "indicators": [_ioc_row(m) for m in evaluated.get("ioc_matches", ())],
         "first_seen": bool(evaluated.get("first_seen", False)),
@@ -366,7 +366,7 @@ def report_body(
         # `coverage_gaps`, which was already here - but a consumer should
         # not have to know that an empty list is the only safe reading of
         # a verdict.
-        # Spec §8: a run with a non-empty unresolved list is not complete
+        # a run with a non-empty unresolved list is not complete
         # even when it recorded no coverage gap - the list names assignments
         # the analysis refused to read, which is a boundary, not a quiet
         # "nothing there".
@@ -400,7 +400,7 @@ def report_body(
     return body
 
 
-#: Severity ladder to SARIF result level (spec §3).
+# Severity ladder to SARIF result level.
 _SARIF_LEVELS = {
     "FATAL": "error",
     "CRITICAL": "error",
@@ -410,7 +410,7 @@ _SARIF_LEVELS = {
 
 
 def finding_fingerprint(finding: dict, package: str) -> str:
-    """A stable fingerprint for a finding (spec §3).
+    """A stable fingerprint for a finding.
 
     Package + rule + file + line + normalized evidence.  Stable across
     runs of the same diff, so a code-scanning system can deduplicate a
@@ -482,7 +482,7 @@ def _sarif_location(finding: dict, doc) -> dict | None:
 
 
 def report_to_sarif(reports, diffs: dict | None = None) -> dict:
-    """Render evaluated reports as one SARIF 2.1.0 document (spec §3).
+    """Render evaluated reports as one SARIF 2.1.0 document.
 
     *reports* is an iterable of evaluated dicts (the ``report_body``
     shape) or Report-like objects with ``to_dict``.  *diffs* optionally
@@ -525,7 +525,7 @@ def report_to_sarif(reports, diffs: dict | None = None) -> dict:
                 "defaultConfiguration": {"level": level},
             }
             if layer is not None:
-                # Addendum 5 §2: the layer is on the rule so a code-scanning
+                # the layer is on the rule so a code-scanning
                 # consumer can group findings by the kind of evidence.
                 rule["properties"] = {"layer": layer.value}
             rules.setdefault(rule_id, rule)
@@ -578,7 +578,7 @@ def report_to_sarif(reports, diffs: dict | None = None) -> dict:
 def _resolution_coverage_rows(fact) -> dict:
     """R1's resolution coverage plus the rule-level X026 pointer.
 
-    Addendum 2 R1 (v2): when a ``match_target=resolved`` R-rule fired zero
+     R1 (v2): when a ``match_target=resolved`` R-rule fired zero
     times while unresolved lines exist, the report points at X026 rather
     than leaving the rule's silence unqualified.
     """
@@ -680,14 +680,14 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "risk_label": row.get("risk_label") or row.get("risk", ""),
         "verdict": row.get("verdict", ""),
         "findings": findings,
-        # Addendum 5 §3: the layer profile, additive.
+        # the layer profile, additive.
         "layers": _layer_profile_row(row, findings),
         "suppressed_rules": list(row.get("suppressed_rules", ())),
         "changes": list(row.get("changes", ())),
         "required_by": list(row.get("required_by", ())),
         "coverage_gaps": list(row.get("coverage_gaps", ())),
         "coverage_gaps_carried": list(row.get("coverage_gaps_carried", ())),
-        # Addendum 2 W1: the unified boundary list, additive.
+        # W1: the unified boundary list, additive.
         "boundaries": _boundaries_for_row(row, findings),
         "change": dict(row.get("change", {}) or {}),
         "unresolved_assignments": [

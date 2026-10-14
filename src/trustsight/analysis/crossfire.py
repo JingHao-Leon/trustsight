@@ -2412,7 +2412,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
 def _resolved_records(found: dict) -> dict:
     """The kept records after resolution, each carrying ``resolved_by``.
 
-    Spec §6.0: a record is ``(line, shape, quoted, resolved_by)``.  A yielded
+A record is ``(line, shape, quoted, resolved_by)``. A yielded
     record is not emitted, so every emitted record owns its line and its
     ``resolved_by`` is ``None``; :func:`resolve_ownership_audit` keeps the
     yielded records and names their owner.
@@ -2433,7 +2433,7 @@ def _resolved_records(found: dict) -> dict:
     return resolved
 
 
-#: Addendum 1 §6.0: declarative ownership.  Each row is ``owner ->
+#: : declarative ownership. Each row is ``owner ->
 #: owners it yields to`` when both matched the same line.  The resolver
 #: applies the table after production, so a new X rule adds a row here
 #: instead of another pairwise conditional.  On the locked corpus no line
@@ -2447,7 +2447,7 @@ CROSSFIRE_OWNERSHIP = (
 
 
 def _ownership_yields(found: dict) -> dict[int, str]:
-    """The winning owner for each contested line, from the table (spec §6.0)."""
+    """The winning owner for each contested line, from the table."""
     yields = dict(CROSSFIRE_OWNERSHIP)
     owners_by_line: dict[int, set[str]] = {}
     for rule_id, hits in found.items():
@@ -2464,7 +2464,7 @@ def _ownership_yields(found: dict) -> dict[int, str]:
 
 
 def resolve_ownership(found: dict) -> dict:
-    """Assign each matched line exactly one owner (spec §6.0).
+    """Assign each matched line exactly one owner.
 
     A rule yields on a line when an owner it yields to matched the same
     line.  Returns a new dict; the input is left untouched.
@@ -2489,7 +2489,7 @@ def resolve_ownership(found: dict) -> dict:
 
 
 def resolve_ownership_audit(found: dict) -> dict[str, list[tuple]]:
-    """Every produced record with its ``resolved_by`` (spec §6.0).
+    """Every produced record with its ``resolved_by``.
 
     The public :func:`resolve_ownership` returns owners only, so a record it
     drops is invisible.  This audit keeps every record and names the owner a
@@ -2573,8 +2573,8 @@ def _crossfire_findings(diff_text, config, add, previous_diff: str = "",
             f"{len(techniques)} evasion techniques in one diff: {shapes}",
             line=None, count=len(techniques), techniques=shapes)
 
-    # Addendum 1: the refusal family.  Deliberately outside the techniques
-    # dict above, so X007 keeps counting known techniques only (spec X027).
+    # the refusal family. Deliberately outside the techniques
+    # Dict above, so X007 keeps counting known techniques only.
     from .refusals import refusal_findings
 
     refusal_findings(diff_text, config, add, previous_diff=previous_diff,

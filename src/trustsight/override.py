@@ -336,7 +336,7 @@ def filter_triggered_rules(
         o for o in overrides
         if o.package is None or (package is not None and o.package == package)
     ]
-    # Addendum 3: an override keyed to a retired id still applies, through
+    # an override keyed to a retired id still applies, through
     # its survivor, so a merge never silently un-suppresses a rule the
     # operator had turned off.  The survivor's own id wins if both exist.
     from .rule_id_history import survivor_id

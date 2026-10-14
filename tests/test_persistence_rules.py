@@ -1,4 +1,4 @@
-"""Behavioural tests for the Phase 3 install-path persistence cluster
+"""Behavioural tests for the install-path persistence cluster
 (H032/H038/H039/H042/H062) and the kill-chain composition capstone
 (H040 host reconnaissance, H043 attack-chain annotation).
 

@@ -1,4 +1,4 @@
-"""Addendum 5 §6.1: the T-series temporal novelty rules."""
+"""The T-series temporal novelty rules."""
 
 import pytest
 
@@ -53,7 +53,7 @@ def test_t002_fires_for_a_new_domain(db):
 
 
 def test_t002_fires_for_a_domain_first_seen_inside_the_window(db):
-    """Addendum 5 §6.1: the window, not just "never observed"."""
+    """The window, not just "never observed"."""
     record_observed_domain("fresh.example")  # first_seen defaults to now
     got = t_domain_findings("me@fresh.example", None)
     assert [f["rule_id"] for f in got] == ["T002"]

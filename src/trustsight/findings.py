@@ -68,7 +68,7 @@ TEMPLATES: dict[str, str] = {
     "H036": "{position}() line carries {count} obfuscation indicators: {body}",
     "H065": "{detail}: {body}",
 
-    # --- Phase 2: July delivery stack ---
+    # --- July delivery stack ---
     "H066": "ELF file committed to the repository: {path}",
     "H067": "{position}() probes its environment: {probe}",
     "H068": "{encoding} blob on the line decodes to {magic}",
@@ -76,19 +76,19 @@ TEMPLATES: dict[str, str] = {
     "H070": "{match}",
     "H072": "{position}() writes {path} and then executes it",
 
-    # --- Phase 3: install-path persistence ---
+    # --- install-path persistence ---
     "H032": "{position}() writes into the user's home/rc: {path}",
     "H038": "{position}() stages work in a world-writable path: {path}",
     "H039": "systemd unit ExecStart points at runtime-writable path: {exec_target}",
     "H042": "{position}() drops a hidden file outside the build trees: {path}",
     "H062": "{position}() installs a pacman hook: {path}",
 
-    # --- Phase 3: kill-chain composition ---
+    # --- kill-chain composition ---
     "H040": "{position}() profiles the host: {probe}",
     "H043": "rule hits span {n_stages} distinct kill-chain stages: {stages}",
     "H098": "{count} naming/deception signals: {members}",
 
-    # --- Phase 3: network surface ---
+    # --- network surface ---
     "H004": "{position}() runs sudo: {body}",
     "H031": "{variable}={value!r} carries injection chars interpolated into a source URL: {url}",
     "H033": "{detail}",
@@ -103,11 +103,11 @@ TEMPLATES: dict[str, str] = {
     "H080": "{detail}: {body}",
     "H081": "{position}() executes repo-committed file not declared in source=(): {path}",
 
-    # --- Phase 4: Class B ---
+    # --- Class B ---
     "H063": "epoch={epoch} newly introduced",
     "H064": "{field} claims '{dep_name}', {kind} but unrelated to '{package_name}'",
 
-    # --- Phase 5: Class C longitudinal ---
+    # --- Class C longitudinal ---
     "H037": "{key} changed after {stable_for_n} stable observations",
     "H047": "configure_flags changed security flags after {stable_for_n} stable observations: {flags}",
     "H048": "removed dependency {vendored} now vendored in-tree after {stable_for_n} stable observations",

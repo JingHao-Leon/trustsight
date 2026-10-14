@@ -1,4 +1,4 @@
-"""The rules that close the §15.3 known gaps.
+"""The rules that close the known gaps.
 
 H077 (a network client at parse time), H078 (the signing-key set changed),
 H079 (the recipe weakens the distribution build flags) and H080 (a command

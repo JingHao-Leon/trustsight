@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from trustsight.doc_cache import parse_diff_cached  # noqa: E402
 
-#: Spec §4: the replay reads documents from the cache when present and
+#: : the replay reads documents from the cache when present and
 #: parses on miss.  A temp dir keeps the run from polluting the operator's
 #: XDG cache; the cache is an optimization, never an authority, so a miss
 #: (or a version/integrity mismatch) falls back to a fresh parse and the

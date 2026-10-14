@@ -771,7 +771,7 @@ watch_interval = 3600
 watch_min_interval = 60
 
 [verify]
-# The optional L9 build lane (Addendum 5 §12).  When enabled, `trustsight
+# The optional L9 build lane. When enabled, `trustsight
 # verify-build` may build the package inside the project's rootless,
 # networkless container and inspect the artifact (A001-A005).  Off by
 # default, explicit, and never blended into the static score.  When it is
@@ -780,7 +780,7 @@ watch_min_interval = 60
 enabled = false
 
 [layers]
-# Override a rule's assurance layer (Addendum 5 §2).  The layer names the
+# Override a rule's assurance layer. The layer names the
 # kind of evidence the rule represents, L1 (structural coherence) to L8
 # (campaign correlation).  The shipped per-series default and per-rule
 # overrides apply unless a rule id is named here.  A value outside L1-L8 is
@@ -960,7 +960,7 @@ DEFAULT_BASELINE_TAG = (
 #: The shipped ruleset generation.  Bumped in a release that changes the
 #: shipped rules in a way an existing install should pick up.  ``rules.toml``
 #: carries the matching ``ruleset-version`` marker; the gap between the two
-#: is what the age-drift prompt reads (Addendum 2, R2).
+# is what the age-drift prompt reads.
 SHIPPED_RULESET_VERSION = 18
 
 _RULESET_VERSION_RE = re.compile(r"^#\s*ruleset-version:\s*(\d+)", re.MULTILINE)
@@ -2399,7 +2399,7 @@ def missing_shipped_rules() -> list[str]:
     if not path.exists():
         return []
     existing = {r.get("id") for r in load_rules()}
-    # Addendum 3 Phase 5: a retired id is never resurrected by a sync.  Its
+    # a retired id is never resurrected by a sync. Its
     # detection now fires under the survivor, so re-adding the old block
     # would double-report; the alias in `survivor_id` is what keeps the id
     # readable.
@@ -2467,7 +2467,7 @@ def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
     for rid in added:
         text += "\n" + blocks[rid]
 
-    # Stamp the current generation (Addendum 2, R2): a file with no marker is
+    # Stamp the current generation: a file with no marker is
     # a pre-marker install and would keep reading as age-drifting after a
     # sync; an old marker is replaced in place.
     before = text

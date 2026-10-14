@@ -1,4 +1,4 @@
-"""M-series: meta / confluence (Addendum 5 §6.5).
+"""M-series: meta / confluence.
 
 The only series whose input is other rules' outputs: predicates over the
 finding multiset after the ownership resolver, so no line is double-counted.
@@ -86,7 +86,7 @@ def claim_contradictions(triggered: list[dict], claims=None) -> list[dict]:
 
 
 def cofire_absence(triggered: list[dict], pairs) -> list[str]:
-    """M004: a tool-health check, never a package finding (§6.5 family 4).
+    """M004: a tool-health check, never a package finding (family 4).
 
     *pairs* is an iterable of ``(precursor_rule, expected_rule)``.  When the
     precursor fired but the expected rule did not, the construct that

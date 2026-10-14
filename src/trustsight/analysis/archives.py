@@ -8,7 +8,7 @@ offline-testable with fixtures and lets it compose with any future byte
 source - a corpus-side fetch on your own infrastructure, a user-supplied
 local file, or a cached tarball.
 
-Threat-model note (see the plan spec §4): fetching attacker-declared
+Threat-model note (see the plan): fetching attacker-declared
 ``source=`` URLs must never happen in the ``review`` path.  Downloading
 arbitrary URLs at analysis time turns the reviewer into an SSRF probe, tells
 the attacker who scanned them, and is a DoS vector.  If H070 ever runs live,

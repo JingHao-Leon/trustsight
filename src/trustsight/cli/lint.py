@@ -1,9 +1,9 @@
-"""Spec §8 v2: ``trustsight lint`` - pre-submission recipe hygiene.
+"""``trustsight lint`` - pre-submission recipe hygiene.
 
 Lint runs ``parse_recipe`` on a local file and reports what the typed core
 saw: parse status, unresolved assignments, the function inventory, the
 array inventory (with duplicate and ordering notes), and the rules that
-can run without a diff (the function-scoped rules from §7/§9).  It is
+can run without a diff (the function-scoped rules). It is
 explicitly **not** a verdict: no score, no finding severity, no history.
 """
 
@@ -32,7 +32,7 @@ def _all_added_diff(text: str, filename: str) -> str:
 
 
 def lint_report(text: str, filename: str) -> dict:
-    """The hygiene report for one recipe's text (spec §8 v2)."""
+    """The hygiene report for one recipe's text."""
     from ..coverage import (
         _COMMAND_SUBSTITUTION_RE,
         _SOURCE_ASSIGN_RE,
@@ -66,7 +66,7 @@ def lint_report(text: str, filename: str) -> dict:
                          f"{'y' if len(duplicates) == 1 else 'ies'}")
         if any(entry.strip().upper() in ("SKIP", "NONE") for entry in entries):
             notes.append("contains SKIP/NONE")
-        # §8: an ordering note.  A checksum array whose entry count differs
+        # an ordering note. A checksum array whose entry count differs
         # from source=() cannot be in positional parity, so a hash sits in a
         # slot a reviewer would not check.
         if _is_checksum_array(name) and n_source and len(entries) != n_source:
@@ -115,7 +115,7 @@ def lint_report(text: str, filename: str) -> dict:
                     })
                     break
 
-    # §7/§9 diff-free rules: H076 (build write outside the staging root) and
+    # / diff-free rules: H076 (build write outside the staging root) and
     # H091 (checksum array shorter than source=()).  Neither needs a diff, so
     # a first-seen recipe gets the same hygiene view as a change.
     from ..analysis.edges import build_context

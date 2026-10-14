@@ -1,6 +1,6 @@
 """The persistence engine: write-target + location-class predicates as data.
 
-Addendum 3 Phase 4 consolidates the "write to a sensitive location, with a
+ consolidates the "write to a sensitive location, with a
 declaration check" rules onto one path-classification table.  This module owns
 the :data:`PERSISTENCE_INSTANCES` table and the predicates; the shared
 :class:`~trustsight.analysis.edges.GraphContext` supplies the resolved lines,
@@ -472,21 +472,21 @@ PERSISTENCE_INSTANCES: tuple[PersistenceInstance, ...] = (
     PersistenceInstance("H039", "Systemd ExecStart From Runtime-Writable Path",
                         "runtime_writable", False, "HIGH",
                         "docs/reference/rules/install-and-persist.md",
-                        ("tests/test_phase3.py",), emit_systemd_unit),
+                        ("tests/test_persistence_rules.py",), emit_systemd_unit),
     PersistenceInstance("H062", "Pacman Hook Installed", "pacman_hook", False,
                         "MEDIUM", "docs/reference/rules/install-and-persist.md",
-                        ("tests/test_phase3.py",), emit_pacman_hook),
+                        ("tests/test_persistence_rules.py",), emit_pacman_hook),
     PersistenceInstance("H032", "Write To User Home Or RC", "home_rc", False,
                         "HIGH/CRITICAL", "docs/reference/rules/install-and-persist.md",
-                        ("tests/test_phase3.py",), emit_home_rc),
+                        ("tests/test_persistence_rules.py",), emit_home_rc),
     PersistenceInstance("H038", "World-Writable Staging", "world_writable",
                         False, "HIGH",
                         "docs/reference/rules/staging-and-recon.md",
-                        ("tests/test_phase3.py",), emit_worldwritable),
+                        ("tests/test_persistence_rules.py",), emit_worldwritable),
     PersistenceInstance("H076", "Build Writes Outside Staging Root",
                         "absolute_outside", False, "HIGH",
                         "docs/reference/rules/staging-and-recon.md",
-                        ("tests/test_phase3.py",), emit_outside_staging),
+                        ("tests/test_persistence_rules.py",), emit_outside_staging),
     PersistenceInstance("H004", "Privilege Escalation", "privilege", False,
                         "CRITICAL", "docs/reference/rules/fetch-and-execution.md",
                         ("tests/test_rules.py",), emit_sudo),
@@ -517,7 +517,7 @@ PERSISTENCE_INSTANCES: tuple[PersistenceInstance, ...] = (
     PersistenceInstance("C031", "Boot Or System Image Tool Run During Build",
                         "boot_mutation", False, "HIGH",
                         "docs/reference/rules/install-and-persist.md",
-                        ("tests/test_phase3.py",),
+                        ("tests/test_persistence_rules.py",),
                         emit_boot_mutation),
     # H093 is manifest-scope: its emitter is `emit_committed_build_path`,
     # called by `scan_tree_manifest`, so the table row has no graph emitter.

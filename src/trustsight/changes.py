@@ -11,7 +11,7 @@ already parsed.  Entries carry no severity and no points, never appear in
 ``triggered_rules``, and are not findings: conflating the two would
 corrupt the calibration and the reader's sense of what a finding means.
 
-The same module owns the typed *change-as-data* view (spec §1):
+The same module owns the typed *change-as-data* view:
 :func:`change_delta` parses a diff once into a :class:`ChangeDelta`, the
 single query every consumer shares.  The prose summary above and the JSON
 ``change`` object render from that one object, so they cannot disagree by
@@ -163,7 +163,7 @@ class ManifestDelta:
 
 @dataclass(frozen=True)
 class ChangeDelta:
-    """What changed in a diff, as one typed query result (spec §1).
+    """What changed in a diff, as one typed query result.
 
     Built purely from the typed core: the diff parses once into a
     ``DiffDoc``, the pre/post projections become ``RecipeDoc``s, and each
@@ -183,7 +183,7 @@ class ChangeDelta:
     checkdependencies: "ArrayDelta"
     optdependencies: "ArrayDelta"
     version: VersionFacts
-    #: The relational arrays, raw (spec §1 / Addendum 4 G6).  ``provides`` /
+    # The relational arrays, raw. ``provides`` /
     #: ``replaces`` / ``conflicts`` claim or remove another name; they are
     #: dependency-shaped and share the extraction path.
     provides: ArrayDelta = field(default_factory=lambda: ArrayDelta((), (), False))
@@ -193,7 +193,7 @@ class ChangeDelta:
     #: ``deps.extract_dependency_changes`` produces (version constraints and
     #: optdepends descriptions dropped, unresolved/soname entries filtered).
     #: H030/H064 and the D-series read this instead of re-extracting, so the
-    #: change view and the rules cannot disagree (spec §1, deviation E1).
+    # change view and the rules cannot disagree.
     added_dependencies: dict[str, tuple[str, ...]] = field(default_factory=dict)
     #: The checksum-behaviour classification the summary already emits
     #: (``checksum_added_or_changed``, ``checksum_array_emptied``, ...).
@@ -209,7 +209,7 @@ class ChangeDelta:
     local_sources_lost: frozenset[str] = frozenset()
     #: True when a checksum array's entries changed relative order.
     #: Populated from ``sources``/``checksums``/``pgp_keys``; no rule
-    #: consumes it in v1 (spec §6).
+    # consumes it in v1.
     reordered: bool = False
     #: H091's parity result over wholly-added arrays, and whether the source
     #: array grew in the diff (the gate for reading the complete recipe
@@ -331,7 +331,7 @@ def _version_facts(pre, post) -> VersionFacts:
 
 
 def change_delta(diff_text: str, pkgbase: str = "") -> ChangeDelta:
-    """Build the ``ChangeDelta`` for *diff_text* (spec §1).
+    """Build the ``ChangeDelta`` for *diff_text*.
 
     The one construction site: parse the diff once, project the pre/post
     recipes, and answer each family with ``recipedoc.array_diff``.
@@ -583,8 +583,8 @@ def _delta_for(fact, diff_text: str):
 def summarise(fact, diff_text: str = "") -> list[str]:
     """The change summary for *fact*, most structural first.
 
-    The host and checksum entries render the :class:`ChangeDelta` (spec
-    §1), so the prose and the JSON ``change`` object read the same facts.
+    The host and checksum entries render the :class:`ChangeDelta`, so the
+    prose and the JSON ``change`` object read the same facts.
     The remaining entries are facts the pipeline already settled on the
     fact (version resolution, maintainer, dependency names, file status).
     """
@@ -687,7 +687,7 @@ def summarise(fact, diff_text: str = "") -> list[str]:
     # names) - not the ChangeDelta's raw array delta.  Rendering the raw
     # delta here changed the prose on 119 corpus diffs, so the summary keeps
     # its established source and the delta remains a raw view beside it
-    # (spec §1 records the divergence).  Both are documented on the report
+    # (records the divergence). Both are documented on the report
     # schema; neither is claimed to be the other.
     for field_name, names in sorted(
             (getattr(fact, "dependency_changes", None) or {}).items()):

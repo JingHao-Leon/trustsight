@@ -1,6 +1,6 @@
 """The temporal engine: the single home for the history-backed H/T rules.
 
-Phase 2 of the H-series reduction.  Before this module the history-backed
+ of the H-series reduction. Before this module the history-backed
 rules lived in four places - :mod:`~trustsight.full_aur.corpus`,
 :mod:`~trustsight.full_aur.graph`, :mod:`~trustsight.analysis.temporal` and
 :mod:`~trustsight.analysis.longitudinal` - each reading the observation
@@ -131,7 +131,7 @@ class HistorySnapshot:
 class TemporalInstance:
     """One rule id's row in the engine's descriptor table.
 
-    Spec Addendum 3 Phase 2: each id is a row of *predicate + parameters +
+Each id is a row of *predicate + parameters +
     doc fragment + fixture pair*.  ``parameters`` names the threshold keys
     the predicate reads, ``doc`` is its reference page, and ``fixtures`` are
     the tests that prove it, so the family's specification is the table
@@ -692,12 +692,12 @@ PER_PACKAGE_INSTANCES: tuple[TemporalInstance, ...] = (
         "H020", "Very Recent Update", "gap_revival", "package", "INFO", "temporal",
         parameters=("fixed:72h",),
         doc="docs/reference/rules/temporal.md",
-        fixtures=("tests/regressions/test_redteam_proposals.py",)),
+        fixtures=("tests/regressions/test_checksum_and_evasion.py",)),
     TemporalInstance(
         "H021", "Brand New Package", "gap_revival", "package", "INFO", "temporal",
         parameters=("fixed:30d",),
         doc="docs/reference/rules/temporal.md",
-        fixtures=("tests/regressions/test_redteam_proposals.py",)),
+        fixtures=("tests/regressions/test_checksum_and_evasion.py",)),
     TemporalInstance(
         "H022", "Stale Package Revived", "gap_revival", "package", "MEDIUM", "temporal",
         parameters=("fixed:365d",),

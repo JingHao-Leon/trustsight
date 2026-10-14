@@ -1,4 +1,4 @@
-"""``trustsight full-aur --watch``: repeated corpus cycles (plan §6.4).
+"""``trustsight full-aur --watch``: repeated corpus cycles.
 
 The cycle itself is ``run_baseline_build``, which the other tests cover.
 What is asserted here is what --watch adds: it repeats, it honours the

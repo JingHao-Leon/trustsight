@@ -1,6 +1,6 @@
 """Finding-level parity runner for the typed-core migration.
 
-Phase 1 moves diff readers off their own text walks onto
+ moves diff readers off their own text walks onto
 :class:`~trustsight.diffdoc.DiffDoc` projections.  The projection gate
 (``diffdoc_parity.py``) proves the parse; this runner proves the
 *findings*: replay the locked benign corpus and the labelled malicious

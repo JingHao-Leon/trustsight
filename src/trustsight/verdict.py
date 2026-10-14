@@ -92,7 +92,7 @@ def version_transition(fact) -> str:
 
 
 def no_aur_change_note(fact) -> str | None:
-    """The plan §13.3 line, when the AUR holds nothing new for this package.
+    """The line, when the AUR holds nothing new for this package.
 
     The user asked what changed; the honest answer when the commit has not
     moved is that nothing did, plus why the installed version still looks
@@ -155,7 +155,7 @@ def _version_prefix(fact: PackageFact) -> str:
 
 
 def layer_sentence(fact: PackageFact) -> str:
-    """Name the evidence categories the fired findings represent (Addendum 5 §3).
+    """Name the evidence categories the fired findings represent.
 
     A layer is the kind of evidence a finding represents, not a stage an
     attacker passed.  The sentence lists the fired categories, so the summary
@@ -200,7 +200,7 @@ def fallback_verdict(fact: PackageFact) -> str:
     if fact.maintainer_changed:
         reasons.append("maintainer changed")
     if not reasons:
-        # Spec §2: a run with an open coverage gap cannot claim "no
+        # a run with an open coverage gap cannot claim "no
         # structural changes" - it does not know what it did not see.  The
         # qualified phrasing is still a claim, but one bounded by what was
         # actually read.  W1: read the boundary view, not the raw gap list,

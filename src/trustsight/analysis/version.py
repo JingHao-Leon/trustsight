@@ -1,4 +1,4 @@
-"""Phase 4 - Class B version rules, and the version comparison (plan §6, §13).
+"""- Class B version rules, and the version comparison.
 
 H063 fires on an ``epoch=`` that is newly present in a diff.
 
@@ -26,7 +26,7 @@ from ..tokenizer import resolve_added_lines
 from ..tokenizer import split_lines
 
 # ---------------------------------------------------------------------------
-# Full-version parsing (plan §13.2)
+# Full-version parsing
 # ---------------------------------------------------------------------------
 
 # makepkg allows alphanumerics, ``.``, ``_``, ``+`` and ``~`` in a pkgver.
@@ -382,7 +382,7 @@ def _epoch_removed_unchanged(diff_text: str) -> tuple[bool, str | None]:
     """Return ``(removed, value)``: was ``epoch=`` dropped with pkgver/pkgrel
     unchanged by resolved value?
 
-    Addendum 4, low priority: epoch removal is usually legitimate (a rebase
+, low priority: epoch removal is usually legitimate (a rebase
     onto a version that no longer needs the prefix), so this is
     annotation-tier.  It matters only because the ordering override silently
     disappears.
@@ -437,10 +437,10 @@ def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False,
     still wants to know the field is there), but it says what it knows.
 
     With *delta* the introduction is read from the shared ``ChangeDelta``
-    (spec §1): ``epoch`` absent pre and present post.  The line number
+``epoch`` absent pre and present post. The line number
     still comes from the diff so the citation is unchanged.
     """
-    # Addendum 4, low priority: epoch dropped while pkgver/pkgrel stood still.
+    # , low priority: epoch dropped while pkgver/pkgrel stood still.
     # Checked before H063's early return: a removal is never an introduction.
     removed, removed_value = _epoch_removed_unchanged(diff_text)
     if removed:
@@ -462,7 +462,7 @@ def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False,
     if delta is None:
         introduced, value = _epoch_introduced(diff_text)
     else:
-        # Spec §1: the shared delta answers "was epoch absent before and
+        # the shared delta answers "was epoch absent before and
         # present now" from the pre/post projections, the same question the
         # regex above asks of the diff lines.
         introduced = (not (delta.version.old_epoch or "").strip()

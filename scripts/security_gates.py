@@ -3313,7 +3313,7 @@ def gate_critical_paths_are_synchronised() -> Gate:
 # ---------------------------------------------------------------------------
 
 
-#: The live H-series count at the intake freeze (Addendum 3 Phase 0).  Derived
+#: The live H-series count at the intake freeze. Derived
 #: from the frozen id set minus the retained anchors, so the ceiling and the
 #: set cannot drift: a new H id past the freeze is caught by the intake gate,
 #: and the residue gate fails if the live count moves above this.
@@ -3347,12 +3347,12 @@ def gate_h_series_intake_is_frozen() -> Gate:
     return Gate("H-series intake is frozen", not problems,
                 {"frozen": len(FROZEN_H_IDS)}, problems)
 
-#: Addendum 3 Phase 6: the H-series live-count target band.
+#: The H-series live-count target band.
 H_SERIES_REDUCTION_TARGET = (55, 65)
 
 
 def gate_h_series_reduction_residue() -> Gate:
-    """Addendum 3 Phase 6: the live H count, and the frozen ceiling.
+    """The live H count, and the frozen ceiling.
 
     Reports the live (emitting) H count against the 55-65 target band so the
     residue is visible, and **fails only above the documented ceiling** (the
@@ -3366,7 +3366,7 @@ def gate_h_series_reduction_residue() -> Gate:
 
     h_ids = sorted(rid for rid in RULE_CATEGORIES if rid.startswith("H"))
     # The live count is the *emitting* rules: the retained documentation
-    # anchors are not live H logic (Addendum 3 Phase 5 Step 2).
+    # Anchors are not live H logic.
     live = len([rid for rid in h_ids if rid not in ANCHOR_RULE_IDS])
     ceiling = _h_series_live_ceiling()
     low, high = H_SERIES_REDUCTION_TARGET
@@ -3386,7 +3386,7 @@ def gate_h_series_reduction_residue() -> Gate:
 
 
 def gate_retired_ids_resolve_to_live_survivors() -> Gate:
-    """Addendum 3 Phase 5: every retired id aliases a live, non-retired rule.
+    """Every retired id aliases a live, non-retired rule.
 
     A retired id whose survivor is itself retired, or is absent from the
     catalog, would break the "config keeps the old ID readable" contract.
@@ -3619,7 +3619,7 @@ def gate_layer_detection_and_coverage_are_independent() -> Gate:
 
 def gate_every_rule_names_shared_dependencies() -> Gate:
     """Every rule names its mechanism, subject, evidence and shared
-    dependencies (Addendum 5, review remediation).
+    dependencies (review remediation).
 
     Different algorithms do not imply independent failure modes; a rule whose
     series has no shared-dependency entry would hide the common-mode risk.
@@ -3637,7 +3637,7 @@ def gate_every_rule_names_shared_dependencies() -> Gate:
 
 
 def gate_layer_overrides_stay_within_the_closed_set() -> Gate:
-    """Addendum 5 §2: a ``[layers]`` override cannot leave the closed L1-L8 set.
+    """A ``[layers]`` override cannot leave the closed L1-L8 set.
 
     ``parse_overrides`` applies a valid override and drops an out-of-range
     value or an unknown rule; the set of layer values is exactly L1..L8.
@@ -3699,7 +3699,7 @@ def gate_every_report_key_is_documented() -> Gate:
 
 
 def gate_transcendence_table_is_wellformed() -> Gate:
-    """Addendum 5 §5: the coverage-complementarity table names real series.
+    """The coverage-complementarity table names real series.
 
     The table is a set of hypotheses, but each row still refers to real
     evidence families.  A row naming a series that does not exist, or a
@@ -3742,7 +3742,7 @@ def gate_transcendence_table_is_wellformed() -> Gate:
 
 
 def gate_every_rule_carries_exactly_one_layer() -> Gate:
-    """Addendum 5 §2: every rule has exactly one layer.
+    """Every rule has exactly one layer.
 
     layer_of returns one layer or none; M (fires at its inputs' layer) and
     A (the reserved L9 build lane) have no static layer by design. Every
@@ -3767,7 +3767,7 @@ def gate_every_rule_carries_exactly_one_layer() -> Gate:
 
 
 def gate_boundaries_forbid_clean_exactly_when_gaps() -> Gate:
-    """Addendum 2 W1: the boundary view equals the coverage-gap view.
+    """W1: the boundary view equals the coverage-gap view.
 
     ``forbids_clean(boundaries_from_fact(fact))`` is the verdict's view and
     equals ``bool(coverage_gaps)`` by construction; a W-only boundary (a
@@ -3792,7 +3792,7 @@ def gate_boundaries_forbid_clean_exactly_when_gaps() -> Gate:
 
 
 def gate_indicator_tier_mirrors_ioc_matches() -> Gate:
-    """Addendum 5 §6.4 / B1: the promoted indicator tier mirrors IOC matches
+    """/ B1: the promoted indicator tier mirrors IOC matches
     and never touches the score."""
     from trustsight.ioc_baseline import IocMatch
     from trustsight.reporting import REPORT_KEYS, evaluate_fact, report_body
@@ -3817,7 +3817,7 @@ def gate_indicator_tier_mirrors_ioc_matches() -> Gate:
 
 
 def gate_layer_profile_is_gap_precise_and_additive() -> Gate:
-    """Addendum 5 §3: the layer profile is gap-precise and changes nothing.
+    """The layer profile is gap-precise and changes nothing.
 
     A history gap blinds only L6; a tokenizer refusal blinds L1-L4; content
     truncation blinds L1-L7; L8 is ``not_exercised`` on a single-package

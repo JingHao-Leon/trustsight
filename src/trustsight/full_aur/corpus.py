@@ -1,7 +1,7 @@
 """The Class-D corpus sweep, now a thin facade over the temporal engine.
 
 The detectors themselves live in :mod:`~trustsight.full_aur.temporal_engine`
-(Phase 2 of the H-series reduction): the history-backed rules share one
+(of the H-series reduction): the history-backed rules share one
 :class:`~trustsight.full_aur.temporal_engine.HistorySnapshot` and are
 dispatched from one instance table.  This module keeps the historical import
 surface (``run_corpus_sweep``, ``source_repos_from_pkgbuild``) so callers do

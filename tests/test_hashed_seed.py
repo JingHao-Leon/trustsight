@@ -439,7 +439,7 @@ def test_seed_cli_migrate_from_backup_requires_the_backup(tmp_path, monkeypatch)
     assert "maintainers_deprecated_backup" in payload["error"]
 
 
-# --- normalization edge cases (spec §3.3.1: lowercase().strip()) -----------
+# --- normalization edge cases (: lowercase.strip) -----------
 
 
 def test_hash_is_case_and_whitespace_insensitive():

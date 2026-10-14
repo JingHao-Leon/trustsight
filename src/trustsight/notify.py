@@ -70,7 +70,7 @@ def alert_payload(cycle) -> dict:
         for package, indicator in getattr(cycle, "ioc_hits", [])
     ]
     n_alerts = len(cycle.new_alerts)
-    # Addendum 5 §6.2/§9: the G-series campaign clusters, as member triples.
+    # the G-series campaign clusters, as member triples.
     # The same document shape as over_threshold, so notify plumbing is reused.
     # Only the correlation family belongs here: the sweep also returns
     # weight-0 context findings (H057/H060/H061), and counting those made a

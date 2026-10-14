@@ -1,4 +1,4 @@
-"""Addendum 3: the H-series reduction's enforceable machinery.
+"""The H-series reduction's enforceable machinery.
 
 The plan's hard invariants: the intake freeze (no new H id while the live
 count is above target) and the retirement alias (a retired id resolves to
@@ -65,7 +65,7 @@ def test_an_override_on_a_retired_id_still_suppresses_the_survivor(monkeypatch):
 
 
 def test_cofire_row_measures_the_shared_firings():
-    """Phase 5 Step 1: the co-fire ratio is over the rarer rule's firings."""
+    """The co-fire ratio is over the rarer rule's firings."""
     import sys
     from pathlib import Path
 

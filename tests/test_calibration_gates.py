@@ -1,6 +1,6 @@
-"""Phase 8 - the §10 calibration gates run as tests.
+"""- the calibration gates run as tests.
 
-``scripts/calibration_gates.py`` turns each §10 line into a number and a
+``scripts/calibration_gates.py`` turns each line into a number and a
 comparison.  The default test run scans a sample of the benign corpus so a
 full replay does not sit in every `pytest` invocation; the CI job and
 ``TRUSTSIGHT_FULL_CALIBRATION=1`` run it whole.

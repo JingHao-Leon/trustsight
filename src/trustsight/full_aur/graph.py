@@ -1,4 +1,4 @@
-"""Phase 6 - Class D dependency-graph rules (plan §8).
+"""- Class D dependency-graph rules.
 
 H046/H057/H060/H061 read the *corpus-wide* dependency graph built from the
 metadata snapshot's Depends/MakeDepends/CheckDepends fields (edges are kept
@@ -204,7 +204,7 @@ def run_graph_sweep(
     *,
     edges: dict[str, set[str]] | None = None,
 ) -> list[dict]:
-    """Run the Phase 6 graph detectors for one metadata cycle."""
+    """Run the graph detectors for one metadata cycle."""
     if old_meta is None:
         return []
     graph = edges if edges is not None else dependency_edges(new_meta)

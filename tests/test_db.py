@@ -849,7 +849,7 @@ def test_checkpoint_wal_is_best_effort(db):
 
 
 def test_the_three_correlation_views_exist_and_serve(db):
-    """Addendum 5 §9: the G-series reads indexed views, not per-package scans."""
+    """The G-series reads indexed views, not per-package scans."""
     from trustsight.db import (
         correlation_feed,
         get_connection,

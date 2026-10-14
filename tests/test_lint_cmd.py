@@ -1,4 +1,4 @@
-"""Spec §8 v2: ``trustsight lint`` - pre-submission hygiene, no verdict."""
+"""``trustsight lint`` - pre-submission hygiene, no verdict."""
 
 import json
 

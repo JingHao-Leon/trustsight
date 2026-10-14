@@ -41,8 +41,8 @@ from .tokenizer import split_lines
 
 #: Bumped whenever the parse or the dataclass shape changes.  A cached
 #: document written under a different version is a cache miss, never a
-#: partial read (spec §4).  v2 adds the typed file metadata (mode and
-#: rename headers) for Addendum 5 §7.
+# partial read. v2 adds the typed file metadata (mode and
+# rename headers) for.
 DIFFDOC_SCHEMA_VERSION = 2
 
 #: The tokenizer's own critical files: a change to any of them changes
@@ -78,8 +78,7 @@ _HUNK_HEADER_RE = re.compile(
     r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@"
 )
 
-#: Git's per-file metadata headers, captured into ``DiffFile`` (Addendum 5
-#: §7).  A mode change is ``old mode 100644`` / ``new mode 100755``; a
+# Git's per-file metadata headers, captured into ``DiffFile`` (#: ). A mode change is ``old mode 100644`` / ``new mode 100755``; a
 #: rename is ``rename from <path>`` / ``rename to <path>``.  These lines are
 #: still classed ``side="other"`` (the parse contract keeps every line), but
 #: their values are typed onto the file they precede.
@@ -228,7 +227,7 @@ class DiffFile:
     paths from ``rename from``/``rename to`` (git rename headers), empty for
     an ordinary edit.  A pure rename carries no hunks and no ``+++`` header,
     so a file section is materialised here from its rename/mode metadata
-    alone (Addendum 5 §7), with ``path`` naming the post-rename file.
+    alone, with ``path`` naming the post-rename file.
     """
 
     path: str
@@ -364,7 +363,7 @@ class DiffDoc:
         and the counts are what the gap quotes back to the reader so the
         missing tail has a size.  The predicate is ``!=``, not ``<``: a hunk
         that parses *more* lines than it declares is a malformed/lying
-        header too (spec §2), and a count mismatch in either direction means
+        header too, and a count mismatch in either direction means
         the reader cannot trust the stream's arithmetic.
         """
         return [
@@ -374,7 +373,7 @@ class DiffDoc:
         ]
 
     def to_dict(self) -> dict:
-        """A stable, versioned byte-format view of this document (spec §4).
+        """A stable, versioned byte-format view of this document.
 
         JSON only - never pickle: the document is attacker-derived and a
         deserialiser that executes is the boundary violation the sandbox
@@ -394,7 +393,7 @@ class DiffDoc:
 
         A version mismatch, a tokenizer change, or a malformed payload is
         a cache miss rather than an error or a partial document: the cache
-        is an optimization, never an authority (spec §4).
+        is an optimization, never an authority.
         """
         if not isinstance(data, dict):
             return None
@@ -480,7 +479,7 @@ def _parse_diff_lines_cached(lines: tuple[str, ...]) -> DiffDoc:
     hunk_expected: int | None = None
     pending_file_boundary = False
     pending_hunk_boundary = False
-    # File-level metadata (Addendum 5 §7): mode changes and rename headers,
+    # File-level metadata: mode changes and rename headers,
     # attached to the file they precede.  A pure rename has no ``+++``/hunk,
     # so it is materialised as a file from this metadata alone.
     pending_old_mode = ""

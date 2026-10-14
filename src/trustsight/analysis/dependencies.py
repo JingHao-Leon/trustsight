@@ -55,7 +55,7 @@ def _is_widely_provided(name: str, config: dict) -> bool:
 
 def _added_deps(diff_text, package_name, delta) -> dict[str, set[str]]:
     """The normalised added dependency names, from the shared delta or the
-    extractor.  One construction site (spec §1): the delta and the rules
+    extractor. One construction site: the delta and the rules
     read the same facts."""
     if delta is not None:
         return {f: set(v) for f, v in delta.added_dependencies.items()}
@@ -75,7 +75,7 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
     cold start never trips it.
 
     The added names come from the shared ``ChangeDelta`` when *delta* is
-    given (spec §1); otherwise the extractor runs here.
+    given; otherwise the extractor runs here.
     """
     added_deps = _added_deps(diff_text, package_name, delta)
     # `conflicts` belongs beside the other two.  All three insert this
@@ -139,7 +139,7 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
     if not wanted:
         return
 
-    # Addendum 2 D2: a D-rule that declines for insufficient observations
+    # D2: a D-rule that declines for insufficient observations
     # is a first-class, weight-0 boundary, not silence.  D001/D002 abstain
     # when the dependency corpus is unseeded (every name would look novel,
     # which is the cold-start guard); naming that abstention is the same

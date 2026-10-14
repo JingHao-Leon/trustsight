@@ -321,7 +321,7 @@ class Report:
         root cause the previous recorded analysis already carried.  Still
         gaps; labelled "unchanged since the previous review" rather than
         read as introduced by this diff.
-    :ivar change: the typed change-as-data view (spec §1),
+:ivar change: the typed change-as-data view,
         ``ChangeDelta.to_dict()``: file statuses, host and source deltas,
         checksum and dependency array deltas, and the resolved version
         move.  The prose summary renders the same object.
@@ -337,12 +337,12 @@ class Report:
         all unchanged, so nothing was re-computed.
     :ivar cached_at: when the reused analysis was recorded; empty unless
         :attr:`cached`.
-    :ivar layers: the assurance-layer profile (Addendum 5 §3): per layer,
+:ivar layers: the assurance-layer profile: per layer,
         ``status`` (``fired``/``passed``/``unreadable``) and the rule ids
         that fired there.
-    :ivar boundaries: the unified analysis boundaries (Addendum 2 W1): one
+:ivar boundaries: the unified analysis boundaries (W1): one
         object per coverage gap and per W-series rendering.
-    :ivar indicators: the indicator tier (Addendum 5 §6.4), promoted from
+:ivar indicators: the indicator tier, promoted from
         ``ioc_matches``.  Outside the heuristic score.
     """
 
@@ -422,7 +422,7 @@ class Report:
     """The diff was clamped by line count before the rules read it."""
 
     indicators: tuple = ()
-    """The indicator tier (Addendum 5 §6.4): signed-baseline matches,
+    """The indicator tier: signed-baseline matches,
     promoted from ``ioc_matches`` to a first-class surface.  Outside the
     heuristic score, at maximum alert priority."""
 
@@ -439,14 +439,14 @@ class Report:
     """The subset of :attr:`coverage_gaps` unchanged since the previous review."""
 
     change: dict = field(default_factory=dict)
-    """The typed change-as-data view (spec §1): ``ChangeDelta.to_dict()``.
+    """The typed change-as-data view: ``ChangeDelta.to_dict``.
 
     The same object the prose summary renders, exposed for consumers that
     want the host/source/checksum/dependency deltas as data.
     """
 
     unresolved_assignments: tuple = ()
-    """Assignments the tokenizer refused on the analysed surface (spec §8).
+    """Assignments the tokenizer refused on the analysed surface.
 
     Each entry names the variable, quotes the raw line, and names its
     file.  The value is still "not seen" to every rule; this only names
@@ -454,27 +454,27 @@ class Report:
     """
 
     partial_files: tuple = ()
-    """Install-script files whose diff showed only part of the file (§9).
+    """Install-script files whose diff showed only part of the file.
 
     Their hook bodies are not read as whole scripts; the run carries a
     ``partial_file_analysis`` coverage gap instead.
     """
 
     resolution_coverage: dict = field(default_factory=dict)
-    """How much of the diff the tokenizer could read (Addendum 2, R1).
+    """How much of the diff the tokenizer could read.
 
     ``resolved_lines``, ``unresolved_lines``, the R-rules whose accuracy
     is coupled to resolution, and the subset that actually matched.
     """
 
     layers: dict = field(default_factory=dict)
-    """The layer profile (Addendum 5 §3): per layer ``status`` and the rule
+    """The layer profile: per layer ``status`` and the rule
     ids that fired there.  A finding carries the layer where it caught, so
     this is a projection of :attr:`findings`.
     """
 
     boundaries: tuple = ()
-    """The unified analysis boundaries (Addendum 2 W1): one object per
+    """The unified analysis boundaries (W1): one object per
     coverage gap and per W-series rendering, each naming whether it forbids
     a clean verdict.  Additive to :attr:`coverage_gaps` for one release.
     """
@@ -568,7 +568,7 @@ class Report:
         return json.dumps(self.to_dict(**kwargs), indent=indent)
 
     def to_sarif(self, diff_text: str | None = None) -> dict:
-        """This report as a SARIF 2.1.0 document (spec §3).
+        """This report as a SARIF 2.1.0 document.
 
         *diff_text*, when given, lets a removed-line finding anchor to the
         pre-image (``old_lineno``) instead of being dropped; without it,
@@ -1569,7 +1569,7 @@ class TrustSight:
                      manifest: Optional[list] = None,
                      declared: Optional[dict] = None,
                      static_clean: Optional[bool] = None) -> dict:
-        """The optional L9 build lane (Addendum 5 §12), off by default.
+        """The optional L9 build lane, off by default.
 
         When ``[verify] enabled`` is false, or the rootless container is
         unavailable, this returns ``l9_unavailable`` - a weight-0 boundary,

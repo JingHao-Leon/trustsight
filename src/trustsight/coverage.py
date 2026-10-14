@@ -439,7 +439,7 @@ def gaps_from(
     # fragment as a whole array with no notice.
     if partial_hunks and not (diff_truncated or scan_truncated):
         gaps.append(PARTIAL_HUNK)
-    # Spec §9: an install script shown only in part is not read as a whole
+    # an install script shown only in part is not read as a whole
     # script; the hook rules stand down and the gap names the boundary.
     if partial_files:
         gaps.append(PARTIAL_FILE_ANALYSIS)
@@ -509,7 +509,7 @@ def gaps_from(
 
 def resolution_coverage(resolved, unresolved, triggered_rules,
                         rules) -> dict:
-    """How much of the diff the tokenizer could read (Addendum 2, R1).
+    """How much of the diff the tokenizer could read.
 
     ``resolved_target_rules`` names the R-rules whose accuracy is coupled
     to resolution; ``resolved_target_rules_fired`` is the subset that
@@ -535,7 +535,7 @@ def resolution_coverage(resolved, unresolved, triggered_rules,
 def unresolved_assignment_rows(
     text: str, file: str = "", origins=None, extra_lines=None
 ) -> list[dict]:
-    """The structured unresolved list of *text*, for the report (spec §8).
+    """The structured unresolved list of *text*, for the report.
 
     Names every assignment the tokenizer refused, with its raw line
     (capped) and its file.  *extra_lines* adds refusals the coverage layer

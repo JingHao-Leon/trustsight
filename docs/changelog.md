@@ -4870,7 +4870,7 @@ and a database written by 0.15.x is read unchanged.
   `_PINNING_ORDER` was unified in `buckets.py`; `risk_level()` is now the
   single source of truth across all callers.
 
-- **`.seo-debug/` tracked artifacts.** Documentation JSON files committed by a
+- **Tracked documentation artifacts.** Documentation JSON files committed by a
   prior zensical run are removed from the index and gitignored.
 
 ### Style

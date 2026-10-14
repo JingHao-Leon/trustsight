@@ -267,7 +267,7 @@ class TestLastN:
     
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "5", "--json", "testpkg"])
-            # Zero content diffs → exit 2, per spec §6
+            # Zero content diffs → exit 2, per
             assert result.exit_code == 2
             data = json.loads(result.output)
             assert "error" in data

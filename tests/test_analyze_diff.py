@@ -1,4 +1,4 @@
-"""Spec §5: analyze_diff, the arbitrary-comparison entry point.
+"""Analyze_diff, the arbitrary-comparison entry point.
 
 Same-difference guarantee: for a corpus diff, ``analyze_diff`` produces
 the same findings as the corpus path, modulo provenance.  The text cap is

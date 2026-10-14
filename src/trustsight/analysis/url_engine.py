@@ -1,6 +1,6 @@
 """The URL-semantics engine: scheme/host/declaration predicates as data.
 
-Addendum 3 Phase 4 consolidates the URL-family rules onto one
+ consolidates the URL-family rules onto one
 ``canonical_host``-based query.  This module owns the shared context and the
 :data:`URL_INSTANCES` table; the predicates read a diff's source tokens and
 the shared ``ChangeDelta`` facts.

@@ -1,4 +1,4 @@
-"""The assurance-layer registry (Addendum 5 §2/§3)."""
+"""The assurance-layer registry."""
 
 from trustsight.categories import RULE_CATEGORIES
 from trustsight.layers import (
@@ -12,7 +12,7 @@ from trustsight.layers import (
 
 def test_every_rule_has_exactly_one_layer():
     # The M series has no static layer by design: it fires at the layer of
-    # its inputs (Addendum 5 §2), so layer_of returns None for it.
+    # Its inputs, so layer_of returns None for it.
     # M fires at the layer of its inputs and A belongs to the reserved L9
     # build lane (not an L1-L8 layer), so both have no static layer.
     exempt = ("M", "A")

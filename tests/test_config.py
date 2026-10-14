@@ -317,7 +317,7 @@ def test_missing_shipped_rules_detects_stale_config(tmp_path, monkeypatch):
 
 
 def test_sync_rules_never_resurrects_a_retired_id(tmp_path, monkeypatch):
-    """Addendum 3 Phase 5: a retired id is an alias, not a re-addable rule."""
+    """A retired id is an alias, not a re-addable rule."""
     cfg = _install_partial_rules(tmp_path, monkeypatch)
     from trustsight import rule_id_history
 

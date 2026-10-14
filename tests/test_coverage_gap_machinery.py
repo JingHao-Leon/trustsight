@@ -1,4 +1,4 @@
-"""Addendum 4: coverage gaps fillable with existing machinery."""
+"""Coverage gaps fillable with existing machinery."""
 
 from trustsight.analysis.pipeline import scan_diff
 

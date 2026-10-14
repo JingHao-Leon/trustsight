@@ -792,7 +792,7 @@ def _reconstruction_findings(diff_text, config, add) -> None:
 
     A literal that could *not* be rebuilt (a malformed ``$'``) is reported
     too, and as the inconclusive case - unreconstructable input is never
-    read as clean (plan §3.1).
+    read as clean.
     """
     raw_lines = parse_diff_lines(join_line_continuations(split_lines(diff_text))).lines
     bodies = [

@@ -61,7 +61,7 @@ _EVIDENCE_IDS = {
 
 def declared_claims(verification_evidence=None, pinning_level: str = "",
                     source_buckets=None) -> set[str]:
-    """The P-series claim ids a run's declared facts imply (Addendum 5 §6.5).
+    """The P-series claim ids a run's declared facts imply.
 
     The same inputs :func:`calculate_score` turns into P findings, exposed as
     a set so the M-series can join a *claim* against a structural finding
@@ -246,7 +246,7 @@ def _floor_for_critical(level: str, breakdown) -> str:
     return CRITICAL_BAND_FLOOR
 
 
-#: Addendum 5 §6.5: the meta rules that escalate.  M002 (weak signal across
+#: : the meta rules that escalate. M002 (weak signal across
 #: layers) and M003 (a composition no cluster rule owns) are weight-0 - they
 #: never add points - but a weak spread across layers or capability families
 #: is exactly the case the single-signal threshold cannot see, so the band
@@ -356,7 +356,7 @@ def calculate_score(
     # each URL in it: a package that adds thirty unknown-host URLs is one
     # diff whose provenance is unknown, not thirty separate facts.  Under
     # per-URL summation a legitimate multi-source package (electron,
-    # fonts) scored like a CRITICAL finding, which the §10 separation gate
+    # Fonts) scored like a CRITICAL finding, which the separation gate
     # (benign_p95 < malicious_p5) caught.  The modifier of the least-trusted
     # single added URL is the whole contribution; the homograph penalty
     # (+30) still outranks the unknown one (+20) when both appear.

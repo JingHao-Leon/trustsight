@@ -1,4 +1,4 @@
-"""The edge engine: the resolved pipeline as shared facts (Addendum 3 §Phase 3).
+"""The edge engine: the resolved pipeline as shared facts (§).
 
 Fourteen H rules walk the same resolved diff: each rebuilds
 ``resolve_added_lines``, a ``ScopeResolver``, the heredoc body set and the
@@ -149,7 +149,7 @@ class EdgeInstance:
 EDGE_INSTANCES: tuple[EdgeInstance, ...] = (
     EdgeInstance("H040", "Host Reconnaissance", "recon", None, None, (), "INFO",
                  "docs/reference/rules/staging-and-recon.md",
-                 ("tests/test_phase3.py",),
+                 ("tests/test_persistence_rules.py",),
                  edge_recon),
     EdgeInstance("H041", "Upload To Paste Or File-Drop Host", "fetch", "upload",
                  None, (), "HIGH",
@@ -158,7 +158,7 @@ EDGE_INSTANCES: tuple[EdgeInstance, ...] = (
                  edge_paste_egress),
     EdgeInstance("H042", "Hidden Drop", "write", None, None, (), "HIGH",
                  "docs/reference/rules/staging-and-recon.md",
-                 ("tests/test_phase3.py",),
+                 ("tests/test_persistence_rules.py",),
                  edge_hidden_drop),
     EdgeInstance("H016", "Hidden Network Fetch In Build", "fetch", None, False,
                  (), "HIGH", "docs/reference/rules/fetch-and-execution.md",
@@ -171,7 +171,7 @@ EDGE_INSTANCES: tuple[EdgeInstance, ...] = (
                  edge_foreign_pkg),
     EdgeInstance("H072", "Write Then Execute", "write", "exec", None, (), "HIGH",
                  "docs/reference/rules/fetch-and-execution.md",
-                 ("tests/test_phase2.py",),
+                 ("tests/test_delivery_stack_rules.py",),
                  edge_write_execute),
     EdgeInstance("H075", "Remote Script Via Process Substitution", "fetch",
                  "shell", None, (), "CRITICAL",

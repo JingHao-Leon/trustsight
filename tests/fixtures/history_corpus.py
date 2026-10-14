@@ -1,11 +1,11 @@
-"""Addendum 3: a history-exercising corpus.
+"""A history-exercising corpus.
 
 The locked benign corpus is stateless diffs, so the observation-history
 rules (H020/H021/H022, H026/H044, H045/H073, H052/H053/H055/H059/H073/H074,
 plus the graph rules) never fire there and their overlap cannot be measured.
 These cycles are the metadata snapshots that exercise them:
 ``tests/harness/history_replay.py`` runs ``run_corpus_sweep`` over each cycle
-and the H-reduction audit joins the result, so the Phase 5 co-fire matrix has
+and the H-reduction audit joins the result, so the co-fire matrix has
 a committed measurement.
 
 Each cycle is ``{name, old, new, prior_history?, maintainer_history?,

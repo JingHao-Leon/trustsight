@@ -1,4 +1,4 @@
-"""Addendum 5 §6.3: the E-series entropy predicates.
+"""The E-series entropy predicates.
 
 Thresholds ship empty, so the series is silent until configured; the
 helpers are unit-tested and the rules are exercised by setting thresholds.

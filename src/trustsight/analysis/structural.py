@@ -463,13 +463,13 @@ def _structural_findings(
     # file.  The typed parse already knows the true location; project it
     # once here rather than trust each producer to carry it.
     line_map = map_diff_lines(diff_text)
-    # Addendum 3 Phase 3: the resolved pipeline facts, computed once and
+    # the resolved pipeline facts, computed once and
     # shared by the edge-engine predicates dispatched below.
     from .edges import build_context, run_edge_instances
 
     ctx = build_context(diff_text, config or {}, current_text=current_text,
                         tree_manifest=tree_manifest, whole_recipe=whole_recipe)
-    # Spec §1 / Addendum 3 Phase 1: the change-as-data object, built once and
+    # /: the change-as-data object, built once and
     # shared by the dependency, epoch and checksum rules below.
     if delta is None:
         from ..changes import change_delta
@@ -533,7 +533,7 @@ def _structural_findings(
 
     # H091 - makepkg pairs `source=()` with each `*sums=()` by position,
     # and no rule looked at the two lengths together. The shared ChangeDelta
-    # carries the diff-side parity (spec §1); the whole-recipe fallback stays
+    # Carries the diff-side parity; the whole-recipe fallback stays
     # here because the complete PKGBUILD is not part of a diff object.
     parity = cdelta.checksum_parity
     if parity is None and current_text and cdelta.source_array_grew:
@@ -559,7 +559,7 @@ def _structural_findings(
     except Exception:
         scope_pre = scope_post = None
 
-    # C014 (spec §6, re-filed from H099 per Addendum 3): a checksum array
+    # C014 (re-filed from H099): a checksum array
     # reordered during a content change.  Set semantics discard position,
     # so a hash shuffled away from the slot a reviewer checks was invisible;
     # reorder alone is reformatting, so the default gate requires the array
@@ -573,7 +573,7 @@ def _structural_findings(
             span=span, array=name,
             gained=", ".join(delta.gained), lost=", ".join(delta.lost))
 
-    # Spec §6, mildest shape: an isolated checksum insertion whose index does
+    # , mildest shape: an isolated checksum insertion whose index does
     # not match the index at which the corresponding source entry appeared, so
     # the hash/source positional pairing shifted without a reorder.  Scored
     # below the reorder shape (LOW).
@@ -591,7 +591,7 @@ def _structural_findings(
                 span=spans[0] if spans else None, array=name,
                 checksum_index=ck_idx, source_index=src_idx)
 
-    # Addendum 4, low priority: backup=() gains an entry (annotation-tier).
+    # , low priority: backup= gains an entry (annotation-tier).
     # backup-listed files get config-file treatment on upgrade, so a new entry
     # changes what pacman preserves; the value is real but niche, so INFO.
     if scope_pre is not None and scope_post is not None:
@@ -607,11 +607,11 @@ def _structural_findings(
                 + ", ".join(delta.gained),
                 array="backup", gained=", ".join(delta.gained))
 
-    # C015 (spec §7, re-filed from H100 per Addendum 3): a fetch in
+    # C015 (re-filed from H100): a fetch in
     # package().  Sources belong in prepare/build, where the checksum
     # arrays apply; fetching at artifact-assembly time bypasses that
     # accounting.  Reads RecipeDoc.functions only - the whole body, never a
-    # line walk.  (H076 already owns the write-outside-$pkgdir half of §7
+    # Line walk. (H076 already owns the write-outside-$pkgdir half of
     # for package(), so no second rule is filed for it.)
     if scope_post is not None:
         client = _package_fetch_client(
@@ -623,20 +623,20 @@ def _structural_findings(
                     span=scope_post.function_spans.get("package"),
                     client=client[:40])
 
-    # C016/C017 (spec §9, re-filed from H102/H103 per Addendum 3): a
+    # C016/C017 (re-filed from H102/H103): a
     # complete .install script's hook bodies, read as functions.
     if scope_doc is not None:
         findings.extend(install_script_findings(scope_doc))
-        # Addendum 5 §7: the L1 structural rules over the typed DiffFile
+        # the L1 structural rules over the typed DiffFile
         # metadata (mode, rename) and empty-file shape.
         diff_structure_findings(scope_doc, add)
 
-    # Addendum 4: G1/G3/G4/G5/G6/G7 predicates over the same parse.
+    # G1/G3/G4/G5/G6/G7 predicates over the same parse.
     addendum4_findings(diff_text, scope_doc, scope_pre, scope_post,
                        source_changes, config or {}, add,
                        tree_manifest=tree_manifest)
 
-    # Addendum 5 §6.3: the E-series entropy predicates.  Silent until their
+    # the E-series entropy predicates. Silent until their
     # thresholds are configured (they ship empty).
     from .entropy import entropy_findings
 
@@ -951,7 +951,7 @@ def _skip_positions(entries) -> set[int]:
 
 
 def _require_content_change(config) -> bool:
-    """The ``c014.require_content_change`` gate (spec §6; ``h099`` alias)."""
+    """The ``c014.require_content_change`` gate (``h099`` alias)."""
     thresholds = (config or {}).get("thresholds", {})
     section = thresholds.get("c014") or thresholds.get("h099") or {}
     return bool(section.get("require_content_change", True))
@@ -959,7 +959,7 @@ def _require_content_change(config) -> bool:
 
 def array_order_changes(diff_text: str, config: dict | None = None,
                         pre=None, post=None):
-    """Checksum arrays whose entries moved, with delta and span (spec §6).
+    """Checksum arrays whose entries moved, with delta and span.
 
     Returns ``[(array_name, ArrayDelta, span)]``.  Ordering facts come from
     the typed recipe arrays (positions are preserved there); the rule never
@@ -1013,7 +1013,7 @@ def _first_insertion_index(old, new):
 
 
 def isolated_checksum_insertion(pre, post, name: str):
-    """Spec §6, the mildest shape: a checksum entry inserted out of parity.
+    """The mildest shape: a checksum entry inserted out of parity.
 
     A checksum array gains an entry (relative order of the rest preserved)
     whose index differs from the index at which the corresponding ``source``
@@ -1037,7 +1037,7 @@ def isolated_checksum_insertion(pre, post, name: str):
     return ck_idx, src_idx
 
 
-#: Addendum 4: checksum strength order, strongest first.
+#: : checksum strength order, strongest first.
 _CHECKSUM_STRENGTH = ("b2sums", "sha512sums", "sha256sums", "sha1sums",
                       "md5sums")
 _HARDENING_OPTIONS = frozenset(
@@ -1099,7 +1099,7 @@ def _ip_literal_hosts(hosts) -> list[str]:
 
 def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
                        config, add, tree_manifest=None) -> None:
-    """G1/G3/G4/G5/G6/G7 predicates over the typed core (Addendum 4)."""
+    """G1/G3/G4/G5/G6/G7 predicates over the typed core."""
     from ..recipedoc import array_diff
 
     # G1 (C020): credentials embedded in a gained source URL.  The value
@@ -1239,7 +1239,7 @@ _HOOK_INTERPRETER_RE = re.compile(
 )
 
 #: User-writable or temporary locations a root hook has no business
-#: writing to (spec §9, re-filed from H103).
+# writing to (re-filed from H103).
 _XDG_PREFIX_RE = re.compile(r"^\$?\{?XDG_[A-Z_]+\}?(?:/|$)")
 _RUNTIME_USER_RE = re.compile(r"^/run/user/")
 #: Root's home, spelled absolutely: a hook running as root writing into
@@ -1266,7 +1266,7 @@ def _hook_names(recipe) -> list[str]:
 
 
 def partial_install_files(diff_text: str) -> list[str]:
-    """Install-script files whose diff is not the whole file (spec §9).
+    """Install-script files whose diff is not the whole file.
 
     Added files are complete by construction.  A modified file counts as
     complete only when its first hunk starts at line 1 and no hunk was cut
@@ -1290,7 +1290,7 @@ def partial_install_files(diff_text: str) -> list[str]:
 
 
 def install_script_findings(doc) -> list[dict]:
-    """C016/C017 over complete ``.install`` scripts (spec §9, re-filed).
+    """C016/C017 over complete ``.install`` scripts (re-filed).
 
     The file's post-state text is read as a ``RecipeDoc``; every hook body
     is a function.  Findings attribute to the ``.install`` file and its own
@@ -1469,12 +1469,12 @@ def _build_hygiene_findings(diff_text, add, current_text=None) -> None:
 
 #: Git's executable file mode.  A committed file carrying it can be run
 #: directly from the source tree; the structural twin of the artifact-side
-#: mode check (Addendum 5 §12, A-MODE).
+# mode check (A-MODE).
 _EXECUTABLE_MODE = "100755"
 
 
 def diff_structure_findings(doc, add) -> None:
-    """C-MODE / C-RENAME / C-EMPTY over typed ``DiffFile`` metadata (§7).
+    """C-MODE / C-RENAME / C-EMPTY over typed ``DiffFile`` metadata.
 
     Three L1 projections of the parse, with no new walker: an added file
     with the executable bit, any declared rename, and an added file with no

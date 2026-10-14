@@ -348,7 +348,7 @@ def fetch_verified_url(
 ) -> bytes:
     """Fetch *asset_name* from an arbitrary *base_url*, signature-verified.
 
-    Addendum 5 §10 (federation sketch): the same detached-Ed25519 path the
+     (federation sketch): the same detached-Ed25519 path the
     release channel uses, against a publisher key the operator pins.  The
     sibling ``<asset_name>.sig`` must verify over the exact bytes before the
     payload is returned; an unsigned or mismatched asset is refused.

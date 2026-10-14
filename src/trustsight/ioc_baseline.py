@@ -1,4 +1,4 @@
-"""IOC Federation baseline loader and matcher (v0.12.0 spec §2).
+"""IOC Federation baseline loader and matcher.
 
 A baseline is a directory containing:
 

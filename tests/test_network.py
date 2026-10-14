@@ -1,4 +1,4 @@
-"""Behavioural tests for the Phase 3 network-surface rules
+"""Behavioural tests for the network-surface rules
 (H031 version-in-URL, H034 exotic protocol, H071 covert egress).
 
 Each rule is asserted in both directions: the attack case fires, and the

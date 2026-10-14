@@ -1,4 +1,4 @@
-"""Spec §11: corpus as documents.
+"""Corpus as documents.
 
 Per observed version, the RecipeDoc's arrays and scalars are indexed, and
 ``array_seen_before`` / ``tuple_observation_count`` answer exact history
@@ -100,7 +100,7 @@ def test_the_index_answers_from_real_corpus_recipes(db):
 
 
 def test_the_index_answers_the_source_array_novelty_consumer(db):
-    """Spec §11: the one v1 consumer is the source-array novelty check."""
+    """The one v1 consumer is the source-array novelty check."""
     from trustsight.novelty import build_novelty_context
 
     entries = ("https://a.example/x",)
@@ -125,7 +125,7 @@ def test_source_array_novelty_is_false_without_a_package(db):
 
 
 def test_added_literals_feed_g002(db):
-    """Addendum 5 §9: the literal index lets G002 join across packages."""
+    """The literal index lets G002 join across packages."""
     from trustsight.analysis.correlation import shared_added_literal
     from trustsight.db import package_added_literals, record_added_literals
 

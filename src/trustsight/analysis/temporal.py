@@ -12,7 +12,7 @@ def _t_thresholds(config, name: str, key: str, default: int) -> int:
 
 
 def t_key_findings(change: dict, config) -> list[dict]:
-    """T001 - signing-key novelty (Addendum 5 §6.1).
+    """T001 - signing-key novelty.
 
     A ``validpgpkeys`` entry added in this diff whose fingerprint has never
     been observed in the ecosystem index.  Distinct from package novelty:
@@ -42,7 +42,7 @@ def t_key_findings(change: dict, config) -> list[dict]:
 
 
 def t_key_rotation(change: dict) -> list[dict]:
-    """T003 - signing-key rotation (Addendum 5 §6.1).
+    """T003 - signing-key rotation.
 
     A ``validpgpkeys`` key removed *and* a different one added in the same
     diff.  The xz backdoor's shape: the trusted signer is swapped, not merely
@@ -66,7 +66,7 @@ def t_key_rotation(change: dict) -> list[dict]:
 
 
 def t_domain_findings(maintainer: str, config) -> list[dict]:
-    """T002 - maintainer domain novelty (Addendum 5 §6.1).
+    """T002 - maintainer domain novelty.
 
     A maintainer email whose domain first appeared in the ecosystem within
     the observation window: a domain never seen before first appears now, and

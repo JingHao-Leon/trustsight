@@ -1,4 +1,4 @@
-"""Spec §6: the reordered-array rule (C014, re-filed from H099).
+"""The reordered-array rule (C014, re-filed from H099).
 
 A checksum array whose entries moved during a content change is the
 suspicious composition; a pure reformat stands down by default.  The

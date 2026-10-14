@@ -1,4 +1,4 @@
-"""Class E - the indicator list behind H056 (plan §9).
+"""Class E - the indicator list behind H056.
 
 An indicator is a *confirmed* artefact of a real incident: a package name
 that was published as malware, a domain a payload was fetched from, the hash

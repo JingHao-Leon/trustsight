@@ -1,8 +1,8 @@
-"""Spec §7: function-body-scoped rules.
+"""Function-body-scoped rules.
 
 C015 (re-filed from H100) reads ``RecipeDoc.functions["package"]`` only:
 a fetch at artifact-assembly time bypasses source-array accounting.  The
-write-outside-$pkgdir half of §7 is already H076's, scoped to the build
+write-outside-$pkgdir half of is already H076's, scoped to the build
 functions - pinned here so the filing stays honest.
 """
 
@@ -72,7 +72,7 @@ def test_write_outside_staging_in_package_is_h076():
 
 
 def test_c015_fires_on_the_whole_recipe_path():
-    """Spec §7: the --full-recipe path must behave identically.  There the
+    """The --full-recipe path must behave identically. There the
     whole recipe is the document; C015 still reads package() and fires."""
     from trustsight.analysis.structural import _structural_findings
     from trustsight.schema import SourceChanges

@@ -1099,7 +1099,7 @@ def test_full_aur_help_documents_watch():
 
 
 def test_full_aur_verify_reports_l9_unavailable_by_default():
-    """Addendum 5 §12.2: the batch L9 lane, gated off by default."""
+    """The batch L9 lane, gated off by default."""
     result = CliRunner().invoke(
         app, ["full-aur", "verify", "--package", "demo", "--json"])
     assert result.exit_code == 0, result.output

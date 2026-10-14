@@ -85,7 +85,7 @@ RECIPEDOC_SCHEMA_VERSION = 1
 
 @dataclass(frozen=True)
 class UnresolvedAssignment:
-    """One assignment the tokenizer refused, named for the report (spec §8).
+    """One assignment the tokenizer refused, named for the report.
 
     ``name`` is the assigned variable, ``line`` the raw assignment text
     (capped), ``file`` the file it was read from when known.  A rule must
@@ -131,7 +131,7 @@ class RecipeDoc:
     function_spans: dict[str, Span] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
-        """A stable, versioned byte-format view of this document (spec §4)."""
+        """A stable, versioned byte-format view of this document."""
         from .diffdoc import tokenizer_version
 
         return {

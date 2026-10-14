@@ -1,4 +1,4 @@
-"""Spec §4: the document cache - re-scoring without re-parsing.
+"""The document cache - re-scoring without re-parsing.
 
 A :class:`~trustsight.diffdoc.DiffDoc` (and a :class:`RecipeDoc` parsed
 from text) serializes to versioned JSON keyed by the text's content hash.

@@ -245,7 +245,7 @@ def _update_federation(
 ) -> dict:
     """Fetch and import a federated indicator set, signature-verified.
 
-    Addendum 5 §10: ``manifest.json`` and ``iocs.jsonl`` are fetched from
+``manifest.json`` and ``iocs.jsonl`` are fetched from
     *base_url* and verified against the pinned *pubkey_path* before import
     (hashed indicators only, the curator signature inside the manifest is
     checked by ``import_baseline``).
@@ -533,7 +533,7 @@ def ioc_export(
     entries = active_iocs(source=source, expired=True)
     rows = [_export_row(e) for e in entries]
 
-    # Spec §2.4.2: `ioc export --json` is the merged view for debugging, and
+    # `ioc export --json` is the merged view for debugging, and
     # needs no output directory.
     if output is None:
         if not json_output:

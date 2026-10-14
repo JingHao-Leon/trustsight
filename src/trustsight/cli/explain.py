@@ -1,4 +1,4 @@
-"""Spec §10: ``trustsight explain`` - why one rule fired on one line.
+"""``trustsight explain`` - why one rule fired on one line.
 
 The report is deterministic evidence, but the evidence stops at the
 citation.  Findings are projections over a shared document, so "why did
@@ -36,7 +36,7 @@ _EXTERNAL_INPUTS = {
 
 def build_explanation(fact, finding: dict, definition: dict | None,
                       diff_text: str) -> dict:
-    """The mechanical answer to "why did this fire here" (spec §10).
+    """The mechanical answer to "why did this fire here".
 
     Re-reads the document, re-runs the rule's pattern when it has one,
     and returns the rule definition, the matching lines with both line
@@ -108,7 +108,7 @@ def build_explanation(fact, finding: dict, definition: dict | None,
         "lines": matching,
         "pattern_matches": pattern_matches,
         # The document facts the rule read; the change delta is the shared
-        # evidence object (spec §1), so the explanation cannot disagree
+        # Evidence object, so the explanation cannot disagree
         # with the report it explains.
         "facts": {
             "change": dict(getattr(fact, "change", {}) or {}),

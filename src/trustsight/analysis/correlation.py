@@ -1,4 +1,4 @@
-"""G-series: cross-package correlation (Addendum 5 §6.2).
+"""G-series: cross-package correlation.
 
 The only family whose input is the *set* of recent analyses, not one
 package.  Mechanistically distinct from D (single-package graph walk) and T

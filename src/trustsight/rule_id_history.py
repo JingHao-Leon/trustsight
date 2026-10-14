@@ -27,7 +27,7 @@ __all__ = [
 ]
 
 #: Ids the catalog still carries so their reference anchors and citations
-#: resolve, but which no code path emits (Addendum 3 Phase 5, Step 2).  Their
+#: resolve, but which no code path emits. Their
 #: reference entry already says "retained as a documentation anchor for a
 #: retired rule" (or "a reserved runtime id"); they are counted as *live* by
 #: ``RULE_CATEGORIES`` only because removing them would break the anchors.
@@ -38,7 +38,7 @@ ANCHOR_RULE_IDS: frozenset[str] = frozenset({
     "H014", "H028",
 })
 
-#: Addendum 3's intake freeze: the H ids that exist as of the reduction plan.
+#: The intake freeze: the H ids that exist as of the reduction plan.
 #: A PR that adds a new ``H`` id fails CI (the ``H-series intake is frozen``
 #: gate and ``tests/test_h_reduction.py``).  The set only ever shrinks: a
 #: retired id moves to :data:`RETIRED_RULE_IDS` and stays out of the freeze
@@ -46,7 +46,7 @@ ANCHOR_RULE_IDS: frozenset[str] = frozenset({
 FROZEN_H_IDS = frozenset(f"H{n:03d}" for n in range(1, 104))
 
 #: Retired H ids, mapped to the survivor that now carries their detection
-#: (Addendum 3, Phase 5).  **Empty on purpose**: the overlap audit has been
+#: **Empty on purpose**: the overlap audit has been
 #: measured (co-fire matrix over the locked corpus, malicious fixtures and the
 #: history cycles), and every ratio candidate refutes on evidence shape -
 #: H026 is a strict subset of H044, and H053/H059 describe different

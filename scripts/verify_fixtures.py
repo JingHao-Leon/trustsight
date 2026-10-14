@@ -5,7 +5,7 @@ For every tests/fixtures/malicious/*/expected.json record:
   * every expected key must have a non-empty .diff body in the same dir
   * every .diff on disk must be referenced by expected.json (no orphans)
 
-The .diff bodies are committed source now (spec §8 fallback), so this
+The.diff bodies are committed source now (fallback), so this
 script runs in CI to catch accidental drift between the curated records
 and the fixture files. Exits non-zero listing every discrepancy.
 

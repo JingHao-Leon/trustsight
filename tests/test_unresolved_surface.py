@@ -1,4 +1,4 @@
-"""Spec §8 v1: the unresolved list is surfaced, and stays "not seen".
+"""The unresolved list is surfaced, and stays "not seen".
 
 A refused assignment is a coverage boundary, not a finding.  These tests
 pin the three contracts: the report carries the structured list, the gap
@@ -52,7 +52,7 @@ def test_a_refused_source_is_never_read_as_a_declared_value():
 
 
 def test_r1_resolution_pointer_points_at_x026():
-    """Addendum 2 R1 (v2): a silent resolved-target R-rule beside unresolved
+    """R1 (v2): a silent resolved-target R-rule beside unresolved
     lines points at the refusal family rather than reading as clean."""
     from trustsight.reporting import evaluate_fact
     from trustsight.schema import PackageFact

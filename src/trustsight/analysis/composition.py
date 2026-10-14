@@ -1,4 +1,4 @@
-"""Phase 3 - kill-chain composition rules (plan §5).
+"""- kill-chain composition rules.
 
 H040 and H043 share one threat model: a PKGBUILD diff that carries a *staged
 attack* rather than a single suspicious act.  Both are weight-0 annotations;
@@ -78,7 +78,7 @@ def edge_recon(ctx, add) -> None:
 # H043 - attack-chain composition
 # ---------------------------------------------------------------------------
 
-# Stage map (plan §5): each rule id belongs to exactly one kill-chain stage.
+# Stage map: each rule id belongs to exactly one kill-chain stage.
 # Meta rules (H027, H043, H024) are absent - they annotate, they do not
 # stage.
 _STAGE_OF = {

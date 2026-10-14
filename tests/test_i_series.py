@@ -1,4 +1,4 @@
-"""Addendum 5 §6.4: the indicator tier is promoted from ioc_matches."""
+"""The indicator tier is promoted from ioc_matches."""
 
 from trustsight.reporting import REPORT_KEYS, evaluate_fact, report_body
 from trustsight.schema import PackageFact
@@ -16,7 +16,7 @@ def test_indicators_mirrors_ioc_matches_in_the_body():
 
 
 def test_indicators_carry_the_campaign_tag():
-    """Addendum 5 §6.4: campaign-tagged signed indicators surface as-is."""
+    """Campaign-tagged signed indicators surface as-is."""
     from trustsight.ioc_baseline import IocMatch
     from trustsight.reporting import evaluate_fact, report_body
     from trustsight.schema import PackageFact

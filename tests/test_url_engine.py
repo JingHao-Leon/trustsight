@@ -1,4 +1,4 @@
-"""Phase 4: the URL engine's table, dispatch and registry contract."""
+"""The URL engine's table, dispatch and registry contract."""
 
 from pathlib import Path
 

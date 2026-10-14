@@ -193,7 +193,7 @@ def _profile_score(name: str, scores: dict[str, int]) -> int:
 def _correlation_records(
     new_meta: dict, old_meta: Optional[dict], processed: set[str]
 ) -> list[dict]:
-    """Per-package records the G-series correlates (Addendum 5 §6.2).
+    """Per-package records the G-series correlates.
 
     Gained hosts come from the ``source_hosts`` property timeline (the
     corpus already stores every change as JSON old/new values); adoption is
@@ -203,7 +203,7 @@ def _correlation_records(
     """
     from ..db import correlation_feed, record_property_transition
 
-    # Addendum 5 §9: record this cycle's maintainer transitions so the
+    # record this cycle's maintainer transitions so the
     # adoption_events view serves G003.  H044 is an ownership transition
     # between two recorded maintainers; H086 is the orphan-to-maintained
     # shape (the prior snapshot held no maintainer).  H074 (mass adoption) is
@@ -241,7 +241,7 @@ def _run_corpus_sweep(
     processed: set[str],
     scores: dict[str, int],
 ) -> list[dict]:
-    """Run the Phase 6 Class D detectors and attach their additive weight.
+    """Run the Class D detectors and attach their additive weight.
 
     With no prior snapshot (first bootstrap) the sweep is skipped entirely;
     the Class D calibration gate is ``fire_rate(no_baseline) == 0``.  Each
@@ -260,7 +260,7 @@ def _run_corpus_sweep(
         if repos:
             source_repos[name] = repos
 
-    # The shared, once-per-cycle history read (Phase 2): the temporal engine's
+    # The shared, once-per-cycle history read: the temporal engine's
     # rate/baseline instances all consume this one snapshot.
     from .temporal_engine import read_cycle_history
 
@@ -274,7 +274,7 @@ def _run_corpus_sweep(
         now=int(time.time()),
     )
 
-    # Addendum 5 §6.2: the G-series cross-package correlation, over the
+    # the G-series cross-package correlation, over the
     # cycle's records (collective input, so it runs here and not per package).
     from ..analysis.correlation import correlate
 
@@ -902,7 +902,7 @@ def run_watch(
     over_threshold: Optional[int] = None,
     since: Optional[int] = None,
 ) -> list[CycleResult]:
-    """Run corpus cycles on an interval until interrupted (plan §6.4).
+    """Run corpus cycles on an interval until interrupted.
 
     Each cycle is exactly what ``run_baseline_build`` does once: refresh
     the metadata snapshot, analyse what changed, run the Class D sweep and

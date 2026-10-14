@@ -1,4 +1,4 @@
-"""ChangeDelta parity runner (spec §1).
+"""ChangeDelta parity runner.
 
 The change summary, the change report and the rules must read the same
 document-derived facts.  This runner replays the locked benign corpus and

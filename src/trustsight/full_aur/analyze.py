@@ -374,7 +374,7 @@ def analyze_package_text(
                       + ", ".join(divergent)),
             "params": {"fields": ", ".join(divergent)},
         }))
-    # Addendum 4 G8, directional (see the per-package path in pipeline.py).
+    # G8, directional (see the per-package path in pipeline.py).
     from ..analysis.crossfile import line_of, source_divergence
 
     pkgbuild_only, srcinfo_only = source_divergence(new_pkgbuild, srcinfo)
@@ -692,7 +692,7 @@ def analyze_package_text(
         acknowledged_urls=acknowledged_url_rows(url_acks),
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
-        # Addendum 5 §6.2 / remediation T4: the corpus cycle runs the
+        # /: the corpus cycle runs the
         # collective G-series correlation, so L8 was exercised for this
         # package's corpus result.
         correlation_ran=True,
@@ -730,7 +730,7 @@ def analyze_package_text(
             triggered_rules=triggered_rules,
         )
 
-        # Spec §11: index this version's RecipeDoc arrays and scalars for
+        # index this version's RecipeDoc arrays and scalars for
         # exact tuple history.  The index is analysis-side; the signed
         # seed/baseline pipeline is untouched.
         from ..recipedoc import parse_recipe

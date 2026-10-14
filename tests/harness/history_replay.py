@@ -1,10 +1,10 @@
-"""Replay the history-exercising corpus (Addendum 3).
+"""Replay the history-exercising corpus.
 
 The locked benign corpus is stateless diffs, so the observation-history rules
 never fire there.  This harness drives ``run_corpus_sweep`` (the pure
 cycle-end Class D path) over the committed history cycles
 (``tests/fixtures/history_corpus.py``) and reports the fired rule set per
-cycle, so the Phase 5 co-fire matrix has a real measurement and a parity
+cycle, so the co-fire matrix has a real measurement and a parity
 check.
 
 Usage:

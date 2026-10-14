@@ -1,4 +1,4 @@
-"""Sampled ChangeDelta parity gate (spec §1).
+"""Sampled ChangeDelta parity gate.
 
 The full replay lives in ``tests/harness/change_parity.py`` and runs in the
 calibration CI job; this module checks every 37th benign diff against the

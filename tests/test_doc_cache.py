@@ -1,4 +1,4 @@
-"""Spec §4: the document cache.
+"""The document cache.
 
 ``from_dict(to_dict(doc))`` must project identically for every projection,
 and a cache entry must never become an authority: a version change, a
@@ -85,7 +85,7 @@ def _findings(fact):
 
 
 def test_findings_are_identical_cold_and_from_cache():
-    """Spec §4 replay equality: findings from a cached document are
+    """Replay equality: findings from a cached document are
     byte-identical to findings from a fresh parse.  The parse cache is the
     in-process memo (`_parse_diff_lines_cached`); the cross-process document
     cache is exercised by `tests/harness/diffdoc_parity.py`."""

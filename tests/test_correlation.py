@@ -1,4 +1,4 @@
-"""Addendum 5 §6.2: the G-series cross-package correlation."""
+"""The G-series cross-package correlation."""
 
 from trustsight.analysis.correlation import (
     coordinated_adoption,
