@@ -51,10 +51,13 @@ def _row_to_dict(row) -> dict:
 
 def all_campaigns() -> list[dict]:
     """Every recorded campaign, active or not (tests and diagnostics)."""
-    with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM campaign_alerts ORDER BY campaign_id"
-        ).fetchall()
+    try:
+        with get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM campaign_alerts ORDER BY campaign_id"
+            ).fetchall()
+    except Exception:  # noqa: BLE001 - no table means no campaigns
+        return []
     return [_row_to_dict(row) for row in rows]
 
 
@@ -66,12 +69,15 @@ def active_campaigns(now_obs: Optional[int] = None) -> list[dict]:
     sweep is needed to retire one.
     """
     now = observation_seq() if now_obs is None else int(now_obs)
-    with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM campaign_alerts WHERE activated_at_obs + ttl_obs > ?"
-            " ORDER BY campaign_id",
-            (now,),
-        ).fetchall()
+    try:
+        with get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM campaign_alerts WHERE activated_at_obs + ttl_obs > ?"
+                " ORDER BY campaign_id",
+                (now,),
+            ).fetchall()
+    except Exception:  # noqa: BLE001 - an unreadable table has no campaigns
+        return []
     return [_row_to_dict(row) for row in rows]
 
 
