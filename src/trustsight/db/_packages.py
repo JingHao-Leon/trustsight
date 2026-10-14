@@ -3,6 +3,7 @@
 import re
 from typing import Optional
 from ._connection import get_connection
+from ._metadata import OBSERVATION_SEQ_KEY
 
 __all__ = ['_RESERVED_NAMES', '_sanitize_maintainer', 'count_observations', 'get_analysis', 'get_aur_orphan_state', 'get_last_analysis', 'get_package', 'get_package_id', 'get_triggered_rules', 'insert_analysis', 'is_reserved_name', 'update_aur_orphan_state', 'update_package_maintainer', 'update_package_version', 'upsert_package']
 
@@ -105,6 +106,21 @@ def insert_analysis(
                 "INSERT INTO triggered_rules (history_id, rule_id, severity) VALUES (?, ?, ?)",
                 (history_id, rule["rule_id"], rule["severity"]),
             )
+        # Advance the observation clock in the same transaction: campaign and
+        # override TTLs are measured in recorded observations, so the counter
+        # must move exactly when an observation is written, never separately.
+        row = conn.execute(
+            "SELECT value FROM metadata WHERE key = ?", (OBSERVATION_SEQ_KEY,)
+        ).fetchone()
+        try:
+            current = max(0, int(row["value"])) if row else 0
+        except (TypeError, ValueError):
+            current = 0
+        conn.execute(
+            """INSERT INTO metadata (key, value) VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (OBSERVATION_SEQ_KEY, str(current + 1)),
+        )
         conn.commit()
         return history_id
 

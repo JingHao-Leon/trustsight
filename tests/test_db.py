@@ -915,3 +915,43 @@ def test_an_unknown_synchronous_mode_falls_back_to_normal(tmp_path, monkeypatch)
         assert conn.execute("PRAGMA synchronous").fetchone()[0] == 1  # NORMAL
     finally:
         conn.close()
+
+
+def test_the_observation_clock_advances_once_per_recorded_analysis(db):
+    """Campaign/override TTLs count observations, so the clock must move with
+    each recorded analysis and not at any other time."""
+    from trustsight.db import observation_seq
+
+    pid = upsert_package("clockpkg", "1.0")
+    assert observation_seq() == 0
+    insert_analysis(pid, "1.0", "1.1", "", "", 0, "", "{}", [])
+    assert observation_seq() == 1
+    insert_analysis(pid, "1.1", "1.2", "", "", 0, "", "{}", [])
+    assert observation_seq() == 2
+
+
+def test_campaign_mode_activates_expires_and_caps(db):
+    from trustsight.db import (
+        activate_campaign, active_campaigns, observation_seq,
+    )
+
+    now = observation_seq()  # 0
+    assert activate_campaign("g005:marchos1as", ["yay", "paru"], "g005",
+                             ttl_obs=3, max_active=8, now_obs=now) is True
+    assert [c["campaign_id"] for c in active_campaigns(now_obs=now)] == [
+        "g005:marchos1as"]
+
+    # Structural expiry: past the TTL it is simply not returned.
+    assert active_campaigns(now_obs=now + 2)
+    assert active_campaigns(now_obs=now + 3) == []
+
+    # The cap refuses a newcomer while every slot holds a live TTL.
+    for i in range(2):
+        activate_campaign(f"c{i}", ["x"], "m", ttl_obs=5, now_obs=now)
+    assert activate_campaign("new", ["y"], "g005", ttl_obs=5,
+                             max_active=3, now_obs=now) is False
+
+    # Make a lapsed slot and the newcomer lands.
+    activate_campaign("stale", ["z"], "s", ttl_obs=1, now_obs=now)
+    assert activate_campaign("new2", ["y"], "g005", ttl_obs=5,
+                             max_active=3, now_obs=now + 2) is True

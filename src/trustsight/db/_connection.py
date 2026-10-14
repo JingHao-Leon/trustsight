@@ -329,6 +329,21 @@ def init_db():
                 PRIMARY KEY (package_name, rule_id)
             );
 
+            /* Campaign alert mode: corroborated campaigns that keep a
+               package's scope "primed" for a bounded number of observations.
+               TTL is in observation units (see OBSERVATION_SEQ_KEY), not
+               wall-clock: the tool must not consult a clock it does not
+               control.  An expired campaign is filtered out by query, so
+               expiry is structural rather than a sweep. */
+            CREATE TABLE IF NOT EXISTS campaign_alerts (
+                campaign_id TEXT PRIMARY KEY,
+                scope_json TEXT NOT NULL DEFAULT '[]',
+                source TEXT NOT NULL DEFAULT '',
+                activated_at_obs INTEGER NOT NULL,
+                ttl_obs INTEGER NOT NULL,
+                expiry_announced INTEGER NOT NULL DEFAULT 0
+            );
+
             /* Class D adoption feed: one row per package per corpus cycle.
                The metadata-dump diff between cycles is the first-class
                stream the corpus sweep consumes; H045/H055/H052/H073 read
