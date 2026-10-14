@@ -444,6 +444,11 @@ DEFAULT_HOSTS = (
 )
 
 DEFAULT_THRESHOLDS = (
+    "# Expected co-fire pairs (M004 tool health): [precursor, expected].  A\n"
+    "# construct whose rule fired while its usual partner did not flags the\n"
+    "# instrument, never the package.  Ships empty until a pair is measured.\n"
+    "cofire_pairs = []\n"
+    "\n"
     "[h036]\n"
     "# H036 fires when a single line carries at least this many distinct\n"
     "# obfuscation indicators from [patterns] obfuscation_indicators.\n"

@@ -134,8 +134,29 @@ def licensor_absent(triggered: list[dict], rules: list[dict]) -> list[dict]:
     return out
 
 
+def _cofire_pairs() -> list[tuple[str, str]]:
+    """Expected co-fire pairs from ``[thresholds] cofire_pairs`` (may be empty).
+
+    Each entry is ``[precursor, expected]``: a construct whose rule fired but
+    whose historical partner did not flags the *instrument*, not the package.
+    Ships empty until a pair is measured, so M004 stays quiet rather than
+    guessing at coincidences.
+    """
+    try:
+        from ..config import load_thresholds
+
+        raw = load_thresholds().get("cofire_pairs", [])
+    except Exception:  # noqa: BLE001 - an unreadable threshold set is no pairs
+        raw = []
+    pairs: list[tuple[str, str]] = []
+    for entry in raw or ():
+        if isinstance(entry, (list, tuple)) and len(entry) == 2:
+            pairs.append((str(entry[0]), str(entry[1])))
+    return pairs
+
+
 def m_tool_health(
-    triggered: list[dict], rules: list[dict] | None = None, pairs=None
+    triggered: list[dict], rules: list[dict] | None = None
 ) -> list[dict]:
     """M004 + M005: instrument health, never the package's finding set.
 
@@ -143,9 +164,12 @@ def m_tool_health(
     the *tool*, and feeding them into the package's breakdown would let a
     detector-health note move a verdict.  They ride on the fact's
     ``cofire_health`` and are consumed by the harness/calibration.
+
+    *config* supplies the expected co-fire pairs for M004; M005 reads the
+    rules' own ``escalates_when`` declarations.
     """
     out: list[dict] = []
-    for note in cofire_absence(triggered, pairs or ()):
+    for note in cofire_absence(triggered, _cofire_pairs()):
         out.append({
             "rule_id": "M004", "name": "Expected Co-fire Absent",
             "severity": "INFO", "category": "meta",

@@ -182,3 +182,14 @@ def test_m005_reports_a_licensed_shape_without_its_licensor():
     assert [r["rule_id"] for r in rows] == ["M005"]
     # With the licensor present: no tool-health note.
     assert m_tool_health(fired + [{"rule_id": "R002"}], rules) == []
+
+
+def test_m004_fires_when_a_configured_cofire_pair_breaks(monkeypatch):
+    from trustsight.analysis import meta
+
+    monkeypatch.setattr(meta, "_cofire_pairs", lambda: [("X001", "X002")])
+    rows = meta.m_tool_health([{"rule_id": "X001", "severity": "HIGH"}], [])
+    assert [r["rule_id"] for r in rows] == ["M004"]
+    # With the partner present: quiet.
+    assert meta.m_tool_health(
+        [{"rule_id": "X001"}, {"rule_id": "X002"}], []) == []
