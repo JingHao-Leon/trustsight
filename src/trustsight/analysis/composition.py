@@ -189,13 +189,26 @@ def _meta_annotations(triggered_rules: list[dict], config=None) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def naming_typosquat_finding(pkg_name: str) -> dict | None:
+def naming_typosquat_finding(
+    pkg_name: str,
+    *,
+    candidates: list[tuple[str, int]] | None = None,
+    self_popularity: int | None = None,
+    min_length: int | None = None,
+) -> dict | None:
     """The H029 finding for *pkg_name*, or None when no candidate qualifies.
 
     Shared by the live, corpus and first-seen paths so the tiered check and
-    its evidence cannot drift between them.
+    its evidence cannot drift between them.  The corpus path passes AUR
+    popularity *candidates* (``NumVotes``); the git path leaves them None
+    and keeps the dependency index.
     """
-    match = package_typosquat_match(pkg_name)
+    match = package_typosquat_match(
+        pkg_name,
+        candidates=candidates,
+        self_popularity=self_popularity,
+        min_length=min_length,
+    )
     if not match:
         return None
     squatted, tier = match

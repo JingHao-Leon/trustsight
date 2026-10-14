@@ -424,7 +424,8 @@ def test_a_refused_snapshot_is_reported_as_a_coverage_gap(monkeypatch):
     with patch.object(
         corpus_fetch, "_http_get", side_effect=[buf.getvalue(), b"pkgname=demo\n"]
     ):
-        text, manifest, trailer, refused = corpus_fetch.fetch_pkgbuild_with_tree("demo")
+        (text, manifest, trailer, refused,
+         install) = corpus_fetch.fetch_pkgbuild_with_tree("demo")
 
     # The fallback still produced a PKGBUILD, so the run is not a failure -
     # which is exactly why the refusal has to be reported separately.

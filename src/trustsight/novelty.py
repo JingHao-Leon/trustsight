@@ -216,7 +216,13 @@ def classify_typosquat_edit(name: str, candidate: str) -> str:
     return "plain"
 
 
-def package_typosquat_match(pkg_name: str) -> tuple[str, str] | None:
+def package_typosquat_match(
+    pkg_name: str,
+    *,
+    candidates: list[tuple[str, int]] | None = None,
+    self_popularity: int | None = None,
+    min_length: int | None = None,
+) -> tuple[str, str] | None:
     """Return ``(candidate, tier)`` for a package-name squat, or None.
 
     Asymmetric: only fires when the candidate is *much* more popular (10x+
@@ -227,13 +233,34 @@ def package_typosquat_match(pkg_name: str) -> tuple[str, str] | None:
     the higher ``h029_plain_min_observations``.  The high floor is the
     safety-first choice: a plain edit against a genuinely popular name still
     fires, at the cost of some false positives.
+
+    *candidates* and *self_popularity* let the corpus path compare against
+    the AUR's own popularity (``NumVotes``) instead of the dependency
+    index, which never contains AUR helpers or apps (``yay``, ``paru``, a
+    browser) that are the actual typosquat targets.  When *candidates* is
+    None the dependency index is used, unchanged, so the git review path is
+    unaffected.  *min_length* is likewise resolved per source: the corpus
+    popularity path admits three-character names (``yau``), which the
+    dependency path's floor of four excludes.
     """
-    if len(pkg_name) < 4:
-        return None
     naming = load_naming().get("naming", {})
     suffixes = _known_suffixes()
+    if min_length is None:
+        if candidates is not None:
+            min_length = int(naming.get("h029_popularity_min_length", 3))
+        else:
+            min_length = int(naming.get("h029_min_name_length", 4))
+    if len(pkg_name) < min_length:
+        return None
     base = _strip_variant_suffix(pkg_name, suffixes)
-    pkg_pop = dependency_observation_count(pkg_name)
+
+    if candidates is None:
+        candidate_pairs = top_dependency_pairs()
+        pkg_pop = dependency_observation_count(pkg_name)
+    else:
+        # The AUR popularity list; the package's own votes are its weight.
+        candidate_pairs = candidates
+        pkg_pop = int(self_popularity or 0)
 
     # The popularity of every candidate arrives with the candidate list.
     # Asking per name meant one database round-trip each, which for the
@@ -253,7 +280,7 @@ def package_typosquat_match(pkg_name: str) -> tuple[str, str] | None:
     limit = 1 if len(pkg_name) < 8 else 2
 
     best: tuple[int, int, str] | None = None
-    for cand, cand_pop in top_dependency_pairs():
+    for cand, cand_pop in candidate_pairs:
         # Edit distance cannot bridge a length gap wider than the limit, so
         # discarding those here keeps the comparison loop small.
         if abs(len(cand) - len(pkg_name)) > limit:

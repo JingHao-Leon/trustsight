@@ -84,7 +84,27 @@ def alert_payload(cycle) -> dict:
         for finding in (getattr(cycle, "cluster_findings", None) or ())
         if str(finding.get("rule_id", "")).startswith("G")
     ]
+    # An impersonation campaign (G005) is the one alert a reviewer must not
+    # skim past: many typosquats of a popular package under one account.
+    # Surfaced on its own, ahead of everything, with the maintainer and the
+    # impersonated targets named.
+    impersonation = [
+        {
+            "maintainer": finding.get("params", {}).get("maintainer", ""),
+            "members": list(finding.get("params", {}).get("members", ())),
+            "targets": list(finding.get("params", {}).get("targets", ())),
+            "count": int(finding.get("params", {}).get("count", 0) or 0),
+        }
+        for finding in (getattr(cycle, "cluster_findings", None) or ())
+        if finding.get("rule_id") == "G005"
+    ]
     parts = []
+    for campaign in impersonation:
+        who = campaign["maintainer"] or "one submitter"
+        parts.append(
+            f"IMPERSONATION CAMPAIGN: {who} "
+            f"({campaign['count']} name-clones)"
+        )
     if iocs:
         parts.append(f"{len(iocs)} IOC match(es)")
     if campaign_cluster:
@@ -114,6 +134,7 @@ def alert_payload(cycle) -> dict:
         "over_threshold": over,
         "ioc_matches": iocs,
         "campaign_cluster": campaign_cluster,
+        "impersonation": impersonation,
     }
     if day:
         payload["day"] = day

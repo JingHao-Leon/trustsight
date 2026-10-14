@@ -380,6 +380,16 @@ DEFAULT_NAMING = (
     "# edits, which are weaker evidence.\n"
     "h029_min_candidate_observations = " + str(DEFAULT_H029_MIN_OBSERVATIONS) + "\n"
     "h029_plain_min_observations = " + str(DEFAULT_H029_PLAIN_MIN_OBSERVATIONS) + "\n"
+    "\n"
+    "# H029 name length floors.  The dependency path (git review) needs four\n"
+    "# characters; the AUR popularity path (corpus) admits three so short\n"
+    "# clones of a popular helper (yau/yay) are still seen.  A package's own\n"
+    "# AUR vote count is a candidate floor too: below it the candidate list\n"
+    "# is trimmed, and only a name-clone of a genuinely popular package is\n"
+    "# compared at all.\n"
+    "h029_min_name_length = 4\n"
+    "h029_popularity_min_length = 3\n"
+    "h029_popularity_floor = 100\n"
 )
 
 DEFAULT_HOSTS = (

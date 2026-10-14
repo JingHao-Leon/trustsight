@@ -446,3 +446,43 @@ def test_analyze_text_reports_the_source_file_it_added(full_db):
     )
     assert fact.diff_summary.files_changed == ["PKGBUILD"]
     assert any("source file(s) added" in c for c in fact.changes), fact.changes
+
+
+# --- H029 over AUR popularity (the corpus watcher's typosquat signal) -------
+
+
+def test_typosquat_uses_aur_popularity_candidates():
+    from trustsight.novelty import package_typosquat_match
+
+    candidates = [("yay", 2649), ("paru", 1260), ("brave-bin", 1034)]
+    assert package_typosquat_match(
+        "yyay", candidates=candidates, self_popularity=0) == ("yay", "plain")
+    assert package_typosquat_match(
+        "parru", candidates=candidates, self_popularity=0) == ("paru", "plain")
+    assert package_typosquat_match(
+        "yau", candidates=candidates, self_popularity=0) == ("yay", "plain")
+
+
+def test_typosquat_ignores_a_legitimate_variant_family():
+    """A maintainer's own variant names must never read as typosquats."""
+    from trustsight.novelty import package_typosquat_match
+
+    # The upstream project has too few votes to be a candidate floor.
+    assert package_typosquat_match(
+        "koboldcpp-cuda", candidates=[("koboldcpp", 7)], self_popularity=7
+    ) is None
+    # Even against a popular name, a variant of the *same* project is not a
+    # clone: the known suffix is stripped before comparison.
+    assert package_typosquat_match(
+        "yay-bin", candidates=[("yay", 2649)], self_popularity=0
+    ) is None
+
+
+def test_typosquat_popularity_path_keeps_a_three_char_floor():
+    from trustsight.novelty import package_typosquat_match
+
+    candidates = [("yay", 2649)]
+    assert package_typosquat_match(
+        "ya", candidates=candidates, self_popularity=0) is None
+    assert package_typosquat_match(
+        "yau", candidates=candidates, self_popularity=0) == ("yay", "plain")

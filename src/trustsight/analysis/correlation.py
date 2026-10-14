@@ -141,6 +141,51 @@ def shared_upstream_dependency(records, min_packages: int = 2) -> list[dict]:
     return out
 
 
+def impersonation_campaign(records, min_members: int = 3) -> list[dict]:
+    """G005: many name-clones of popular packages under one maintainer.
+
+    Each record carries ``impersonated_target`` when its package name
+    resembles a *far* more popular AUR package (the corpus H029 check over
+    AUR vote counts).  A single maintainer publishing several such clones in
+    one window is the registry-impersonation campaign that the per-package
+    H029 only whispers about - 242 near-identical typosquats read as one
+    campaign, not 242 findings.  This is the alert that names the campaign,
+    its maintainer and its targets.
+    """
+    by_maintainer: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    unowned: list[tuple[str, str]] = []
+    for record in records:
+        target = str(record.get("impersonated_target", "") or "")
+        if not target:
+            continue
+        member = str(record.get("package", ""))
+        maintainer = str(record.get("maintainer", "") or "")
+        if maintainer:
+            by_maintainer[maintainer].append((member, target))
+        else:
+            unowned.append((member, target))
+    groups = list(by_maintainer.items())
+    if unowned:
+        groups.append(("", unowned))
+    out: list[dict] = []
+    for maintainer, pairs in sorted(groups):
+        members = sorted({member for member, _ in pairs})
+        if len(members) < min_members:
+            continue
+        targets = sorted({target for _, target in pairs})
+        who = f"maintainer {maintainer}" if maintainer else "one submitter"
+        out.append({
+            "rule_id": "G005",
+            "name": "Impersonation Campaign",
+            "severity": "HIGH", "category": "correlation",
+            "match": (f"{who} published {len(members)} name-clones of popular "
+                      f"packages ({', '.join(targets[:5])})"),
+            "params": {"members": members, "maintainer": maintainer,
+                       "targets": targets, "count": len(members)},
+        })
+    return out
+
+
 def correlate(records, config=None) -> list[dict]:
     """All G-series findings for one cycle's records."""
     thresholds = _thresholds(config)
@@ -149,9 +194,11 @@ def correlate(records, config=None) -> list[dict]:
     blob_len = int(thresholds.get("g_blob", {}).get("min_length", 256))
     adopt_m = int(thresholds.get("g_adopt", {}).get("min_members", 3))
     dep_n = int(thresholds.get("g_dep", {}).get("min_packages", 2))
+    imp_m = int(thresholds.get("g_impersonation", {}).get("min_members", 3))
     out: list[dict] = []
     out.extend(shared_gained_host(records, host_n))
     out.extend(shared_added_literal(records, blob_n, blob_len))
     out.extend(coordinated_adoption(records, adopt_m))
     out.extend(shared_upstream_dependency(records, dep_n))
+    out.extend(impersonation_campaign(records, imp_m))
     return out

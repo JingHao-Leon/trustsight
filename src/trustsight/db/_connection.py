@@ -292,6 +292,7 @@ def init_db():
                 package_name TEXT PRIMARY KEY,
                 pkgbuild_text TEXT NOT NULL,
                 srcinfo_text TEXT,
+                install_text TEXT,
                 version TEXT NOT NULL,
                 last_modified INTEGER DEFAULT 0,
                 captured_at TEXT NOT NULL
@@ -434,6 +435,11 @@ _ADDED_COLUMNS = {
         # "was not orphaned": an adoption can only be claimed against a
         # recorded prior observation, never against an absence of one.
         "aur_orphaned": "INTEGER DEFAULT -1",
+    },
+    # The ``.install`` scriptlet captured beside the PKGBUILD, so the corpus
+    # path can scan it for an unconditional root fetch/write at install time.
+    "pkgbuild_snapshots": {
+        "install_text": "TEXT",
     },
 }
 

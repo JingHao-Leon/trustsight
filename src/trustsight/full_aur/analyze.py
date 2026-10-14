@@ -125,6 +125,25 @@ def _make_diff_text(old_text: str, new_text: str, context_lines: int = 3) -> str
     return "\n".join(diff_lines) + ("\n" if diff_lines else "")
 
 
+def _install_diff_text(install_text: str, name: str) -> str:
+    """An added-file hunk for the ``.install`` scriptlet, for the corpus diff.
+
+    The corpus diff holds only the PKGBUILD, so an install scriptlet is
+    invisible to the structural rules.  Presenting its whole current content
+    as an added file - the way the git path presents a committed ``.install``
+    - lets every content rule read it, including the unconditional
+    root-fetch/write shapes a trojanised repackage hides there.
+    """
+    lines = split_lines(install_text)
+    if not lines:
+        return ""
+    body = "\n".join("+" + line for line in lines)
+    return (
+        f"--- /dev/null\n+++ b/{name}.install\n"
+        f"@@ -0,0 +1,{len(lines)} @@\n{body}\n"
+    )
+
+
 def _diff_summary(diff_text: str) -> DiffSummary:
     from ..differ import diff_summary_from_text
 
@@ -275,6 +294,9 @@ def analyze_package_text(
     depth: int | None = None,
     _depth_seen: set | None = None,
     record: bool = False,
+    popular_candidates: Optional[list[tuple[str, int]]] = None,
+    package_popularity: int | None = None,
+    install_text: Optional[str] = None,
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -427,7 +449,11 @@ def analyze_package_text(
         )
 
         if effective_observation_count() > 0:
-            typosquat = naming_typosquat_finding(pkg_name)
+            typosquat = naming_typosquat_finding(
+                pkg_name,
+                candidates=popular_candidates,
+                self_popularity=package_popularity,
+            )
             if typosquat:
                 triggered_rules.append(typosquat)
             cluster = naming_cluster_annotation(triggered_rules, config)
@@ -491,6 +517,11 @@ def analyze_package_text(
         return fact
 
     diff_text = _make_diff_text(old_pkgbuild, new_pkgbuild)
+    if install_text:
+        # The install scriptlet the snapshot carried: scanned here so the
+        # corpus path reaches the root-fetch/write shapes only the git path
+        # saw before.
+        diff_text += _install_diff_text(install_text, pkg_name)
 
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
     diff_text, diff_truncated = truncate_diff(diff_text, max_bytes)
@@ -616,7 +647,11 @@ def analyze_package_text(
         }))
 
     if effective_observation_count() > 0:
-        typosquat = naming_typosquat_finding(pkg_name)
+        typosquat = naming_typosquat_finding(
+            pkg_name,
+            candidates=popular_candidates,
+            self_popularity=package_popularity,
+        )
         if typosquat:
             triggered_rules.append(typosquat)
         cluster = naming_cluster_annotation(triggered_rules, config)

@@ -66,3 +66,40 @@ def test_correlate_honors_configured_thresholds():
 
 def test_correlate_is_empty_without_clusters():
     assert correlate([{"package": "only"}], None) == []
+
+
+def test_impersonation_campaign_groups_clones_by_maintainer():
+    from trustsight.analysis.correlation import impersonation_campaign
+
+    records = [
+        {"package": "yyay", "maintainer": "marchos1as",
+         "impersonated_target": "yay"},
+        {"package": "parru", "maintainer": "marchos1as",
+         "impersonated_target": "paru"},
+        {"package": "yau", "maintainer": "marchos1as",
+         "impersonated_target": "yay"},
+        {"package": "koboldcpp-cuda", "maintainer": "TheBill2001",
+         "impersonated_target": ""},
+    ]
+    found = impersonation_campaign(records, min_members=3)
+    assert [f["rule_id"] for f in found] == ["G005"]
+    assert found[0]["severity"] == "HIGH"
+    assert found[0]["params"]["members"] == ["parru", "yau", "yyay"]
+    assert found[0]["params"]["targets"] == ["paru", "yay"]
+
+
+def test_a_lone_clone_is_not_a_campaign():
+    from trustsight.analysis.correlation import impersonation_campaign
+
+    records = [{"package": "yyay", "maintainer": "m",
+                "impersonated_target": "yay"}]
+    assert impersonation_campaign(records, min_members=2) == []
+
+
+def test_correlate_includes_the_impersonation_campaign():
+    records = [
+        {"package": name, "maintainer": "m", "impersonated_target": "yay"}
+        for name in ("yyay", "yau", "yayy")
+    ]
+    ids = {f["rule_id"] for f in correlate(records, None)}
+    assert "G005" in ids

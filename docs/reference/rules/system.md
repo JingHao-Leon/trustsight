@@ -1264,6 +1264,10 @@ See [G003: Coordinated Adoption](correlation.md#g003).
 
 See [G004: Shared Upstream Dependency](correlation.md#g004).
 
+### G005 {#g005}
+
+See [G005: Impersonation Campaign](correlation.md#g005).
+
 ### A001 {#a001}
 
 See [A001: Setuid File In Artifact](artifact.md#a001).

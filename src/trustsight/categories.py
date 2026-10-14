@@ -350,6 +350,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "G002": _C.CORRELATION,
     "G003": _C.CORRELATION,
     "G004": _C.CORRELATION,
+    "G005": _C.CORRELATION,
     "A001": _C.ARTIFACT,
     "A002": _C.ARTIFACT,
     "A003": _C.ARTIFACT,

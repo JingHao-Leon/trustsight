@@ -156,6 +156,7 @@ def save_pkgbuild_snapshot(
     version: str,
     last_modified: int = 0,
     srcinfo_text: Optional[str] = None,
+    install_text: Optional[str] = None,
 ) -> None:
     """Insert or update the PKGBUILD snapshot for *package_name*."""
     # Same guard as upsert_package.  These two tables are keyed by
@@ -168,15 +169,18 @@ def save_pkgbuild_snapshot(
     with get_connection() as conn:
         conn.execute(
             """INSERT INTO pkgbuild_snapshots
-               (package_name, pkgbuild_text, srcinfo_text, version, last_modified, captured_at)
-               VALUES (?, ?, ?, ?, ?, datetime('now'))
+               (package_name, pkgbuild_text, srcinfo_text, install_text,
+                version, last_modified, captured_at)
+               VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
                ON CONFLICT(package_name) DO UPDATE SET
                    pkgbuild_text = excluded.pkgbuild_text,
                    srcinfo_text = excluded.srcinfo_text,
+                   install_text = excluded.install_text,
                    version = excluded.version,
                    last_modified = excluded.last_modified,
                    captured_at = excluded.captured_at""",
-            (package_name, pkgbuild_text, srcinfo_text, version, last_modified),
+            (package_name, pkgbuild_text, srcinfo_text, install_text,
+             version, last_modified),
         )
         conn.commit()
 

@@ -35,6 +35,7 @@ This is a reference page. For how weight and scope work, see
 | [G002](#g002) | Shared Added Literal | HIGH |
 | [G003](#g003) | Coordinated Adoption | MEDIUM |
 | [G004](#g004) | Shared Upstream Dependency | HIGH |
+| [G005](#g005) | Impersonation Campaign | HIGH |
 <!-- /generated: page-index -->
 
 ### G001: Shared Gained Host {#g001}
@@ -72,3 +73,12 @@ Adoption is the temporal engine's own predicate - H044 (ownership transition) or
 - **Condition:** The same upstream dependency (and host), added to a committed manifest, appears in at least `[thresholds] g_dep.min_packages` (default 2) packages in the window.
 
 The committed-manifest counterpart to G001: a dependency name and remote host that many packages gain in the same window is the same-new-upstream-dependency campaign shape. It reads the recorded `upstream_dep_additions` view (the U-series dependency additions); the engine ships and is unit-tested, and the corpus feed that fills the view is the same pending work G002's literal feed is.
+
+### G005: Impersonation Campaign {#g005}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** HIGH (weight 25)
+- **Category:** `correlation`
+- **Condition:** One maintainer publishes at least `[thresholds] g_impersonation.min_members` (default 3) packages in the window whose names resemble a *far* more popular AUR package (the corpus H029 check over AUR vote counts).
+
+The registry-impersonation campaign shape: many near-identical name-clones of popular packages under a fresh account (`yyay`/`yay`, `parru`/`paru`, …). Where H029 reports one clone, G005 names the campaign - its maintainer, the member count, and the impersonated targets - so a flood of typosquats reads as one alert, not N. It fires only on the per-package impersonation evidence, so a maintainer updating their own legitimate variant family is not a campaign.

@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover - rich is a dependency, but degrade grac
     _HAS_RICH = False
 
 from ..analysis.base import _ensure_init
-from ..config import load_config
+from ..config import load_config, load_naming
 from ..db import (
     checkpoint_wal,
     get_connection,
@@ -87,6 +87,13 @@ _FLAGGED_REPORT_LIMIT = 10
 # H061 hubs at once.  Passing them to record_alerts made a routine sweep read
 # as "226 campaign cluster(s) ... 226 new alert(s)".
 _NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061"})
+
+#: Burst/share clusters that fire on legitimate variant families as readily
+#: as on a typosquat campaign.  They score and alert only when one of their
+#: members impersonates a far-more-popular package (the corpus H029 check);
+#: otherwise they are context.  Without this, a maintainer updating six of
+#: their own packages reads as a campaign.
+_IMPERSONATION_GATED_RULES = frozenset({"H052", "H055"})
 
 
 def _since_cursor() -> Optional[int]:
@@ -190,8 +197,55 @@ def _profile_score(name: str, scores: dict[str, int]) -> int:
     return row[0] if row and row[0] is not None else 0
 
 
+#: Cap on the AUR-popularity candidate list H029 compares against.  The
+#: dependency path caps at 5000 too; this list is ordered by votes, so the
+#: cap keeps the names worth impersonating.
+_H029_POPULARITY_CANDIDATE_LIMIT = 5000
+
+
+def _popular_candidates(new_meta: dict) -> list[tuple[str, int]]:
+    """AUR packages worth impersonating, as ``(name, NumVotes)``.
+
+    The corpus H029 check compares a new package name against this instead
+    of the dependency index, which never holds AUR helpers or apps (``yay``,
+    ``paru``, a browser) - exactly the typosquat targets.  Built once per
+    cycle from the metadata snapshot: names at or above
+    ``[naming] h029_popularity_floor`` votes, most-voted first, capped.
+    """
+    floor = int(
+        load_naming().get("naming", {}).get("h029_popularity_floor", 100) or 100
+    )
+    pairs = [
+        (name, int((meta or {}).get("NumVotes", 0) or 0))
+        for name, meta in new_meta.items()
+    ]
+    pairs = [pair for pair in pairs if pair[1] >= floor]
+    pairs.sort(key=lambda pair: (-pair[1], pair[0]))
+    return pairs[:_H029_POPULARITY_CANDIDATE_LIMIT]
+
+
+def _impersonates(
+    name: str, meta: Optional[dict], candidates: list[tuple[str, int]]
+) -> str:
+    """The popular package *name* impersonates, or ``""``.
+
+    One helper for the per-package H029 check and the cycle-level campaign
+    aggregation, so the two cannot disagree about which member is a clone.
+    """
+    from ..novelty import package_typosquat_match
+
+    votes = int((meta or {}).get("NumVotes", 0) or 0)
+    match = package_typosquat_match(
+        name, candidates=candidates, self_popularity=votes
+    )
+    return match[0] if match else ""
+
+
 def _correlation_records(
-    new_meta: dict, old_meta: Optional[dict], processed: set[str]
+    new_meta: dict,
+    old_meta: Optional[dict],
+    processed: set[str],
+    popular: Optional[list[tuple[str, int]]] = None,
 ) -> list[dict]:
     """Per-package records the G-series correlates.
 
@@ -219,6 +273,7 @@ def _correlation_records(
     for name in processed:
         info = feed.get(name, {})
         predicates = list(info.get("adoption_predicates", ()))
+        meta = new_meta.get(name) or {}
         records.append({
             "package": name,
             "hosts_gained": sorted(set(info.get("hosts_gained", ()))),
@@ -228,9 +283,12 @@ def _correlation_records(
             # feed is the recorded `upstream_dep_additions` view.
             "upstream_dep_additions": list(
                 info.get("upstream_dep_additions", ())),
-            "maintainer": info.get("maintainer", ""),
+            "maintainer": meta.get("Maintainer") or info.get("maintainer", ""),
             "adoption": bool(predicates),
             "adoption_predicates": predicates,
+            # The popular package this name clones, when it is one (the
+            # corpus H029 check).  G005 groups these into a campaign.
+            "impersonated_target": _impersonates(name, meta, popular) if popular else "",
         })
     return records
 
@@ -240,6 +298,7 @@ def _run_corpus_sweep(
     old_meta: Optional[dict],
     processed: set[str],
     scores: dict[str, int],
+    popular: Optional[list[tuple[str, int]]] = None,
 ) -> list[dict]:
     """Run the Class D detectors and attach their additive weight.
 
@@ -279,14 +338,30 @@ def _run_corpus_sweep(
     from ..analysis.correlation import correlate
 
     findings.extend(correlate(
-        _correlation_records(new_meta, old_meta, processed), load_config()))
+        _correlation_records(new_meta, old_meta, processed, popular),
+        load_config()))
 
     weights = load_config().get("severity_weights", {})
     for finding in findings:
+        members = finding.get("params", {}).get("members", [])
+        # A shared-repo / attribute-burst cluster is not a campaign on its
+        # own: a maintainer updating their own variant family (same
+        # maintainer, same real repo) trips both.  Only when a member
+        # impersonates a far-more-popular package does the burst read as an
+        # attack - then it scores; otherwise it contributes nothing and is
+        # demoted to context (see the alerting filter in the cycle body).
+        if finding.get("rule_id") in _IMPERSONATION_GATED_RULES:
+            impersonated = bool(popular) and any(
+                _impersonates(member, new_meta.get(member), popular)
+                for member in members
+            )
+            finding["params"]["impersonated"] = impersonated
+            if not impersonated:
+                continue
         delta = int(weights.get(finding.get("severity", ""), 0))
         if delta <= 0:
             continue
-        for member in finding["params"]["members"]:
+        for member in members:
             if is_reserved_name(member):
                 continue
             new_score = max(0, min(100, _profile_score(member, scores) + delta))
@@ -373,7 +448,7 @@ def _iter_prefetched(names, fetch_fn, workers: int):
     Analysis stays serial and ordered (novelty reads the observations earlier
     packages recorded), so only the fetch is parallelised: a bounded window of
     fetches is kept in flight and consumed in order.  A fetch that raises
-    yields ``(None, None, None, False)`` - the same shape ``_fetch_one``
+    yields ``(None, None, None, False, None)`` - the same shape ``_fetch_one``
     returns for a vanished package - rather than aborting the run.
     """
     names = list(names)
@@ -389,7 +464,7 @@ def _iter_prefetched(names, fetch_fn, workers: int):
             try:
                 result = future.result()
             except Exception:
-                result = (None, None, None, False)
+                result = (None, None, None, False, None)
             yield name, result
             if idx < len(names):
                 inflight.append((names[idx], pool.submit(fetch_fn, names[idx])))
@@ -622,10 +697,15 @@ def _run_baseline_build(
     )
     batch_start = time.time()
 
+    # The AUR-popularity candidate list H029 compares against, built once
+    # for the whole cycle.  Without it the corpus typosquat check would see
+    # only dependency names and miss every helper/app clone (yay/paru/...).
+    popular = _popular_candidates(new_meta)
+
     def _fetch_one(name):
         meta = new_meta.get(name)
         if meta is None:
-            return (None, None, None, False)
+            return (None, None, None, False, None)
         return fetch_pkgbuild_with_tree(_pkg_or_base(meta))
 
     def _store(name, fetched) -> str:
@@ -638,7 +718,8 @@ def _run_baseline_build(
         if is_reserved_name(name):
             log.warning("skipping reserved package name %r", name)
             return "reserved"
-        new_pkgbuild, tree_manifest, trailer_finding, snapshot_refused = fetched
+        (new_pkgbuild, tree_manifest, trailer_finding, snapshot_refused,
+         install_text) = fetched
         if new_pkgbuild is None:
             log.debug("could not fetch PKGBUILD for %s (base: %s)", name, _pkg_or_base(meta))
             return "fetch_failed"
@@ -667,6 +748,9 @@ def _run_baseline_build(
                 # The corpus builder is a writer by definition: it exists to
                 # accumulate the observations the read-only default consumes.
                 record=True,
+                popular_candidates=popular,
+                package_popularity=int((new_meta.get(name) or {}).get("NumVotes", 0) or 0),
+                install_text=install_text,
             )
         except TokenizerUnavailable as exc:
             # The sandboxed tokenizer could not answer (A6).  The package is
@@ -679,6 +763,7 @@ def _run_baseline_build(
             pkgbuild_text=new_pkgbuild,
             version=fact.new_version or meta.get("Version", ""),
             last_modified=meta.get("LastModified", 0),
+            install_text=install_text,
         )
         save_package_profile(
             package_name=name,
@@ -811,7 +896,7 @@ def _run_baseline_build(
     # the snapshot advances, as in the removals-only path: a crash between
     # the two used to leave the snapshot at the new state with the cycle's
     # events unrecorded, and the next run diffed the loss away.
-    cluster_findings = _run_corpus_sweep(new_meta, old_meta, processed, scores)
+    cluster_findings = _run_corpus_sweep(new_meta, old_meta, processed, scores, popular)
     _record_cycle_feed(new_meta, old_meta, added, changed, removed)
     save_metadata(new_meta, _meta_snapshot_path())
     clear_resume_state()
@@ -827,6 +912,8 @@ def _run_baseline_build(
     alerting = [
         finding for finding in cluster_findings
         if finding["rule_id"] not in _NON_ALERTING_CLUSTER_RULES
+        and not (finding["rule_id"] in _IMPERSONATION_GATED_RULES
+                 and not finding.get("params", {}).get("impersonated"))
     ]
     result.new_alerts = record_alerts([
         (member, finding["rule_id"])

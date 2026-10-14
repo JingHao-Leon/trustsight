@@ -300,3 +300,22 @@ def test_context_cluster_findings_are_not_campaigns():
         {"rule_id": "G002", "members": ["a", "b"], "count": 2},
     ]
     assert "1 campaign cluster" in payload["title"]
+
+
+def test_payload_leads_with_an_impersonation_campaign():
+    cycle = _cycle(
+        cluster_findings=[{
+            "rule_id": "G005",
+            "params": {"members": ["yyay", "parru", "yau"],
+                       "maintainer": "marchos1as",
+                       "targets": ["yay", "paru"], "count": 3},
+        }],
+        new_alerts=[("yyay", "G005")],
+    )
+    payload = alert_payload(cycle)
+    assert payload["impersonation"] == [{
+        "maintainer": "marchos1as", "members": ["yyay", "parru", "yau"],
+        "targets": ["yay", "paru"], "count": 3,
+    }]
+    assert payload["title"].startswith(
+        "TrustSight: IMPERSONATION CAMPAIGN: marchos1as")

