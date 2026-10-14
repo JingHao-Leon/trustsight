@@ -20,6 +20,14 @@ python scripts/security_gates.py
 | `suppression is never hidden by a flag` | B5 | `suppressed_rules` outside any verbosity branch in `cli/review.py` |
 | `alert grouping is reported` | B5, B11 | `analysis/meta.alert_volume_finding`; W010 becomes a SATURATED boundary |
 | `alert counts reconcile` | B5 | `shown + grouped == rendered`; the JSON is never filtered |
+| `campaign state is instrument state` | B1 | the config fingerprint carries no campaign or observation state |
+| `campaign expiry is structural` | A11 | an expired campaign is never returned by `active_campaigns` |
+| `campaign points are attributed` | B1 | every campaign bonus is a `G007` entry carrying `campaign_id` |
+| `elevation is attributed` | B1/B10 | `G006` is weight-0 INFO and names the campaign whose scope it touched |
+| `escalation is one notch` | B10 | licensing moves a band one step, never more |
+| `escalation never reaches fatal` | B4/B10 | no escalation or bonus path reaches FATAL |
+| `escalation chains are rejected` | B10 | a rule that is itself licensed cannot license a third |
+| `expired overrides are reported` | B5 | a lapsed override stops suppressing and its id is named |
 | `the default output is not headline-shaped` | Guarantees | the default inspect render volunteers no score |
 | `one network host, declared` | A3 | endpoint constants: `aur.archlinux.org` everywhere, `api.github.com` and `github.com` only in `release.py` |
 | `every request has a timeout` | A4 | `urlopen` call sites |

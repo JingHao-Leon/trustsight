@@ -77,6 +77,14 @@ def run_gates() -> list[Gate]:
         gate_a_gap_is_always_shown_with_the_band(),
         gate_alert_grouping_is_reported(),
         gate_alert_counts_reconcile(),
+        gate_campaign_state_is_instrument_state(),
+        gate_campaign_expiry_is_structural(),
+        gate_campaign_points_are_attributed(),
+        gate_elevation_is_attributed(),
+        gate_escalation_is_one_notch(),
+        gate_escalation_never_reaches_fatal(),
+        gate_escalation_chains_are_rejected(),
+        gate_expired_overrides_are_reported(),
         gate_every_producer_accounts_for_coverage(),
         gate_maturity_numbers_are_not_duplicated(),
         gate_fatal_rules_cannot_be_removed(),
@@ -297,6 +305,16 @@ from scripts.gates._parity import (
     gate_score_is_withheld_by_default,
     gate_the_history_walk_is_bounded,
     gate_unpinned_build_deps_is_a_declared_gap,
+)
+from scripts.gates._immune import (
+    gate_campaign_expiry_is_structural,
+    gate_campaign_points_are_attributed,
+    gate_campaign_state_is_instrument_state,
+    gate_elevation_is_attributed,
+    gate_escalation_chains_are_rejected,
+    gate_escalation_is_one_notch,
+    gate_escalation_never_reaches_fatal,
+    gate_expired_overrides_are_reported,
 )
 from scripts.gates._reporting import (
     gate_alert_counts_reconcile,
