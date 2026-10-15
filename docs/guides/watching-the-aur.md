@@ -86,7 +86,7 @@ score is **strictly above** it.
 {
   "event": "trustsight.alerts",
   "tool": "trustsight",
-  "title": "TrustSight: 1 package(s) over threshold (2026-05-01)",
+  "title": "TrustSight: hot-pkg scored 45 (H001) (2026-05-01)",
   "priority": "default",
   "day": "2026-05-01",
   "cycle": {"added": 3, "changed": 41, "removed": 2, "processed": 44},
