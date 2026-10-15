@@ -400,6 +400,24 @@ def test_context_cluster_findings_are_not_campaigns():
     assert "campaign across 2 packages (G002)" in payload["title"]
 
 
+def test_burst_clusters_are_not_campaigns():
+    """H055 (attribute burst) and H052 (shared source repo) fire on a
+    maintainer's own variant family.  Even with several members they are not
+    campaigns: a past build listed 226 H061 hubs and a burst family in the
+    feed's campaign_cluster, which is what this pins shut."""
+    cycle = _cycle(cluster_findings=[
+        {"rule_id": "H055",
+         "params": {"members": ["bnb-shell", "bnb-extra"], "impersonated": False}},
+        {"rule_id": "H052",
+         "params": {"members": ["fam-a", "fam-b"], "impersonated": True}},
+        {"rule_id": "G002", "params": {"members": ["a", "b"]}},
+    ])
+    payload = alert_payload(cycle)
+    assert [c["rule_id"] for c in payload["campaign_cluster"]] == ["G002"]
+    assert "H055" not in payload["title"]
+    assert "H052" not in payload["title"]
+
+
 def test_payload_leads_with_an_impersonation_campaign():
     cycle = _cycle(
         cluster_findings=[{

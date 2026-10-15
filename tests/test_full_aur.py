@@ -499,6 +499,48 @@ def test_context_cluster_rules_do_not_alert(monkeypatch):
     assert ("sdl2", "H061") not in seen
 
 
+def test_impersonation_gated_bursts_do_not_alert(monkeypatch):
+    """H052/H055 fire on a maintainer's own variant family as readily as on a
+    typosquat campaign: six of one maintainer's packages modified together is
+    a burst, not an attack.  They reach record_alerts only when a member
+    impersonates a far-more-popular package; otherwise they are context, and
+    the gate is two-sided so an impersonating burst still alerts."""
+    import trustsight.full_aur.pipeline as pipeline
+
+    _stub_cycle(monkeypatch, pipeline, {"demo": 5})
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(pipeline, "record_alerts",
+                        lambda pairs: seen.extend(pairs) or [])
+
+    def burst(impersonated):
+        return [
+            {"rule_id": "H055", "severity": "MEDIUM", "name": "Attribute Burst",
+             "match": "6 packages by maintainer m modified within 24h",
+             "params": {"members": ["bnb-shell", "bnb-extra"],
+                        "impersonated": impersonated}},
+            {"rule_id": "H052", "severity": "HIGH",
+             "name": "Shared Source Repo Cluster", "match": "share source",
+             "params": {"members": ["fam-a", "fam-b"],
+                        "impersonated": impersonated}},
+            {"rule_id": "H046", "severity": "MEDIUM",
+             "name": "Orphan/Adoption Dependency", "match": "x",
+             "params": {"members": ["dep-pkg"]}},
+        ]
+
+    # A benign burst: the control reaches record_alerts, the gated rules do not.
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: burst(False))
+    pipeline.run_baseline_build()
+    assert ("dep-pkg", "H046") in seen
+    assert ("bnb-shell", "H055") not in seen
+    assert ("fam-a", "H052") not in seen
+
+    # An impersonating burst is not suppressed.
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: burst(True))
+    pipeline.run_baseline_build()
+    assert ("bnb-shell", "H055") in seen
+    assert ("fam-a", "H052") in seen
+
+
 # --- --since backfill ---
 
 _DAY = 86400

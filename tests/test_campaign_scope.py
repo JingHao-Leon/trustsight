@@ -23,6 +23,19 @@ def db(tmp_path, monkeypatch):
     (tmp_path / "trustsight.db").unlink(missing_ok=True)
 
 
+@pytest.fixture
+def thresholds(monkeypatch):
+    """Pin corpus thresholds to small values so tests need small clusters."""
+    def set_values(values: dict):
+        monkeypatch.setattr(
+            "trustsight.full_aur.temporal_engine.load_thresholds", lambda: values
+        )
+        monkeypatch.setattr(
+            "trustsight.config.load_thresholds", lambda: values
+        )
+    return set_values
+
+
 def test_g001_host_campaign_elevates_a_neighbours_gained_host(db):
     from trustsight.db import activate_campaign, observation_seq
     from trustsight.full_aur.pipeline import (
@@ -187,6 +200,82 @@ def test_impersonation_scores_members_but_correlation_clusters_do_not(db):
           "params": {"members": ["a", "b", "c"], "host": "new.cdn"}}],
         {}, None, {})
     assert (get_package_profile("a") or {}).get("last_score", 0) == 0
+
+
+_BURST_NOW = 1_800_000_000
+
+
+def _burst_meta(maintainer, count, clone=None):
+    """*count* packages under one maintainer, each with a distinct upstream."""
+    meta = {}
+    for i in range(count):
+        name = f"tool-{i}"
+        meta[name] = {"Name": name, "PackageBase": name, "Maintainer": maintainer,
+                      "Version": "1", "LastModified": _BURST_NOW, "NumVotes": 0}
+    if clone:
+        meta[clone] = {"Name": clone, "PackageBase": clone,
+                       "Maintainer": maintainer, "Version": "1",
+                       "LastModified": _BURST_NOW, "NumVotes": 0}
+    return meta
+
+
+def _previous(meta, days=30):
+    """The same snapshot, one observation older, so everything reads modified."""
+    return {name: {**entry, "LastModified": _BURST_NOW - 86400 * days}
+            for name, entry in meta.items()}
+
+
+def test_a_benign_attribute_burst_is_context_not_scored(db, thresholds):
+    """One maintainer modifying six of their own packages is H055 - detected,
+    but context: it is not an impersonation, so it scores nobody.  This is the
+    shape the feed reported as a campaign (``zxp19821005``)."""
+    from trustsight.db import get_package_profile
+    from trustsight.full_aur.corpus import run_corpus_sweep
+    from trustsight.full_aur.pipeline import (
+        _apply_cluster_weights, _popular_candidates,
+    )
+
+    thresholds({"h055": {"min_packages": 3, "window_hours": 24}})
+    new = _burst_meta("dominiquini", 6)
+
+    findings = run_corpus_sweep(new, _previous(new), now=_BURST_NOW)
+    h055 = [f for f in findings if f["rule_id"] == "H055"]
+    assert len(h055) == 1, "the burst must still be detected"
+
+    _apply_cluster_weights(findings, new, _popular_candidates(new), {})
+
+    assert h055[0]["params"]["impersonated"] is False
+    for name in h055[0]["params"]["members"]:
+        assert (get_package_profile(name) or {}).get("last_score", 0) == 0
+
+
+def test_an_impersonating_attribute_burst_scores(db, thresholds):
+    """The gate is two-sided: when a burst member is a name-clone of a popular
+    package the burst is impersonation, and it must score - otherwise the
+    suppression would swallow the attack it exists to catch."""
+    from trustsight.db import get_package_profile
+    from trustsight.full_aur.corpus import run_corpus_sweep
+    from trustsight.full_aur.pipeline import (
+        _apply_cluster_weights, _popular_candidates,
+    )
+
+    thresholds({"h055": {"min_packages": 3, "window_hours": 24}})
+    popular = {"Name": "yay", "PackageBase": "yay", "Maintainer": "jguer",
+               "Version": "1", "LastModified": _BURST_NOW, "NumVotes": 2649}
+    new = _burst_meta("marchos1as", 5, clone="yayy")
+    new["yay"] = popular
+    old = _previous(new)
+    old["yay"] = {**popular, "LastModified": _BURST_NOW - 86400 * 30}
+
+    findings = run_corpus_sweep(new, old, now=_BURST_NOW)
+    h055 = [f for f in findings if f["rule_id"] == "H055"]
+    assert len(h055) == 1
+    assert "yayy" in h055[0]["params"]["members"]
+
+    _apply_cluster_weights(findings, new, _popular_candidates(new), {})
+
+    assert h055[0]["params"]["impersonated"] is True
+    assert (get_package_profile("yayy") or {}).get("last_score", 0) > 0
 
 
 def test_a_full_campaign_cap_reports_the_refused_campaign(db):
