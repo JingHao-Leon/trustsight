@@ -379,7 +379,7 @@ def _structural_findings(
         # catches the split where the arch hashes differ.
         arch_split = bool(_ARCH_SCOPED_SUMS.search(current_text or "")) or any(
             _ARCH_SCOPED_SUMS.search(line) and line.lstrip().startswith("+")
-            for line in diff_text.splitlines()
+            for line in split_lines(diff_text)
         )
         if not still_present and not arch_split:
             add("C004", "Checksum Removed For Unchanged Source", "CRITICAL",
