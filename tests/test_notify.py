@@ -371,6 +371,27 @@ def test_a_pathological_payload_is_bounded():
     assert payload["refusals"]  # the refusal tier survives
 
 
+def test_a_refusal_carries_what_could_not_be_read():
+    """A feed must be able to say *what* was incomplete, not only that a
+    package could not be fully read; the refusing X026/X027 findings ride
+    along with the package."""
+    cycle = CycleResult(
+        refusals=["pilinara"],
+        detail={"pilinara": {"findings": [
+            {"rule_id": "X026", "severity": "MEDIUM", "file": "PKGBUILD",
+             "line": None, "reason": "Unresolved Constructs: _v <- package()"},
+            {"rule_id": "W008", "severity": "INFO", "file": "PKGBUILD",
+             "line": None, "reason": "unresolved assignment"},
+        ]}},
+    )
+    payload = alert_payload(cycle)
+    [entry] = payload["refusals"]
+    assert entry["package"] == "pilinara"
+    assert entry["aur"].endswith("/pilinara")
+    assert entry["reason"].startswith("Unresolved Constructs")
+    assert [f["rule_id"] for f in entry["findings"]] == ["X026"]
+
+
 def test_payload_carries_campaign_clusters():
     cycle = _cycle(cluster_findings=[
         {"rule_id": "G001", "params": {"members": ["a", "b", "c"]}},

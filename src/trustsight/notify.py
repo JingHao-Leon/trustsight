@@ -155,6 +155,28 @@ def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
     return "watcher cycle"
 
 
+def _refusal_entry(detail: dict | None, package: str) -> dict:
+    """One ``refusals`` entry: the package, and the parser findings that made
+    the analysis incomplete (X026/X027), so a reader is told what was not read
+    rather than only that something was not.
+    """
+    entry = {"package": package,
+             "aur": f"https://aur.archlinux.org/packages/{package}"}
+    findings = [
+        f for f in ((detail or {}).get("findings") or [])
+        if f.get("rule_id") in ("X026", "X027")
+    ]
+    if findings:
+        entry["findings"] = [
+            {"rule_id": f.get("rule_id"), "severity": f.get("severity", ""),
+             "file": f.get("file", ""), "line": f.get("line"),
+             "reason": f.get("reason", "")}
+            for f in findings
+        ]
+        entry["reason"] = findings[0].get("reason") or findings[0].get("rule_id", "")
+    return entry
+
+
 def alert_payload(cycle) -> dict:
     """The JSON document for one cycle's new alerts.
 
@@ -269,9 +291,12 @@ def alert_payload(cycle) -> dict:
         "ioc_matches": iocs,
         "campaign_cluster": campaign_cluster,
         "impersonation": impersonation,
+        # A refusal names a package the analysis could not fully read.  The
+        # name alone does not explain *what* was incomplete, so the refusing
+        # X026/X027 findings (rule, file, line, reason) ride along; without
+        # them a feed can say "could not fully read X" but not why.
         "refusals": [
-            {"package": package,
-             "aur": f"https://aur.archlinux.org/packages/{package}"}
+            _refusal_entry(detail.get(package), package)
             for package in sorted(getattr(cycle, "refusals", None) or [])
         ],
     }
