@@ -1268,8 +1268,12 @@ def run_watch(
     try:
         from ..notify import notify_url as _configured_notify_url
 
-        _log("  alert webhook: "
-             f"{'configured' if _configured_notify_url() else 'none'}")
+        # The banner must name the webhook that will actually be used: a
+        # `--notify` URL passed on the command line is the effective one, and
+        # reading only the config printed "none" on a watcher that was in fact
+        # delivering every alert.
+        _effective = notify_url or _configured_notify_url()
+        _log(f"  alert webhook: {'configured' if _effective else 'none'}")
     except Exception:  # noqa: BLE001
         pass
     # rules.toml is written once, at install, and only ever gains rules, so a
