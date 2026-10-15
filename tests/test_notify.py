@@ -461,3 +461,82 @@ def test_payload_leads_with_an_impersonation_campaign():
     }]
     assert payload["title"].startswith(
         "TrustSight: impersonation campaign by marchos1as")
+
+
+# --- the signed feed sink ---------------------------------------------------
+
+
+def _ed25519_keypair() -> tuple[str, object]:
+    """A fresh Ed25519 key: (base64 PKCS#8 private, private key object)."""
+    import base64
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding, NoEncryption, PrivateFormat,
+    )
+
+    priv = Ed25519PrivateKey.generate()
+    der = priv.private_bytes(Encoding.DER, PrivateFormat.PKCS8, NoEncryption())
+    return base64.b64encode(der).decode(), priv
+
+
+def test_the_feed_signature_verifies_against_the_public_key(monkeypatch):
+    import base64
+
+    from trustsight.notify import _sign_feed
+
+    key_b64, priv = _ed25519_keypair()
+    body = json.dumps({"event": "trustsight.alerts", "tool": "trustsight"}).encode()
+    headers = _sign_feed(key_b64, "k1", body)
+
+    material = (f"{headers['webhook-id']}.{headers['webhook-timestamp']}."
+                .encode() + body)
+    signature = base64.b64decode(headers["webhook-signature"].removeprefix("v1="))
+    # raises InvalidSignature if the material or key is wrong
+    priv.public_key().verify(signature, material)
+    assert headers["webhook-key-id"] == "k1"
+
+
+def test_the_feed_sink_posts_the_same_document_signed(monkeypatch):
+    key_b64, _priv = _ed25519_keypair()
+    monkeypatch.setenv("TRUSTSIGHT_FEED_KEY", key_b64)
+    monkeypatch.setenv("TRUSTSIGHT_FEED_KEY_ID", "k1")
+
+    ntfy = _Receiver()
+    feed = _Receiver()
+    try:
+        monkeypatch.setattr("trustsight.notify.feed_url", lambda *a, **k: feed.url)
+        cycle = CycleResult(over_threshold=[("hot-pkg", 45)],
+                            new_alerts=[("hot-pkg", "H001")])
+        assert maybe_notify(cycle, ntfy.url) is True
+
+        assert len(ntfy.requests) == 1
+        assert len(feed.requests) == 1
+        # The feed gets the same document the human channel gets.
+        assert feed.requests[0][1] == ntfy.requests[0][1]
+        headers = feed.headers_seen[0]
+        assert headers["webhook-id"]
+        assert headers["webhook-timestamp"].isdigit()
+        assert headers["webhook-key-id"] == "k1"
+        assert headers["webhook-signature"].startswith("v1=")
+    finally:
+        ntfy.stop()
+        feed.stop()
+
+
+def test_the_feed_sink_is_skipped_without_a_key(monkeypatch):
+    monkeypatch.delenv("TRUSTSIGHT_FEED_KEY", raising=False)
+    monkeypatch.delenv("TRUSTSIGHT_FEED_KEY_ID", raising=False)
+
+    ntfy = _Receiver()
+    feed = _Receiver()
+    try:
+        monkeypatch.setattr("trustsight.notify.feed_url", lambda *a, **k: feed.url)
+        cycle = CycleResult(over_threshold=[("hot-pkg", 45)],
+                            new_alerts=[("hot-pkg", "H001")])
+        assert maybe_notify(cycle, ntfy.url) is True
+        assert len(ntfy.requests) == 1
+        assert feed.requests == []
+    finally:
+        ntfy.stop()
+        feed.stop()

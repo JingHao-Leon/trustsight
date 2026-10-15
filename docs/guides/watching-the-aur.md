@@ -79,6 +79,20 @@ or permanently in `config.toml`:
 webhook = "https://example.invalid/hooks/aur"
 ```
 
+A second, independent sink posts the same document to the TrustSight feed,
+which ingests it directly instead of polling ntfy:
+
+```toml
+[notify]
+feed = "https://watcher.trustsight.org/api/ingest"
+```
+
+Every feed POST is signed with an Ed25519 key
+(`TRUSTSIGHT_FEED_KEY`, base64 PKCS#8; `TRUSTSIGHT_FEED_KEY_ID` names it), and
+the feed holds only the public half, so a leaked feed secret cannot forge a
+document. ntfy and the feed are independent: one failing never stops the
+other, and with no key the feed sink is skipped.
+
 The document carries the cycle counts and the alerts. Every
 `over_threshold` entry says what happened, not only that it did: the
 version transition, the AUR change date and the rules that fired. While a
