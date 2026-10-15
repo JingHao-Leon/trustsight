@@ -467,6 +467,7 @@ behaviour is a config key or a command flag.
 | `TRUSTSIGHT_SQLITE_BUSY_TIMEOUT` | A non-negative integer of milliseconds; an invalid value falls back to `30000` | How long a connection waits for a locked database before erroring. `30000` (the default) lets a `seed fetch` and a corpus cycle overlap without a spurious "database is locked"; raise it if a single cycle writes for longer. |
 | `TRUSTSIGHT_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` (case-insensitive); an unknown value falls back to `INFO` | The level of the watcher's log on stderr. |
 | `TRUSTSIGHT_LOG_TIMESTAMPS` | Any non-empty value | Prefix each log line with a timestamp and level, for an unattended watcher whose `docker logs` is the only record. |
+| `TRUSTSIGHT_NO_SYNC_RULES` | Any non-empty value | Skip the ruleset sync a `full-aur --watch` runs once at startup. By default the watch syncs `rules.toml` to the shipped rules the safe way (adds missing rules, fixes non-pattern drift and superseded patterns, never touches a pattern the user edited) and logs what it changed, so an unattended watcher never analyzes with a stale ruleset. |
 
 Rich output is the default only when the target stream is a terminal:
 renderers look at stdout, and progress bars look at stderr. A pipe, a

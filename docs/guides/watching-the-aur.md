@@ -33,6 +33,12 @@ metadata GET plus actual churn either way. Below about 15 minutes you are
 mostly re-downloading a snapshot the AUR has not regenerated; the floor is 60
 seconds (`limits.watch_min_interval`), because a shorter interval only spins.
 
+At startup the watch syncs `rules.toml` to the shipped ruleset the safe way
+(adds missing rules, repairs a `match_target`/`severity`/`category`/`scope`
+that moved, adopts a superseded shipped pattern, never touches a pattern you
+edited) and logs what it changed, so an unattended watcher never analyses with
+a stale ruleset. Set `TRUSTSIGHT_NO_SYNC_RULES` to skip it.
+
 ## Replaying the past with `--since`
 
 A fresh watcher only sees what changes from now on. To scan for a campaign
