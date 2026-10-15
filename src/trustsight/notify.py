@@ -28,12 +28,15 @@ _TIMEOUT_S = 15
 #: ntfy.sh stores a message larger than its 4096-byte limit as a *file
 #: attachment*: the ``message`` field becomes "You received a file: ..." and
 #: the document is only reachable through a separate URL whose file expires
-#: in a few hours (sooner than the message).  A feed that reads ``message``
-#: then sees the placeholder, and the alert is lost.  The document is kept
-#: under the limit so it arrives as plain text; the budget leaves room for
-#: the connecting request and any receiver-added fields.
+#: in a few hours.  A consumer that reads only ``message`` sees the
+#: placeholder and the alert is lost - which is why the feed was taught to
+#: fetch and retry the attachment URL rather than discard it.  With that in
+#: place the document is sent whole (ntfy attaches it above the limit) so the
+#: feed keeps every rule, finding and reason; the budget is only a ceiling
+#: against a pathological cycle, set below the feed's own 1 MB attachment cap
+#: so a document it can still ingest is what the watcher produces.
 _MAX_MESSAGE_BYTES = 4096
-_PAYLOAD_BUDGET_BYTES = 3800
+_PAYLOAD_BUDGET_BYTES = 900_000
 #: Findings kept per package before the payload is trimmed further.
 _MAX_FINDINGS_PER_PACKAGE = 12
 
@@ -208,16 +211,24 @@ def alert_payload(cycle) -> dict:
     # Only the correlation family belongs here: the sweep also returns
     # weight-0 context findings (H057/H060/H061), and counting those made a
     # centrality pass read as hundreds of "campaign cluster(s)".
-    campaign_cluster = [
-        {
-            "rule_id": finding.get("rule_id", ""),
-            "members": _member_list(finding, "members"),
-            "count": len(_member_list(finding, "members")),
-        }
-        for finding in (getattr(cycle, "cluster_findings", None) or ())
-        if isinstance(finding, dict)
-        and str(finding.get("rule_id", "")).startswith("G")
-    ]
+    campaign_cluster = []
+    for finding in (getattr(cycle, "cluster_findings", None) or ()):
+        if not isinstance(finding, dict):
+            continue
+        rule_id = str(finding.get("rule_id", ""))
+        members = _member_list(finding, "members")
+        # Only a G-series correlation cluster with at least two members is a
+        # campaign.  A one-member "cluster" is a single-package signal, not a
+        # coordinated set: the sweep emits H061 dependency hubs one member each,
+        # and a bulk sweep of them read as "hundreds of campaign cluster(s)".
+        # G006 is bounded neighbourhood context, never a campaign either.
+        if not rule_id.startswith("G") or rule_id == "G006" or len(members) < 2:
+            continue
+        campaign_cluster.append({
+            "rule_id": rule_id,
+            "members": members,
+            "count": len(members),
+        })
     # An impersonation campaign (G005) is the one alert a reviewer must not
     # skim past: many typosquats of a popular package under one account.
     # Surfaced on its own, ahead of everything, with the maintainer and the
@@ -275,15 +286,17 @@ def _payload_size(payload: dict) -> int:
 
 
 def _fit_payload(payload: dict) -> dict:
-    """Trim optional detail until the document fits ntfy's message limit.
+    """Bound a pathological document; a normal one is sent whole.
 
-    A message over the limit is stored as a file attachment and the alert is
-    effectively lost to the feed, so the document is made to fit by shedding
-    the least essential detail, in order: the human ``reason`` strings (the
-    rule catalog already explains a rule id), then findings beyond a small
-    per-package cap, then findings entirely (``rules`` and the counts remain),
-    then the lowest-scoring over-threshold entries.  The headline, counts,
-    packages, rules, campaigns, IOCs and refusals always survive.
+    The feed fetches the attachment ntfy produces for a document over its
+    4096-byte limit (and retries a transient fetch), so detail is no longer
+    traded away to stay inline.  This only fires for a cycle far past any
+    real one - north of ``_PAYLOAD_BUDGET_BYTES`` - where it sheds the least
+    essential detail, in order: the human ``reason`` strings (the rule catalog
+    still explains a rule id), then findings beyond a small per-package cap,
+    then findings entirely (``rules`` and the counts remain), then the
+    lowest-scoring over-threshold entries.  The headline, counts, packages,
+    rules, campaigns, IOCs and refusals always survive.
     """
     if _payload_size(payload) <= _PAYLOAD_BUDGET_BYTES:
         return payload

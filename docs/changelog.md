@@ -43,6 +43,7 @@
 - **G001 ignores ubiquitous hosts.** A shared `github.com` (a trusted forge) is not a shared-CDN campaign; G001 joins only on a host the set did not already reach through ordinary sources.
 - **G-series clusters no longer inflate member scores.** `G001`-`G004` keep their alert and campaign state, but membership is not, by itself, evidence against each member; `G005` (impersonation) still scores.
 - **`full-aur --watch` keeps the replay origin**, so a caught-up backfill stays on the live delta path.
+- **A one-member "cluster" is not a campaign.** `campaign_cluster` keeps only G-series clusters of two or more members and drops `G006` (bounded neighbourhood context), so a bulk sweep of `H061` dependency hubs - one member each, naming the ecosystem's most depended-on packages - can no longer read as hundreds of "campaign cluster(s)".
 - **Weight-0 context cluster findings** (`H057`/`H060`/`H061`/`G006`) no longer manufacture "new alert(s)". A lapsed campaign is reported once, and campaign state read from an uninitialised database is treated as empty.
 
 ## [0.19.0] - 2026-10-12

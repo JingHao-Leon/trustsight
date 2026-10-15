@@ -324,31 +324,47 @@ def test_a_modest_payload_keeps_located_findings_with_reasons():
     assert payload["over_threshold"][0]["findings"][0]["reason"] == "curl | bash"
 
 
-def test_an_oversized_payload_is_trimmed_under_the_ntfy_limit():
-    """ntfy turns a >4096-byte message into a file attachment the feed cannot
-    read; the document must be trimmed to fit instead."""
-    from trustsight.notify import _payload_size, _MAX_MESSAGE_BYTES
-
-    names = [f"pkg-{i:02d}" for i in range(40)]
+def _wide_cycle(packages: int, findings_each: int, reason_len: int) -> CycleResult:
+    names = [f"pkg-{i:04d}" for i in range(packages)]
     detail = {
         name: {
             "score": 50, "old_version": "1.0.0", "new_version": "1.0.1",
             "last_modified": 1777593600,
-            "rules": [f"H{i:03d}" for i in range(30)],
+            "rules": [f"H{i:03d}" for i in range(findings_each)],
             "findings": [
                 {"rule_id": f"H{n:03d}", "severity": "HIGH", "weight": 25,
-                 "file": "PKGBUILD", "line": n, "reason": "x" * 120}
-                for n in range(30)
+                 "file": "PKGBUILD", "line": n, "reason": "x" * reason_len}
+                for n in range(findings_each)
             ],
         }
         for name in names
     }
-    cycle = CycleResult(
+    return CycleResult(
         over_threshold=[(name, 50) for name in names], detail=detail,
         refusals=["refused-pkg"],
     )
-    payload = alert_payload(cycle)
-    assert _payload_size(payload) <= _MAX_MESSAGE_BYTES
+
+
+def test_a_large_cycle_keeps_full_detail():
+    """The feed reads the attachment a >4096-byte document arrives as, so a
+    large cycle keeps every finding, reason and rule instead of being trimmed
+    to an inline limit it no longer has to fit."""
+    from trustsight.notify import _payload_size, _MAX_MESSAGE_BYTES
+
+    payload = alert_payload(_wide_cycle(40, 30, 120))
+    assert _payload_size(payload) > _MAX_MESSAGE_BYTES  # it is an attachment now
+    assert payload["over_threshold"][0]["findings"][0]["reason"] == "x" * 120
+    assert payload["refusals"]
+
+
+def test_a_pathological_payload_is_bounded():
+    """A cycle far past any real one is still bounded below the feed's own
+    attachment cap, so the watcher never emits a document the feed would drop;
+    the headline, top signal and refusal tier survive the trim."""
+    from trustsight.notify import _payload_size, _PAYLOAD_BUDGET_BYTES
+
+    payload = alert_payload(_wide_cycle(300, 40, 200))
+    assert _payload_size(payload) <= _PAYLOAD_BUDGET_BYTES
     assert payload["event"] == "trustsight.alerts"
     assert payload["title"].startswith("TrustSight:")
     assert payload["over_threshold"]  # the top signal survives
@@ -367,10 +383,14 @@ def test_payload_carries_campaign_clusters():
 
 def test_context_cluster_findings_are_not_campaigns():
     """H057/H060/H061 are weight-0 corpus context, not G-series campaigns:
-    counting them made a centrality pass read as hundreds of campaigns."""
+    counting them made a centrality pass read as hundreds of campaigns.  G006
+    is bounded neighbourhood context, and a one-member "cluster" is a
+    single-package signal, so neither is a campaign either."""
     cycle = _cycle(cluster_findings=[
         {"rule_id": "H061", "params": {"members": ["sdl2"]}},
         {"rule_id": "H060", "params": {"members": ["x"]}},
+        {"rule_id": "G006", "params": {"members": ["a", "b"]}},
+        {"rule_id": "G001", "params": {"members": ["solo"]}},
         {"rule_id": "G002", "params": {"members": ["a", "b"]}},
     ])
     payload = alert_payload(cycle)
