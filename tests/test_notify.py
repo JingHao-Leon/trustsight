@@ -162,11 +162,10 @@ def test_the_title_and_tags_reach_the_headers(receiver):
     assert headers.get("Tags") == "eye"
 
 
-def test_the_heartbeat_beats_low_and_daily():
-    from trustsight.notify import HEARTBEAT_SECONDS, maybe_heartbeat
+def test_the_heartbeat_beats_low_and_every_quiet_cycle(tmp_path, monkeypatch):
+    from trustsight.notify import maybe_heartbeat
     from trustsight.full_aur.pipeline import run_watch
 
-    assert HEARTBEAT_SECONDS == 86400
     receiver = _Receiver()
     try:
         assert maybe_heartbeat(
@@ -179,6 +178,13 @@ def test_the_heartbeat_beats_low_and_daily():
     finally:
         receiver.stop()
 
+    # Every cycle that raises no alert beats, so silence on the channel means
+    # the watcher is dead rather than quiet.
+    import trustsight.config as config_module
+
+    monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr(config_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config_module, "CACHE_DIR", tmp_path / ".cache")
     receiver = _Receiver()
     try:
         outcomes = iter([CycleResult(), CycleResult()])
@@ -188,10 +194,9 @@ def test_the_heartbeat_beats_low_and_daily():
                                lambda **kwargs: next(outcomes)):
             run_watch(interval=60, cycles=2, sleep=lambda s: None,
                       notify_url=receiver.url)
-        # One beat for the first cycle; the second is inside the same day.
         beats = [b for _p, b in receiver.requests
                  if b.get("event") == "trustsight.heartbeat"]
-        assert len(beats) == 1
+        assert len(beats) == 2
     finally:
         receiver.stop()
 

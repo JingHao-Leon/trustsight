@@ -448,17 +448,12 @@ def maybe_notify(cycle, url: str | None = None) -> bool:
     return True
 
 
-#: One heartbeat a day.  Silence on the alert channel is ambiguous between
-#: "nothing found" and "the watcher is dead"; this makes the two
-#: distinguishable without spamming the panel.
-HEARTBEAT_SECONDS = 86400
-
-
 def maybe_heartbeat(cycle, url: str | None = None) -> bool:
     """POST the low-priority alive beat to the webhook.
 
-    The cadence decision belongs to the caller (run_watch), so a day with
-    no cycles simply beats on the next one.  Same failure policy as the
+    ``full-aur --watch`` sends one for every cycle that raised no alert, so
+    the cadence decision belongs to the caller and silence on the channel
+    means the watcher is dead rather than quiet.  Same failure policy as the
     alerts: logged, swallowed, never fatal to the loop.
     """
     url = url if url is not None else notify_url()

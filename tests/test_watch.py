@@ -411,3 +411,48 @@ def test_watch_sync_can_be_disabled(tmp_path, monkeypatch):
     run_watch(interval=60, cycles=1, sleep=lambda _: None)
 
     assert any(r[0] == "R001" for r in drifted_shipped_rules())
+
+
+# --- the alive beat ---
+
+
+def _isolated_config(tmp_path, monkeypatch):
+    import trustsight.config as config_module
+
+    monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr(config_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config_module, "CACHE_DIR", tmp_path / ".cache")
+
+
+def test_a_cycle_that_raises_no_alert_beats(tmp_path, monkeypatch):
+    """Silence between alerts must mean the watcher is dead, not quiet, so a
+    no-alert analysis still sends the low-priority alive beat."""
+    _isolated_config(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kw: CycleResult(added=1),
+    )
+    beats: list[int] = []
+    monkeypatch.setattr("trustsight.notify.maybe_notify", lambda *a, **k: False)
+    monkeypatch.setattr("trustsight.notify.maybe_heartbeat",
+                        lambda c, u=None: beats.append(1) or True)
+
+    run_watch(interval=60, cycles=1, sleep=lambda _: None)
+
+    assert beats == [1]
+
+
+def test_a_cycle_that_alerts_does_not_beat(tmp_path, monkeypatch):
+    _isolated_config(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kw: CycleResult(added=1),
+    )
+    beats: list[int] = []
+    monkeypatch.setattr("trustsight.notify.maybe_notify", lambda *a, **k: True)
+    monkeypatch.setattr("trustsight.notify.maybe_heartbeat",
+                        lambda c, u=None: beats.append(1) or True)
+
+    run_watch(interval=60, cycles=1, sleep=lambda _: None)
+
+    assert beats == []

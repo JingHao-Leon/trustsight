@@ -1297,7 +1297,6 @@ def run_watch(
         except Exception as exc:  # noqa: BLE001 - never fail the watch over this
             _log(f"  ruleset sync skipped: {exc}")
     attempts = 0
-    last_heartbeat = 0.0
     try:
         while True:
             # A transient failure (network blip, rate limit) must not kill an
@@ -1349,15 +1348,15 @@ def run_watch(
             # announced once here and never again, and an over-threshold
             # package is what the watcher exists for - so the webhook is how
             # either reaches anyone not reading the log.
-            from ..notify import HEARTBEAT_SECONDS, maybe_heartbeat, maybe_notify
+            from ..notify import maybe_heartbeat, maybe_notify
 
             if maybe_notify(result, notify_url):
                 _log("  alert webhook delivered")
-            # Silence is otherwise ambiguous between "nothing found" and
-            # "the watcher is dead": one low-priority beat a day.
-            if time.time() - last_heartbeat > HEARTBEAT_SECONDS:
-                if maybe_heartbeat(result, notify_url):
-                    last_heartbeat = time.time()
+            elif maybe_heartbeat(result, notify_url):
+                # Every analysis that raised no alert still beats, so silence
+                # on the channel unambiguously means the watcher is dead
+                # rather than merely quiet.
+                _log("  heartbeat delivered")
             if cycles and len(results) >= cycles:
                 break
             # A backfill is a queue, not a schedule: the interval governs the
