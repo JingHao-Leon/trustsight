@@ -34,7 +34,7 @@ _PYPI_TO_ARCH = {
     "rich": "python-rich",
     "typer": "python-typer",
     "cryptography": "python-cryptography",
-    "pyyaml": "python-pyyaml",
+    "pyyaml": "python-yaml",
 }
 
 

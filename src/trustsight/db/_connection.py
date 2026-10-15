@@ -70,7 +70,10 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     # a path-dependent "unable to open database file".
     db_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     existed = db_path.exists()
-    conn = sqlite3.connect(str(db_path))
+    # `timeout` is the busy handler: a writer waits this long for a lock
+    # instead of raising "database is locked".  Set here rather than with
+    # `PRAGMA busy_timeout` so no value ever reaches SQL text.
+    conn = sqlite3.connect(str(db_path), timeout=_busy_timeout_ms() / 1000)
     if not existed:
         # SQLite creates the file 0666 & ~umask; the database holds package
         # names, maintainers and analysis history, so pin it to the owner.
@@ -85,7 +88,6 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute(_SYNC_SQL[_synchronous_mode()])
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute(f"PRAGMA busy_timeout={_busy_timeout_ms()}")
     return conn
 
 @contextmanager
@@ -100,12 +102,11 @@ def get_read_only_connection():
     """
     db_path = get_db_path()
     uri = f"file:{db_path}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True)
-    conn.row_factory = sqlite3.Row
     # A reader in WAL still needs the busy handler: it waits on a checkpoint
     # or a schema lock, and without a timeout a busy database reads as an
-    # error rather than a short wait.
-    conn.execute(f"PRAGMA busy_timeout={_busy_timeout_ms()}")
+    # error rather than a short wait.  The connect `timeout` sets it.
+    conn = sqlite3.connect(uri, uri=True, timeout=_busy_timeout_ms() / 1000)
+    conn.row_factory = sqlite3.Row
     try:
         yield conn
     finally:

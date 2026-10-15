@@ -17,7 +17,7 @@ pkgbase = trustsight
 	depends = python-rich>=13.0
 	depends = python-typer>=0.12
 	depends = python-cryptography>=42.0
-	depends = python-pyyaml>=6.0
+	depends = python-yaml>=6.0
 	optdepends = pyalpm: native version comparison (faster discovery)
 	source = trustsight-0.19.0.tar.gz::https://github.com/emiliano-go/trustsight/releases/download/v0.19.0/trustsight-0.19.0.tar.gz
 	source = trustsight-0.19.0.tar.gz.sig::https://github.com/emiliano-go/trustsight/releases/download/v0.19.0/trustsight-0.19.0.tar.gz.sig

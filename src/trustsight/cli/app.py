@@ -66,6 +66,51 @@ _register_ioc(app)
 _register_seed(app)
 
 
+class _StderrHandler(logging.StreamHandler):
+    """Write to the *current* ``sys.stderr``, not the object at setup time.
+
+    ``logging.basicConfig(stream=sys.stderr)`` captures the stream object.  A
+    caller that swaps and then closes ``stderr`` - a CLI test runner, a
+    notebook - leaves the handler holding a closed file, and the next record
+    raises ``ValueError: I/O operation on closed file`` in logging's own error
+    path (which prints "--- Logging error ---" and can corrupt a ``--json``
+    document).  Resolving the stream on every emit keeps the handler pointed at
+    a live stream.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.stream = sys.stderr
+        super().emit(record)
+
+
+def _configure_logging() -> None:
+    """Send the pipeline's progress log to stderr, honouring the env knobs.
+
+    ``TRUSTSIGHT_LOG_LEVEL`` raises or lowers the level and
+    ``TRUSTSIGHT_LOG_TIMESTAMPS`` adds a timestamp and level to each line, so an
+    unattended watcher's ``docker logs`` (or journal) shows *when* a cycle ran.
+
+    A handler is added only when the root logger has none, exactly as
+    ``logging.basicConfig`` does by default.  The CLI is not the only caller of
+    the engine: a test harness (or an embedder) that already configured logging
+    owns the root, and adding a second handler to ``sys.stderr`` would leak the
+    engine's log lines into its captured output - which corrupted the ``--json``
+    documents a CLI test reads back.  ``force=True`` used to do exactly that.
+    """
+    level = getattr(logging, os.environ.get("TRUSTSIGHT_LOG_LEVEL", "").upper(),
+                    logging.INFO)
+    fmt = ("%(asctime)s %(levelname)s %(message)s"
+           if os.environ.get("TRUSTSIGHT_LOG_TIMESTAMPS", "").strip()
+           else "%(message)s")
+    root = logging.getLogger()
+    if root.handlers:
+        return
+    handler = _StderrHandler()
+    handler.setFormatter(logging.Formatter(fmt))
+    root.addHandler(handler)
+    root.setLevel(level)
+
+
 def main() -> None:
     """Console entry point.
 
@@ -73,20 +118,10 @@ def main() -> None:
     contract in docs/reference/exit-codes.md: 0 means the command ran, 2 means
     it could not run or complete. Deliberate exits (typer.Exit) pass through.
     """
-    # The corpus pipeline reports progress through logging; without a
-    # handler those messages (including its refusal to bootstrap) would be
-    # invisible.  Messages go to stderr so stdout stays machine-readable.
-    #
-    # `TRUSTSIGHT_LOG_LEVEL` raises or lowers the level, and
-    # `TRUSTSIGHT_LOG_TIMESTAMPS` adds a timestamp and level to each line, so
-    # an unattended watcher's `docker logs` (or journal) shows *when* a cycle
-    # ran.  `force=True` replaces any handler a library installed first.
-    level = getattr(logging, os.environ.get("TRUSTSIGHT_LOG_LEVEL", "").upper(),
-                    logging.INFO)
-    fmt = ("%(asctime)s %(levelname)s %(message)s"
-           if os.environ.get("TRUSTSIGHT_LOG_TIMESTAMPS", "").strip()
-           else "%(message)s")
-    logging.basicConfig(level=level, format=fmt, stream=sys.stderr, force=True)
+    # The corpus pipeline reports progress through logging; without a handler
+    # those messages (including its refusal to bootstrap) would be invisible.
+    # Messages go to stderr so stdout stays machine-readable.
+    _configure_logging()
     try:
         app()
     except typer.Exit:
