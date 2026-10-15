@@ -63,7 +63,9 @@ jobs:
       - name: Harness conformance
         working-directory: ../trustsight-harness
         run: |
-          uv sync --locked
+          # pytest is an optional `dev` extra in the harness, not a default
+          # group, so it must be asked for or `uv run pytest` cannot spawn.
+          uv sync --locked --extra dev
           uv run pytest tests/test_core_contract.py -q
 
       # 4. The harness pin is meant to lag a release, but it must stay an
