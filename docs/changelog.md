@@ -2,6 +2,17 @@
 
 # Changelog
 
+## [0.20.2] - 2026-10-15
+
+### Added
+
+- **The watcher posts every alert to the TrustSight feed, independently of ntfy.** A second sink (`TRUSTSIGHT_FEED_URL`, or `[notify] feed`) carries the same document the human channel gets, signed with Ed25519 over `webhook-id.webhook-timestamp.raw_body` (`TRUSTSIGHT_FEED_KEY`, base64 PKCS#8; `TRUSTSIGHT_FEED_KEY_ID` names it). The feed holds only the public key and ingests the document directly on `POST /api/ingest`, so it no longer polls ntfy. ntfy and the feed fail independently; with no key the feed sink is skipped. The contract artifact carries the ingest request shape.
+
+### Fixed
+
+- **The watch banner names the effective webhook.** It read only `[notify] webhook`, so a watcher started with `--notify` printed "alert webhook: none" while it was delivering every alert.
+- **The alive beat is sent on every cycle that raised no alert**, not once a day, so silence on the channel unambiguously means the watcher is dead rather than quiet.
+
 ## [0.20.1] - 2026-10-15
 
 ### Added
