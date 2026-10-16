@@ -51,7 +51,8 @@ def __getattr__(name: str):
     module = _RICH_EXPORTS.get(name)
     if module is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    value = getattr(importlib.import_module(module), name)
+    # The module name always comes from _RICH_EXPORTS, a fixed allowlist.
+    value = getattr(importlib.import_module(module), name)  # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
     globals()[name] = value
     return value
 

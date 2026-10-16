@@ -286,9 +286,13 @@ def seed_migrate(
             raise typer.Exit(code=2)
 
         salt = _ensure_salt(conn)
+        # Only one of these two fixed legacy tables is ever read; the choice
+        # is a boolean flag handled by the CLI, not caller-controlled text.
         source_table = "maintainers_deprecated_backup" if from_backup else "maintainers"
-        rows = conn.execute(
-            f"SELECT name, first_seen_package_id FROM {source_table}"
+        if source_table not in ("maintainers", "maintainers_deprecated_backup"):
+            raise ValueError(f"unsafe table identifier: {source_table!r}")
+        rows = conn.execute(  # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, python.lang.security.audit.formatted-sql-query.formatted-sql-query
+            f"SELECT name, first_seen_package_id FROM {source_table}"  # nosec B608
         ).fetchall()
 
         by_name: dict[str, list[int]] = {}
@@ -298,9 +302,11 @@ def seed_migrate(
         pkg_ids = [pid for pids in by_name.values() for pid in pids if pid]
         pkg_names: dict[int, str] = {}
         if pkg_ids:
-            placeholders = ",".join("?" * len(pkg_ids))
+            # json_each keeps the IN-list as a single bound value.
             for r in conn.execute(
-                f"SELECT id, name FROM packages WHERE id IN ({placeholders})", pkg_ids
+                "SELECT id, name FROM packages "
+                "WHERE id IN (SELECT value FROM json_each(?))",
+                (json.dumps(pkg_ids),),
             ).fetchall():
                 pkg_names[r["id"]] = r["name"]
 

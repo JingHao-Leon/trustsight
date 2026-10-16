@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 import json
+import re
 import threading
 import os
 import sqlite3
@@ -485,11 +486,20 @@ _ADDED_COLUMNS = {
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Add columns missing from a database created by an older version."""
+    # _ADDED_COLUMNS maps only trusted module constants into the SQL below;
+    # sqlite offers no bound parameter for PRAGMA/ALTER targets, so the
+    # interpolation is unavoidable — the guard proves it cannot carry a
+    # payload and the scans annotate the residual as deliberate.
+    _SQL_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
     for table, columns in _ADDED_COLUMNS.items():
+        if not _SQL_IDENT.fullmatch(table):
+            raise ValueError(f"unsafe table identifier: {table!r}")
         try:
+            # Module-constant table; PRAGMA/ALTER targets cannot be bound.
+            pragma_sql = f"PRAGMA table_info({table})"  # nosec B608
             existing = {
                 row["name"]
-                for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+                for row in conn.execute(pragma_sql).fetchall()  # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, python.lang.security.audit.formatted-sql-query.formatted-sql-query
             }
         except sqlite3.OperationalError:
             continue
@@ -497,7 +507,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
             continue
         for name, decl in columns.items():
             if name not in existing:
-                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+                if not _SQL_IDENT.fullmatch(name) or not re.fullmatch(
+                    r"^[A-Za-z0-9_ ()',-.=]+", decl
+                ):
+                    raise ValueError(
+                        f"unsafe DDL fragment: {name!r} {decl!r}"
+                    )
+                alter_sql = f"ALTER TABLE {table} ADD COLUMN {name} {decl}"  # nosec B608
+                conn.execute(alter_sql)  # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query, python.lang.security.audit.formatted-sql-query.formatted-sql-query
 
     # v0.12.0: plaintext maintainer names are migrated to salted hashes.
     # The old table is renamed rather than dropped so the migration is
@@ -529,7 +546,8 @@ def _migrate_rule_ids(conn: sqlite3.Connection) -> None:
         "UPDATE triggered_rules SET rule_id = ? WHERE rule_id = ?", pairs)
     # A literal, because PRAGMA does not take bound parameters. The value is
     # a module constant, never anything read from a database or a diff.
-    conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION:d}")
+    version_sql = f"PRAGMA user_version = {_SCHEMA_VERSION:d}"  # nosec B608  # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query
+    conn.execute(version_sql)
 
 def _migrate_plaintext_maintainers(conn: sqlite3.Connection) -> None:
     """Hash existing plaintext maintainer rows and retire the old table.
@@ -584,9 +602,11 @@ def _hash_maintainer_rows(conn: sqlite3.Connection, salt: str) -> None:
     pkg_names: dict[int, str] = {}
     pkg_ids = [pid for pids in by_name.values() for pid in pids if pid]
     if pkg_ids:
-        placeholders = ",".join("?" * len(pkg_ids))
+        # json_each keeps the IN-list parameterized as one bound value.
         for r in conn.execute(
-            f"SELECT id, name FROM packages WHERE id IN ({placeholders})", pkg_ids
+            """SELECT id, name FROM packages
+                WHERE id IN (SELECT value FROM json_each(?))""",
+            (json.dumps(pkg_ids),),
         ).fetchall():
             pkg_names[r["id"]] = r["name"]
 

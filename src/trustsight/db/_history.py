@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 import hashlib
+import json
 from typing import Optional
 from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
@@ -48,6 +49,8 @@ def get_property_transitions(
     package yields an empty list.
     """
     with get_connection() as conn:
+        # where accumulates only fixed internal condition fragments
+        # ("package_id = ?" / " AND property_key = ?"); values stay in params.
         where = "WHERE package_name = ?"
         params: list = [package_name]
         if property_key:
@@ -56,14 +59,14 @@ def get_property_transitions(
         if limit:
             # Newest rows overall, then ordered for display.
             query = (
-                f"SELECT * FROM (SELECT * FROM property_transitions {where} "
-                f"ORDER BY id DESC LIMIT ?) ORDER BY property_key, id"
+                f"SELECT * FROM (SELECT * FROM property_transitions {where} "  # nosec B608
+                f"ORDER BY id DESC LIMIT ?) ORDER BY property_key, id"  # nosemgrep
             )
             params.append(limit)
         else:
             query = (
-                f"SELECT * FROM property_transitions {where} "
-                f"ORDER BY property_key, id"
+                f"SELECT * FROM property_transitions {where} "  # nosec B608
+                f"ORDER BY property_key, id"  # nosemgrep
             )
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
@@ -85,12 +88,13 @@ def read_aur_cache(names: list[str], ttl_minutes: int = 60) -> dict[str, dict]:
     if not names:
         return {}
     with get_connection() as conn:
-        placeholders = ",".join("?" for _ in names)
+        # json_each keeps the IN-list fully parameterized: the statement is
+        # static and the values travel as one bound json text parameter.
         rows = conn.execute(
-            f"""SELECT name, version, last_modified, cached_at
+            """SELECT name, version, last_modified, cached_at
                 FROM aur_cache
-                WHERE name IN ({placeholders})""",
-            names,
+                WHERE name IN (SELECT value FROM json_each(?))""",
+            (json.dumps(list(names)),),
         ).fetchall()
         hits = {}
         expired = []
@@ -104,9 +108,10 @@ def read_aur_cache(names: list[str], ttl_minutes: int = 60) -> dict[str, dict]:
             else:
                 expired.append(r["name"])
         if expired:
-            placeholders = ",".join("?" for _ in expired)
             conn.execute(
-                f"DELETE FROM aur_cache WHERE name IN ({placeholders})", expired
+                "DELETE FROM aur_cache WHERE name IN "
+                "(SELECT value FROM json_each(?))",
+                (json.dumps(expired),),
             )
             conn.commit()
     return hits

@@ -7,6 +7,13 @@ from ._common import log
 from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
 
+# Package records referenced *by name* across these tables (never by id); the
+# forget_package DELETE loop interpolates only members of this tuple.
+_NAME_KEYED_TABLES = (
+    "alert_state", "pkgbuild_snapshots", "package_profiles",
+    "package_properties", "property_transitions",
+)
+
 __all__ = ['alert_history', 'checkpoint_wal', 'forget_package', 'forget_prune', 'get_package_profile', 'introduction_rate_history', 'latest_cycle_time', 'maintainer_activity_history', 'record_alerts', 'record_cycle_events', 'save_package_profile']
 
 def get_package_profile(package_name: str) -> Optional[dict]:
@@ -143,9 +150,14 @@ def forget_package(name: str) -> dict[str, int]:
 
         # alert_state, pkgbuild_snapshots, package_profiles, package_properties
         # and property_transitions are keyed by package_name directly.
-        for table in ("alert_state", "pkgbuild_snapshots", "package_profiles",
-                      "package_properties", "property_transitions"):
-            cur = conn.execute(f"DELETE FROM {table} WHERE package_name = ?", (name,))
+        # The table name comes from a frozen module constant (never caller
+        # input); DELETE's target cannot be bound, so the scan suppressions
+        # below are the residual cost of that SQL-language limit.
+        for table in _NAME_KEYED_TABLES:
+            cur = conn.execute(  # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
+                f"DELETE FROM {table} WHERE package_name = ?",  # nosec B608
+                (name,),
+            )
             counts[table] = cur.rowcount
 
         # triggered_rules joins through analysis_history.

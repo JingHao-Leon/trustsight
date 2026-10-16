@@ -495,12 +495,13 @@ def _import_sqlite_seed(path: Path, origin: str, digest: str) -> dict:
             "SELECT COUNT(*) AS n FROM maintainers_hashed"
         ).fetchone()["n"]
 
-        placeholders = ",".join("?" for _ in SEED_OWNED_KEYS)
+        # json_each keeps the statement static; the owned keys travel as a
+        # bound json text parameter rather than dynamic SQL placeholders.
         conn.execute(
-            f"""INSERT OR REPLACE INTO metadata (key, value)
+            """INSERT OR REPLACE INTO metadata (key, value)
                 SELECT key, value FROM seed.metadata
-                WHERE key IN ({placeholders})""",
-            SEED_OWNED_KEYS,
+                WHERE key IN (SELECT value FROM json_each(?))""",
+            (json.dumps(SEED_OWNED_KEYS),),
         )
 
         conn.execute(

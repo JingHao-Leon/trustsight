@@ -1,7 +1,8 @@
 """Extracted from db.py: _dependencies."""
 
-import threading
+import json
 import sqlite3
+import threading
 import subprocess
 from typing import Optional
 from ..subproc import minimal_env
@@ -35,20 +36,20 @@ def dependency_observation_counts(names: list[str]) -> dict[str, int]:
     unique = list({n for n in names if n})
     counts: dict[str, int] = {}
     with get_connection() as conn:
-        # SQLITE_MAX_VARIABLE_NUMBER is 999 on older builds, so chunk.
-        for start in range(0, len(unique), 900):
-            chunk = unique[start:start + 900]
-            placeholders = ",".join("?" * len(chunk))
-            try:
-                rows = conn.execute(
-                    f"""SELECT name, observation_count FROM dependency_names
-                        WHERE name IN ({placeholders})""",
-                    chunk,
-                ).fetchall()
-            except sqlite3.OperationalError:
-                return {}
-            for row in rows:
-                counts[row["name"]] = int(row["observation_count"] or 0)
+        # json_each turns the IN-list into one bound json text parameter:
+        # static SQL (no placeholder fan-out), and because a single bind
+        # value is used, the SQLITE_MAX_VARIABLE_NUMBER=999 chunking that
+        # older builds needed is unnecessary.
+        try:
+            rows = conn.execute(
+                """SELECT name, observation_count FROM dependency_names
+                    WHERE name IN (SELECT value FROM json_each(?))""",
+                (json.dumps(unique),),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return {}
+        for row in rows:
+            counts[row["name"]] = int(row["observation_count"] or 0)
     return counts
 
 def top_dependency_names(limit: int = 5000) -> list[str]:

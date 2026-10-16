@@ -435,10 +435,11 @@ def import_baseline(
         ).fetchall()
         keep_ids = [r["id"] for r in rows if _is_expired(r["expires_at"])]
         if keep_ids:
-            placeholders = ",".join("?" * len(keep_ids))
+            # json_each keeps the NOT IN list fully parameterized.
             conn.execute(
-                f"DELETE FROM ioc_entries WHERE source = ? AND id NOT IN ({placeholders})",
-                (source, *keep_ids),
+                "DELETE FROM ioc_entries WHERE source = ? "
+                "AND id NOT IN (SELECT value FROM json_each(?))",
+                (source, json.dumps(keep_ids)),
             )
         else:
             conn.execute("DELETE FROM ioc_entries WHERE source = ?", (source,))
