@@ -12,6 +12,9 @@ on:
     workflows: ["Release software"]
     types: [completed]
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:maintainer-only manual rebuild of an already
+    # published tag (vX.Y.Z); the job's `packages: write` is unreachable for
+    # anyone without admin rights, and automatic triggers pass no input at all.
     inputs:
       tag:
         description: Release tag to build, e.g. v0.17.1

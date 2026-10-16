@@ -17,5 +17,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Spacing bumps out so a freshly published action version has time to be
+    # reverted upstream or superseded before Dependabot opens a PR.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci"

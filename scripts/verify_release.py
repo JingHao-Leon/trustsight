@@ -39,7 +39,8 @@ def _verify_signature(signature: Path, artifact: Path, fingerprint: str) -> None
     if not signature.exists():
         raise SystemExit(f"missing detached signature {signature.relative_to(ROOT)}")
     with tempfile.TemporaryDirectory(prefix="trustsight-release-gnupg-") as home:
-        os.chmod(home, 0o700)
+        # Restrictive on purpose: throwaway keyring dir used as GNUPGHOME.
+        os.chmod(home, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         env = {**os.environ, "GNUPGHOME": home}
         imported = subprocess.run(
             ["gpg", "--batch", "--import", str(COMMIT_KEY)],

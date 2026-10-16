@@ -1,6 +1,10 @@
 name: Release Baselines
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:maintainer-only tool for completing a draft
+    # baseline-<date> release; every dispatch value flows through env vars,
+    # never into a `run:` script, and signing requires the BASELINE_SIGNING_KEY
+    # Actions secret only maintainers can reach.
     inputs:
       tag:
         description: Existing draft baseline tag to complete, e.g. baseline-2026-08-17

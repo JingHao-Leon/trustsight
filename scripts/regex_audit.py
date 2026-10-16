@@ -84,7 +84,9 @@ def _runtime_patterns() -> list[tuple[str, str]]:
             continue
         name = "trustsight." + ".".join(parts)
         try:
-            module = importlib.import_module(name)
+            # Only walks the package itself (trustsight.* modules found via
+            # os.walk); the dynamic name is built from enumerated paths.
+            module = importlib.import_module(name)  # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
         except Exception:
             continue
         for attr, value in vars(module).items():

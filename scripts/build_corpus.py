@@ -37,7 +37,10 @@ def fetch_meta(force: bool = False) -> list[dict]:
         return json.loads(cache_path.read_text())
     print(f"  Fetching {AUR_META} ...", end=" ", flush=True)
     start = time.time()
-    with urllib.request.urlopen(AUR_META, timeout=180) as resp:
+    # Scheme guard: standalone script, so `trustsight.net.open` lives inline.
+    if not AUR_META.startswith("https://"):
+        raise ValueError(f"unallowed url scheme: {AUR_META}")
+    with urllib.request.urlopen(AUR_META, timeout=180) as resp:  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         raw = resp.read()
     data = json.loads(gzip.decompress(raw))
     cache_path.write_text(json.dumps(data))

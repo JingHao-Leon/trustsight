@@ -12,6 +12,12 @@ on:
     branches:
       - master
 
+# Top-level least privilege: without a top-level permissions block the job
+# would inherit the repository default (historically write-all). The job
+# itself re-restricts to `contents: read` below.
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest

@@ -2,6 +2,9 @@ name: Release software
 
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7:maintainer-only release creation ("Release
+    # software"). Inputs select the tag and rev to publish; runs are gated by
+    # per-job least privilege and the publish job needs `contents: write`.
     inputs:
       tag:
         description: Software tag to create, e.g. v0.13.2

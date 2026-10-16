@@ -469,12 +469,15 @@ def gate_hashed_maintainers_protect_privacy() -> Gate:
                     problems.append("seed_meta.salt is missing after seed import")
 
                 # No plaintext maintainer names should remain in the active
-                # maintainer tables.
+                # maintainer tables. The table name comes from the fixed
+                # tuple below; forbidden values travel as bind parameters.
                 for forbidden in ("Alice Example", "Bob Builder", "alice@example.com"):
                     for table in ("maintainers_hashed", "package_maintainers_hashed"):
                         try:
+                            stmt = f"SELECT 1 FROM {table} WHERE name_hash = ? OR email_hash = ?"  # nosec B608
+                            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
                             rows = local.execute(
-                                f"SELECT 1 FROM {table} WHERE name_hash = ? OR email_hash = ?",
+                                stmt,
                                 (forbidden, forbidden),
                             ).fetchall()
                         except sqlite3.OperationalError:

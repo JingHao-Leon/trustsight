@@ -32,7 +32,12 @@ _RANK = {"primary-source": 3, "single-source": 2}
 
 
 def _fetch(name: str) -> str:
-    with urllib.request.urlopen(f"{BASE}/{name}", timeout=30) as response:
+    # Scheme guard: this script runs standalone (the package is not on its
+    # sys.path), so the central `trustsight.net.open` allowlist lives inline.
+    if not BASE.startswith("https://"):
+        raise ValueError(f"unallowed url scheme: {BASE}")
+    with urllib.request.urlopen(  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+            f"{BASE}/{name}", timeout=30) as response:
         return response.read().decode("utf-8", errors="replace")
 
 
