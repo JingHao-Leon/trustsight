@@ -9,6 +9,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
+
 from urllib.parse import quote
 from io import BytesIO
 from pathlib import Path
@@ -111,7 +112,11 @@ def _http_get(url: str) -> Optional[bytes]:
         resp = None
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
-            resp = urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)
+            # Scheme guard (kept inline so tests can monkeypatch urlopen
+            # through the module).
+            if not url.startswith("https://"):
+                raise ValueError(f"unallowed url scheme: {url}")
+            resp = urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             buf = bytearray()
             deadline = time.monotonic() + _DOWNLOAD_DEADLINE_SECONDS
             while True:
@@ -227,18 +232,20 @@ def _pkgbuild_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
     return raw.decode("utf-8", errors="replace")
 
 
-def _install_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
-    """The first top-level ``*.install`` scriptlet in the snapshot, or None.
+def _install_from_tarfile(tf: tarfile.TarFile, name: str) -> list[tuple[str, str]]:
+    """Every ``*.install`` scriptlet's relative filename and body.
 
     The corpus path must scan the install scriptlet: an unconditional fetch
     or write at its top level runs as root at pacman install/upgrade time,
     and that is where a trojanised repackage hides its payload (the
-    ``yyay`` shape).  A snapshot holds at most one install file; the first
-    ``*.install`` member is read under the same member cap as the PKGBUILD.
+    ``yyay`` shape). Split packages can carry several scriptlets; each is
+    read under the same member cap as the PKGBUILD.
     """
+    scripts = []
+    total_bytes = 0
     for seen, member in enumerate(tf):
         if seen >= MAX_TAR_MEMBERS:
-            break
+            raise ReadTooLarge("snapshot install scan exceeded member cap")
         if member.isfile() and member.name.endswith(".install"):
             handle = tf.extractfile(member)
             if handle is None:
@@ -250,9 +257,13 @@ def _install_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
                 )
             except ReadTooLarge:
                 log.warning("install member of %s refused by the read cap", name)
-                return None
-            return raw.decode("utf-8", errors="replace")
-    return None
+                raise
+            filename = member.name.partition("/")[2] or member.name
+            total_bytes += len(raw)
+            if total_bytes > MAX_RESPONSE_BYTES:
+                raise ReadTooLarge("snapshot install bodies exceeded total byte cap")
+            scripts.append((filename, raw.decode("utf-8", errors="replace")))
+    return scripts
 
 
 def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
@@ -276,13 +287,18 @@ def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
         return None
 
 
-def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[tuple[str, bytes]]:
+def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000,
+                       require_complete: bool = False) -> list[tuple[str, bytes]]:
     """``(member_path, first_bytes)`` for each regular file in the tarball.
 
     The AUR snapshot tarball comes from the AUR mirror, never from a
     PKGBUILD-declared ``source=`` URL, so reading it keeps the review path's
     "no network, no execution" claim intact.  Only the head of each member
     is read: H066 needs the magic bytes, not the whole file.
+
+    A bounded prefix suffices for positive magic-byte checks. Callers using
+    the manifest as absence evidence must require completeness and refuse a
+    capped walk instead of publishing that prefix as the entire tree.
     """
     manifest: list[tuple[str, bytes]] = []
     # Count *iterations*, not appended files: a tar of directories,
@@ -291,15 +307,17 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
     # bound the work.
     for seen, member in enumerate(tf):  # lazy: getmembers() parses it all
         if seen >= max_members:
+            if require_complete:
+                raise ReadTooLarge("snapshot manifest exceeded member cap")
             break
         if not member.isfile():
             continue
         try:
             f = tf.extractfile(member)
         except (tarfile.TarError, OSError):
-            continue
+            raise
         if f is None:
-            continue
+            raise tarfile.ReadError("unreadable snapshot member")
         head = f.read(64)
         manifest.append((member.name, head))
     return manifest
@@ -309,10 +327,10 @@ def fetch_pkgbuild_with_tree(
     name: str,
 ) -> tuple[
     Optional[str], Optional[list[tuple[str, bytes]]], Optional[dict], bool,
-    Optional[str],
+    Optional[list[tuple[str, str]]],
 ]:
     """PKGBUILD text, the tree manifest, an H070 finding, a refusal flag,
-    and the ``.install`` scriptlet text (or None).
+    and all ``.install`` scriptlets' repository-relative filenames and text.
 
     Downloads the AUR snapshot tarball directly so the corpus path sees the
     same committed file tree the git path does (H066-tree).  The tarball is
@@ -341,7 +359,7 @@ def fetch_pkgbuild_with_tree(
         try:
             with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf:
                 pkgbuild = _pkgbuild_from_tarfile(tf, name)
-                manifest = _snapshot_manifest(tf)
+                manifest = _snapshot_manifest(tf, require_complete=True)
                 if pkgbuild is not None:
                     # A fresh stream for the install file: reading the
                     # PKGBUILD has already consumed this one.

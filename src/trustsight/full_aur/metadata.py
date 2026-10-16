@@ -192,7 +192,11 @@ def fetch_metadata(on_progress=None) -> dict:
     if last_modified:
         headers["If-Modified-Since"] = last_modified
     try:
-        resp = urlopen(Request(_METADATA_URL, headers=headers), timeout=HTTP_TIMEOUT)
+        # Scheme guard (kept inline so tests can monkeypatch urlopen
+        # through the module).
+        if not _METADATA_URL.startswith("https://"):
+            raise ValueError(f"unallowed url scheme: {_METADATA_URL}")
+        resp = urlopen(Request(_METADATA_URL, headers=headers), timeout=HTTP_TIMEOUT)  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
     except HTTPError as exc:
         if exc.code == 304:
             existing = load_metadata()
@@ -204,7 +208,7 @@ def fetch_metadata(on_progress=None) -> dict:
             # the 304 at face value hands back an empty dict and every cycle
             # refuses forever.  Refetch unconditionally.
             log.info("AUR metadata 304 but no stored snapshot; refetching")
-            resp = urlopen(Request(_METADATA_URL), timeout=HTTP_TIMEOUT)
+            resp = urlopen(Request(_METADATA_URL), timeout=HTTP_TIMEOUT)  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         else:
             raise RuntimeError(
                 f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"

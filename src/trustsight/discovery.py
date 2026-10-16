@@ -6,6 +6,7 @@ import subprocess
 import time
 import urllib.parse
 import urllib.request
+
 from typing import Optional
 
 from .subproc import minimal_env
@@ -229,10 +230,12 @@ def _aur_rpc_query(names: list[str]) -> dict[str, dict] | None:
     that delete on the answer must key off the None.
     """
     url = _aur_info_url(names)
+    if not url.startswith("https://"):
+        raise ValueError(f"unallowed url scheme: {url}")
     for attempt in range(_RPC_MAX_RETRIES + 1):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
                 return _parse_rpc_results(_load_rpc_json(resp))
         except urllib.error.HTTPError as exc:
             if exc.code in _RPC_RETRYABLE_STATUS and attempt < _RPC_MAX_RETRIES:
@@ -389,8 +392,10 @@ def fetch_package_info(name: str) -> Optional[dict]:
     # Encoded, not interpolated: an unescaped "&" or "#" in the name would
     # otherwise inject or truncate RPC query parameters.
     url = _aur_info_url([name])
+    if not url.startswith("https://"):
+        raise ValueError(f"unallowed url scheme: {url}")
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
+        with urllib.request.urlopen(url, timeout=10) as resp:  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             data = _load_rpc_json(resp)
             if data["resultcount"] > 0:
                 return data["results"][0]

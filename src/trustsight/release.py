@@ -130,7 +130,9 @@ def _resolve_baseline_tag() -> str | None:
                 "User-Agent": _USER_AGENT,
             },
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        if not url.startswith("https://"):
+            raise ValueError(f"unallowed url scheme: {url}")
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             body = resp.read(_MAX_RELEASES_JSON_BYTES + 1)
         # A truncated JSON body must not be parsed as if it were complete:
         # fall back to ``latest`` instead of reading a cut-off listing.
@@ -221,7 +223,9 @@ def latest_release_tag() -> str | None:
                 "User-Agent": _USER_AGENT,
             },
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        if not url.startswith("https://"):
+            raise ValueError(f"unallowed url scheme: {url}")
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             body = resp.read(_MAX_RELEASES_JSON_BYTES + 1)
         # A truncated body must not be parsed as if complete.
         if len(body) > _MAX_RELEASES_JSON_BYTES:
@@ -338,8 +342,10 @@ def download_asset(
             "no download attempted"
         )
     url = asset_url(asset_name, tag)
+    if not url.startswith("https://"):
+        raise ValueError(f"unallowed url scheme: {url}")
     try:
-        with urllib.request.urlopen(url, timeout=_REQUEST_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(url, timeout=_REQUEST_TIMEOUT_SECONDS) as resp:  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             # The per-op timeout does not bound the transfer; a slow-drip
             # server resets it every chunk.  Charge the whole download one
             # wall-clock deadline as well.
@@ -410,8 +416,10 @@ def fetch_verified_asset(
 
 def _download_url(url: str, max_bytes: int = _MAX_RELEASE_BYTES) -> bytes:
     """Download *url* with the same byte cap and wall-clock deadline."""
+    if not url.startswith("https://"):
+        raise ValueError(f"unallowed url scheme: {url}")
     try:
-        with urllib.request.urlopen(
+        with urllib.request.urlopen(  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
                 url, timeout=_REQUEST_TIMEOUT_SECONDS) as resp:
             from .bounded_io import (
                 ReadTimedOut,

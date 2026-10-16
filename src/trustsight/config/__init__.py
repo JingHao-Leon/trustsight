@@ -111,7 +111,9 @@ def ensure_dirs():
     for d in (CONFIG_DIR, DATA_DIR, CACHE_DIR):
         d.mkdir(parents=True, exist_ok=True, mode=0o700)
         try:
-            os.chmod(d, 0o700)
+            # Restrictive on purpose: these hold package names, maintainers
+            # and analysis history (see the docstring above).
+            os.chmod(d, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         except OSError:
             pass
 

@@ -20,6 +20,7 @@ import os
 import time
 import urllib.request
 
+
 from .bounded_io import read_capped_with_deadline
 
 log = logging.getLogger(__name__)
@@ -420,7 +421,9 @@ def post_webhook(url: str, payload: dict, timeout: float = _TIMEOUT_S) -> None:
         headers=headers,
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    if not (url.startswith("https://") or url.startswith("http://")):
+        raise ValueError(f"unallowed url scheme: {url}")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         # Drain the body under a byte cap and the same deadline: an
         # unbounded read here would let a slow-drip receiver stall the
         # watcher past the timeout.
@@ -487,7 +490,9 @@ def post_feed(url: str, payload: dict, key_b64: str, key_id: str,
     headers = {"Content-Type": "application/json", "User-Agent": "trustsight/1.0"}
     headers.update(_sign_feed(key_b64, key_id, body))
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    if not (url.startswith("https://") or url.startswith("http://")):
+        raise ValueError(f"unallowed url scheme: {url}")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         read_capped_with_deadline(resp, _MAX_RESPONSE_BYTES, url, timeout)
 
 
