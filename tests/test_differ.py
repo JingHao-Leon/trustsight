@@ -593,7 +593,7 @@ def test_a_removed_sig_does_not_justify_a_new_skip():
 
     diff = (
         '-source=("foo.tar.gz" "foo.sig")\n'
-        '+source=("foo.tar.gz")\n'
+        '+source=("https://example.org/foo.tar.gz")\n'
         "+sha256sums=('SKIP')\n"
     )
     assert is_skip_justified(diff) == ""
@@ -607,6 +607,74 @@ def test_a_present_sig_still_justifies_a_skip():
         "+sha256sums=('SKIP')\n"
     )
     assert is_skip_justified(diff) == "signature file"
+
+
+def test_a_multi_hunk_diff_still_justifies_a_local_skip():
+    from trustsight.differ import is_skip_justified
+
+    diff = (
+        "--- a/PKGBUILD\n"
+        "+++ b/PKGBUILD\n"
+        "@@ -1,3 +1,3 @@\n"
+        " pkgname=example\n"
+        "-pkgver=1.0\n"
+        "+pkgver=1.1\n"
+        " pkgrel=1\n"
+        "@@ -10,3 +10,3 @@\n"
+        " source=('example.service' 'example.install')\n"
+        "-sha256sums=('aa' 'bb')\n"
+        "+sha256sums=('SKIP' 'SKIP')\n"
+        " package() {\n"
+    )
+    assert is_skip_justified(diff) == "local source"
+
+
+def test_a_vcs_source_with_unresolved_fragment_justifies_a_skip():
+    # `git+https://…#tag=v$pkgver` is a VCS source whose fragment carries an
+    # unresolved variable; the scheme, not the resolution, is what licenses
+    # the SKIP (wireview-linux).
+    from trustsight.differ import is_skip_justified
+
+    diff = (
+        '+source=("git+https://github.com/emaspa/wireview-linux.git#tag=v$pkgver")\n'
+        "+sha256sums=('SKIP')\n"
+    )
+    assert is_skip_justified(diff) == "vcs source"
+
+
+def test_a_vcs_source_with_unresolved_fragment_justifies_with_current_text():
+    from trustsight.differ import is_skip_justified
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+        " pkgname=wireview-linux\n"
+        "-pkgver=1.0\n+pkgver=1.1\n"
+        " source=(\"git+https://github.com/emaspa/wireview-linux.git#tag=v$pkgver\")\n"
+    )
+    current = (
+        "pkgname=wireview-linux\npkgver=1.1\n"
+        'source=("git+https://github.com/emaspa/wireview-linux.git#tag=v$pkgver")\n'
+        "sha256sums=('SKIP')\n"
+    )
+    assert is_skip_justified(diff, current) == "vcs source"
+
+
+def test_a_plain_source_with_unresolved_variable_stays_unjustified():
+    # The reorder above must not open a gap: a non-VCS source whose URL is
+    # unresolvable still fail-closed.
+    from trustsight.differ import is_skip_justified
+
+    diff = (
+        '+source=("https://example.com/$pkgver/foo.tar.gz")\n'
+        "+sha256sums=('SKIP')\n"
+    )
+    assert is_skip_justified(diff) == ""
+    current = (
+        "pkgname=demo\n"
+        'source=("https://example.com/$pkgver/foo.tar.gz")\n'
+        "sha256sums=('SKIP')\n"
+    )
+    assert is_skip_justified(diff, current) == ""
 
 
 # --- DiffSummary from text is the same shape as the git producer -----------

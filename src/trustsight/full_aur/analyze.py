@@ -126,13 +126,9 @@ def _make_diff_text(old_text: str, new_text: str, context_lines: int = 3) -> str
 
 
 def _install_diff_text(install_text: str, name: str) -> str:
-    """An added-file hunk for the ``.install`` scriptlet, for the corpus diff.
+    """A synthetic added-file hunk for content scanning, never change reporting.
 
-    The corpus diff holds only the PKGBUILD, so an install scriptlet is
-    invisible to the structural rules.  Presenting its whole current content
-    as an added file - the way the git path presents a committed ``.install``
-    - lets every content rule read it, including the unconditional
-    root-fetch/write shapes a trojanised repackage hides there.
+    ``name`` is the actual repository-relative archive member filename.
     """
     if not isinstance(install_text, str) or not install_text:
         return ""
@@ -141,7 +137,7 @@ def _install_diff_text(install_text: str, name: str) -> str:
         return ""
     body = "\n".join("+" + line for line in lines)
     return (
-        f"--- /dev/null\n+++ b/{name}.install\n"
+        f"--- /dev/null\n+++ b/{name}\n"
         f"@@ -0,0 +1,{len(lines)} @@\n{body}\n"
     )
 
@@ -299,6 +295,8 @@ def analyze_package_text(
     popular_candidates: Optional[list[tuple[str, int]]] = None,
     package_popularity: int | None = None,
     install_text: Optional[str] = None,
+    install_filename: Optional[str] = None,
+    install_scripts: Optional[list[tuple[str, str]]] = None,
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -332,6 +330,10 @@ def analyze_package_text(
             rather than being absent, so the missing tree is a bound that
             dropped content and not a package without a tarball.  Recorded
             as the ``snapshot_refused`` coverage gap.
+        install_text: Current snapshot scriptlet body, not a historical diff.
+        install_filename: Actual repository-relative filename of that body.
+        install_scripts: All current snapshot scriptlets as (filename, body)
+            pairs; supersedes the single-script arguments when supplied.
 
     Returns:
         A fully-scored PackageFact.
@@ -429,10 +431,45 @@ def analyze_package_text(
                        "recipe_file": "PKGBUILD"},
         }))
 
+    # Snapshot content is evidence of behavior, not evidence of a change.
+    install_findings = []
+    install_long_lines = 0
+    scripts = install_scripts if install_scripts is not None else (
+        [(install_filename, install_text)] if install_text and install_filename else [])
+    for install_filename, install_text in scripts:
+        install_diff = _install_diff_text(install_text, install_filename)
+        install_diff, bytes_cut = truncate_diff(
+            install_diff, config.get("diff", {}).get("max_diff_bytes", 5_242_880)
+        )
+        install_diff, lines_cut = clamp_diff_lines(install_diff, pkg_name)
+        if bytes_cut or lines_cut:
+            note_stage_failure("install-snapshot")
+        raw, raw_indices = get_raw_diff_lines_indexed(install_diff)
+        install_long_lines += oversized_lines(raw)
+        resolved, _, indices = tokenize_and_resolve_indexed(install_diff)
+        script_findings = apply_rules(
+            resolved, raw,
+            include_experimental=config.get("rules", {}).get("experimental", False),
+            line_map=map_diff_lines(install_diff),
+            resolved_indices=indices, raw_indices=raw_indices,
+        )
+        install_sources = extract_urls_from_diff(install_diff)
+        script_findings.extend(_structural_findings(
+            clamp_text(install_diff), install_sources,
+            classify_urls(install_sources.added_urls),
+            package_name=pkg_name, config=config,
+        ))
+        script_findings.extend(apply_structural_rules(
+            clamp_text(install_diff), package_name=pkg_name,
+        ))
+        install_findings.extend(f for f in script_findings
+                                if f["rule_id"] not in {"R007", "C024"})
+
     if old_pkgbuild is None:
         novelty = build_novelty_context([], package_id, record=record)
         triggered_rules: list[dict] = []
         triggered_rules.extend(metadata_findings)
+        triggered_rules.extend(install_findings)
         triggered_rules.extend(
             _temporal_findings(temporal, pkg_name, True)
         )
@@ -464,6 +501,7 @@ def analyze_package_text(
                 triggered_rules.append(cluster)
 
         gaps = gaps_from(
+            long_lines=install_long_lines,
             tree_analyzed=bool(tree_manifest),
             snapshot_refused=snapshot_refused,
             deps_not_scanned=depth_result.truncated,
@@ -521,11 +559,6 @@ def analyze_package_text(
         return fact
 
     diff_text = _make_diff_text(old_pkgbuild, new_pkgbuild)
-    if install_text:
-        # The install scriptlet the snapshot carried: scanned here so the
-        # corpus path reaches the root-fetch/write shapes only the git path
-        # saw before.
-        diff_text += _install_diff_text(install_text, pkg_name)
 
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
     diff_text, diff_truncated = truncate_diff(diff_text, max_bytes)
@@ -536,7 +569,7 @@ def analyze_package_text(
     # corpus path must too, or a package chooses how long its cycle runs.
     diff_text, scan_truncated = clamp_diff_lines(diff_text, pkg_name)
 
-    source_changes = extract_urls_from_diff(diff_text)
+    source_changes = extract_urls_from_diff(diff_text, source_only=True)
     url_acks = match_url_acks(pkg_name, source_changes.added_urls)
     scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
     source_buckets = classify_urls(
@@ -580,6 +613,7 @@ def analyze_package_text(
         raw_indices=raw_indices,
     )
     triggered_rules.extend(metadata_findings)
+    triggered_rules.extend(install_findings)
     change_delta_obj = change_delta(clamp_text(diff_text), pkg_name)
     triggered_rules.extend(
         _structural_findings(
@@ -690,7 +724,7 @@ def analyze_package_text(
         partial_files=partial_files,
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
-        long_lines=oversized_lines(raw_lines),
+        long_lines=oversized_lines(raw_lines) + install_long_lines,
         parse_time_substitutions=parse_time_subs,
         snapshot_refused=snapshot_refused,
         unpinned_build_deps=has_unpinned_build_deps(diff_text, new_pkgbuild),

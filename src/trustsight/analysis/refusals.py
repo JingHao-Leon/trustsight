@@ -105,6 +105,58 @@ def _unresolved_names(recipe) -> list[str]:
     return names
 
 
+def _display_only_names(text: str) -> set[str]:
+    """Recognize formatting, not values: never execute or resolve tput."""
+    from ..recipedoc import _ASSIGNMENT_SHAPE_RE
+
+    reference = r"\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$[A-Za-z_][A-Za-z0-9_]*"
+    formatting = r"\$\(tput (?:sgr0|bold|setaf [0-7])\)"
+    atoms = rf'(?:{reference}|{formatting})+'
+    value = re.compile(rf'(?:{atoms}|"{atoms}")')
+    printf = re.compile(
+        rf'\s*printf\s+"(?:[^"$`\\]|\\[nrt]|{reference})*"'
+        r'(?:\s+"\$[1-9]")*\s*'
+    )
+    assignments: dict[str, list[str]] = {}
+    lines = text.splitlines()
+    for line in lines:
+        match = _ASSIGNMENT_SHAPE_RE.match(line)
+        if match:
+            assignments.setdefault(match.group(1), []).append(
+                line[match.end():].strip() if match.group(2) == "=" else "")
+    safe: set[str] = set()
+    for _ in assignments:
+        before = len(safe)
+        for name, values in assignments.items():
+            if all(value.fullmatch(rhs) and all(
+                ref.strip("${}") in safe for ref in re.findall(reference, rhs)
+            ) for rhs in values):
+                safe.add(name)
+        if len(safe) == before:
+            break
+    # Every use must be display-only, including uses outside build functions.
+    while True:
+        before = safe.copy()
+        for name in before:
+            for line in lines:
+                if not _references(name).search(line):
+                    continue
+                assignment = _ASSIGNMENT_SHAPE_RE.match(line)
+                if assignment and assignment.group(1) in safe:
+                    continue
+                if not printf.fullmatch(line):
+                    safe.discard(name)
+                    break
+        # An alias cannot hide a non-display use in either direction.
+        rejected = {name for name in safe if any(
+            ref.strip("${}") not in safe
+            for rhs in assignments[name] for ref in re.findall(reference, rhs)
+        )}
+        safe -= rejected
+        if safe == before:
+            return safe
+
+
 def _added_stream(diff_text: str) -> str:
     """Only the added content lines of a diff, as a headerless stream."""
     from ..diffdoc import parse_diff_lines
@@ -176,8 +228,13 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
 
     # --- X026 / X027: refusals in executable positions -------------------
     names = _unresolved_names(post)
+    display_only = _display_only_names(
+        current_text or "\n".join(doc.post_lines())
+    ) if not {"tput", "printf"} & post.functions.keys() else set()
     referenced: list[tuple[str, list[str]]] = []
     for name in names:
+        if name in display_only:
+            continue
         pattern = _references(name)
         functions = [
             fn for fn in _EXECUTABLE_FUNCTIONS

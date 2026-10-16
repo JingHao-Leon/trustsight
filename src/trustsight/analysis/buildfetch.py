@@ -30,6 +30,7 @@ would be the quiet skip B2 exists to prevent.
 from __future__ import annotations
 
 import re
+import shlex
 from functools import lru_cache
 
 from ..deps import _strip_comment
@@ -91,9 +92,45 @@ _REGISTRY_RESOLVE_RE = re.compile(
 # add for free must not silence a signal. So this only suppresses the gap
 # when the manager is explicitly offline, which cannot reach a registry at
 # all.
-_OFFLINE_RE = re.compile(
-    r"--offline\b|--no-network\b|--frozen-lockfile\s+--offline\b", re.IGNORECASE
-)
+def _network_disabled(command: str, *, cargo: bool = False) -> bool:
+    """Prove a literal option belongs to this invocation, not quoted data.
+
+    Substitutions and unknown Cargo options are deliberately not exempted:
+    without parsing the nested shell/option grammar we cannot prove them offline.
+    """
+    if any(char in command for char in "$`()<>\\"):
+        return False
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return False
+    options = {"--offline", "--no-network"}
+    if cargo:
+        options = {"--offline", "--frozen"}
+        value_options = {
+            "--config", "--target", "--manifest-path", "--lockfile-path",
+            "--target-dir", "--features", "--package", "-p", "--jobs", "-j",
+            "--profile", "--color", "--message-format", "--exclude",
+        }
+        flags = options | {
+            "--locked", "--release", "--workspace", "--all-features",
+            "--no-default-features", "--verbose", "--quiet", "-v", "-vv", "-q",
+        }
+        args = iter(tokens)
+        tokens = []
+        for token in args:
+            if token == "--":
+                break
+            if token in value_options:
+                next(args, None)
+            elif token.startswith("-") and token not in flags:
+                if token.split("=", 1)[0] not in value_options:
+                    return False
+            else:
+                tokens.append(token)
+    if "--" in tokens:
+        tokens = tokens[:tokens.index("--")]
+    return any(token in options for token in tokens)
 
 
 
@@ -142,6 +179,7 @@ def _registry_resolutions_uncached(
     lines = join_line_continuations(split_lines(clamp_text(diff_text)))
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
     found: list[tuple[str, str]] = []
+    from .crossfire import _split_commands
     for i, line in enumerate(parse_diff_lines(lines).lines):
         # The raw-line checks are kept: the legacy guard counted any
         # ``+``-led line, headers included, and only stripped one character.
@@ -153,11 +191,13 @@ def _registry_resolutions_uncached(
         body = _strip_comment(line.raw[1:])
         if not body.strip():
             continue
-        if _OFFLINE_RE.search(body):
-            continue
-        match = _REGISTRY_RESOLVE_RE.search(body)
-        if match:
-            found.append((function, body.strip()[:200]))
+        for command in _split_commands(body):
+            for match in _REGISTRY_RESOLVE_RE.finditer(command):
+                if not _network_disabled(
+                    command, cargo=bool(re.match(r"\s*cargo\b", match.group(0)))
+                ):
+                    found.append((function, command.strip()[:200]))
+                    break
     return found
 
 

@@ -31,6 +31,10 @@ _FUNCTION_NAME_RE = re.compile(
     rf"|({_FUNCTION_NAME_CLASS})\s*\(\s*\))\s*\{{"
 )
 
+_HUNK_FUNCTION_RE = re.compile(
+    r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@\s*(.*)$"
+)
+
 def _starts_a_new_file(line: str, previous: str) -> bool:
     """True when *line* begins a new file's section of the diff.
 
@@ -81,6 +85,15 @@ def _classify_line_context(lines: list[str]) -> dict[int, str]:
             previous = line
             continue
         previous = line
+        hunk = _HUNK_FUNCTION_RE.match(line)
+        if hunk:
+            if _FUNCTION_NAME_RE.match(hunk.group(1)):
+                depth = 1
+            contexts[i] = "other"
+            continue
+        if line.startswith("-"):
+            contexts[i] = "other"
+            continue
         code = lex.code.lstrip("+").lstrip()
         if _is_message_line(line):
             contexts[i] = "message"
@@ -146,6 +159,14 @@ def _enclosing_function_map_cached(lines: tuple[str, ...]) -> dict[int, str]:
             previous = line
             continue
         previous = line
+        hunk = _HUNK_FUNCTION_RE.match(line)
+        if hunk:
+            match = _FUNCTION_NAME_RE.match(hunk.group(1))
+            if match:
+                stack = [(match.group(1) or match.group(2))]
+            continue
+        if line.startswith("-"):
+            continue
         code = lex.code.lstrip("+").lstrip()
         match = _FUNCTION_NAME_RE.search(code)
         name = (match.group(1) or match.group(2)) if match else None

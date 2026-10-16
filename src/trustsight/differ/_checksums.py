@@ -449,6 +449,41 @@ def source_array_grew_in_diff(diff_text: str) -> bool:
             inside = False
     return added > removed
 
+def _checksums_removed_with_sources(diff_text: str, var: str) -> bool:
+    """Prove a count reduction only drops source/checksum pairs, not checks."""
+    sides = {"before": {}, "after": {}}
+    chunks = {"before": [], "after": []}
+
+    def flush() -> None:
+        for side, lines in chunks.items():
+            text = "\n".join(lines)
+            for name in ("source", var):
+                items = _text_array_items(
+                    text, re.compile(r"^\s*" + name + r"\s*=\s*\(", re.MULTILINE))
+                if items is not None:
+                    sides[side][name] = items
+            lines.clear()
+
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        if line.file_boundary or line.hunk_boundary:
+            flush()
+        if line.file != "PKGBUILD" or not line.is_content:
+            continue
+        if line.side != "add":
+            chunks["before"].append(line.content)
+        if line.side != "remove":
+            chunks["after"].append(line.content)
+    flush()
+    before, after = sides["before"], sides["after"]
+    if any(name not in side for side in (before, after) for name in ("source", var)):
+        return False
+    if any(len(side["source"]) != len(side[var]) for side in (before, after)):
+        return False
+    old_pairs = Counter(zip(before["source"], before[var]))
+    new_pairs = Counter(zip(after["source"], after[var]))
+    return len(after["source"]) < len(before["source"]) and not (new_pairs - old_pairs)
+
+
 def detect_checksum_changes(diff_text: str) -> str:
     """Detect checksum-related changes in a diff.
 
@@ -494,6 +529,7 @@ def detect_checksum_changes(diff_text: str) -> str:
         if (
             not array.decl_removed
             and sum(removed.values()) > sum(added.values())
+            and not _checksums_removed_with_sources(diff_text, array.var)
         ):
             entry_removed = True
     if emptied:

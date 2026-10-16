@@ -205,6 +205,32 @@ def is_related_package(name: str, pkgbase: str) -> bool:
     )
 
 
+def is_upstream_project_name(name: str, upstream_url: str) -> bool:
+    """True when *name* is the project the package's own ``url=`` names.
+
+    ``odinls-bin`` builds the ``ols`` project and its ``url=`` points at
+    the ols repository, so ``provides=('ols')`` is the ordinary
+    same-upstream variant - not a hijack of an established name by an
+    unrelated package.  Matching is on the path of the parsed URL: the last
+    segment (``.git`` stripped, lowercased) or any whole path token.
+    """
+    if not name or not upstream_url:
+        return False
+    from urllib.parse import urlparse
+
+    path = urlparse(upstream_url.strip("'\"")).path
+    tokens = [t for t in path.split("/") if t]
+    if not tokens:
+        return False
+    last = tokens[-1].lower()
+    if last.endswith(".git"):
+        last = last[:-4]
+    claimed = name.lower()
+    if claimed == last:
+        return True
+    return claimed in {t.lower().removesuffix(".git") for t in tokens}
+
+
 def is_ignorable(name: str, pkgbase: str = "") -> bool:
     """Names that must never be treated as novel dependencies.
 

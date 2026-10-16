@@ -451,6 +451,21 @@ _PIPE_TO_SHELL_RE = re.compile(
 _CMDSUB_CALL_RE = re.compile(r"(?:\$\(|`)\s*(\w+)\b")
 
 
+def _has_parse_time_fetch(body: str, patterns) -> bool:
+    from .crossfire import _split_commands
+    from .buildfetch import _network_disabled
+
+    return any(
+        not (
+            re.match(r"\s*cargo\b", match.group(0))
+            and _network_disabled(command, cargo=True)
+        )
+        for command in _split_commands(body)
+        for pattern in patterns
+        for match in pattern.finditer(command)
+    )
+
+
 def _fetch_function_names(diff_text: str, config) -> set[str]:
     """Return names of added functions whose bodies contain a parse-time fetch.
 
@@ -479,13 +494,13 @@ def _fetch_function_names(diff_text: str, config) -> set[str]:
             if depth <= 0:
                 # One-line function: test the remainder before the closing brace.
                 body = body.split("}", 1)[0]
-                if any(p.search(body) for p in patterns):
+                if _has_parse_time_fetch(body, patterns):
                     fetchers.add(current)
                 current = None
                 depth = 0
                 continue
         depth += body.count("{") - body.count("}")
-        if any(p.search(body) for p in patterns):
+        if _has_parse_time_fetch(body, patterns):
             fetchers.add(current)
         if depth <= 0:
             current = None
@@ -543,15 +558,14 @@ def edge_parse_time_fetch(ctx, add) -> None:
                 body=stripped[:80],
                 detail="network fetch runs at parse time via a function call")
             return
-        for pattern in patterns:
-            if pattern.search(body):
-                add("H077", "Parse-time Network Fetch", "HIGH", "network",
-                    f"top-level line fetches over the network when the "
-                    f"PKGBUILD is sourced: {stripped[:80]}",
-                    line=_find_line(diff_text, stripped[:40]),
-                    body=stripped[:80],
-                    detail="network fetch runs at parse time, outside every function")
-                return
+        if _has_parse_time_fetch(body, patterns):
+            add("H077", "Parse-time Network Fetch", "HIGH", "network",
+                f"top-level line fetches over the network when the "
+                f"PKGBUILD is sourced: {stripped[:80]}",
+                line=_find_line(diff_text, stripped[:40]),
+                body=stripped[:80],
+                detail="network fetch runs at parse time, outside every function")
+            return
 
 
 # ---------------------------------------------------------------------------

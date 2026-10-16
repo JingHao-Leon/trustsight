@@ -96,7 +96,7 @@ def scan_diff(
         diff_text, config, package_name
     )
 
-    source_changes = extract_urls_from_diff(diff_text)
+    source_changes = extract_urls_from_diff(diff_text, source_only=True)
     url_acks = match_url_acks(package_name, source_changes.added_urls) if package_name else {}
     scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(

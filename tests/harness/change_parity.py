@@ -38,7 +38,7 @@ def replay(sample: int = 1) -> list[str]:
     for path in paths:
         text = path.read_text(encoding="utf-8", errors="replace")
         delta = change_delta(text)
-        reference = extract_urls_from_diff(text)
+        reference = extract_urls_from_diff(text, source_only=True)
         added = {_host(u) for u in reference.added_urls if _host(u)}
         removed = {_host(u) for u in reference.removed_urls if _host(u)}
         local = (

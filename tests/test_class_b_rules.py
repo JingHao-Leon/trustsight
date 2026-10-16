@@ -193,3 +193,84 @@ def test_h064_existing_provides_unchanged_is_quiet(establish):
     establish(True)
     d = "-provides=('openssl')\n+provides=('openssl')\n+pkgrel=2\n"
     assert "H064" not in ids(d, package_name="bar")
+
+
+# --- Same-upstream provides: H064 / D004 -----------------------------------
+#
+# odinls-bin / odinls-git build the ols project (`url=` points at the ols
+# repository) and provide `ols`; the name shares no prefix with the
+# pkgbase, so the variant check alone read them as hijacks.  A claimed name
+# the package's own upstream identity carries is the ordinary variant
+# pattern and must stand both rules down - while an unrelated established
+# name still fires.
+
+
+def _ids_with_current(diff_text, *, package_name: str, current_text: str,
+                      config=None) -> set[str]:
+    source_changes = extract_urls_from_diff(diff_text, source_only=True)
+    return {
+        f["rule_id"]
+        for f in _structural_findings(
+            diff_text, source_changes, {}, config=config or {},
+            package_name=package_name, current_text=current_text,
+        )
+    }
+
+
+_ODINLS_CURRENT = "pkgname=odinls-bin\nurl='https://github.com/DanielGavin/ols'\n"
+_EVIL_CURRENT = "pkgname=evil-helper\nurl='https://github.com/attacker/whatever'\n"
+
+
+def test_h064_same_upstream_project_provides_is_quiet(establish):
+    establish(True)
+    d = "+provides=('ols')\n"
+    assert "H064" not in _ids_with_current(
+        d, package_name="odinls-bin", current_text=_ODINLS_CURRENT)
+
+
+def test_h064_git_suffix_upstream_project_provides_is_quiet(establish):
+    establish(True)
+    d = "+provides=('ols')\n"
+    current = "pkgname=odinls-git\nurl='https://github.com/DanielGavin/ols.git'\n"
+    assert "H064" not in _ids_with_current(
+        d, package_name="odinls-git", current_text=current)
+
+
+def test_h064_unrelated_established_name_still_fires(establish):
+    establish(True)
+    d = "+provides=('firefox')\n"
+    assert "H064" in _ids_with_current(
+        d, package_name="evil-helper", current_text=_EVIL_CURRENT)
+
+
+def test_h064_unrelated_name_without_url_still_fires(establish):
+    establish(True)
+    assert "H064" in ids("+provides=('openssl')\n")
+
+
+def test_d004_same_upstream_project_provides_is_quiet(establish):
+    establish(True)
+    d = "+provides=('ols')\n"
+    assert "D004" not in _ids_with_current(
+        d, package_name="odinls-bin", current_text=_ODINLS_CURRENT,
+        config={"code_rules": {"D004": True}})
+
+
+def test_d004_unrelated_established_name_still_fires(establish):
+    establish(True)
+    d = "+provides=('firefox')\n"
+    assert "D004" in _ids_with_current(
+        d, package_name="evil-helper", current_text=_EVIL_CURRENT,
+        config={"code_rules": {"D004": True}})
+
+
+def test_d004_variant_family_pattern_unchanged(establish, observe):
+    # The lmstudio-bin/htop-vim related cases keep standing D004 down with
+    # no url= in hand.
+    establish(True)
+    observe(30)
+    for pkg, provided in (("htop-vim", "htop"), ("lmstudio-bin", "lmstudio")):
+        d = f"+provides=('{provided}')\n"
+        assert "D004" not in _ids_with_current(
+            d, package_name=pkg, current_text="",
+            config={"code_rules": {"D004": True}}), pkg

@@ -1,6 +1,7 @@
 import pytest
 
 from trustsight.db import get_connection, get_package_id, init_db, upsert_package
+from trustsight.analysis.pipeline import scan_diff
 from trustsight.novelty import (
     build_novelty_context,
     check_maintainer_novelty,
@@ -486,3 +487,87 @@ def test_typosquat_popularity_path_keeps_a_three_char_floor():
         "ya", candidates=candidates, self_popularity=0) is None
     assert package_typosquat_match(
         "yau", candidates=candidates, self_popularity=0) == ("yay", "plain")
+
+
+# --- NOVELTY attributes only source-array download URLs --------------------
+#
+# The watcher alert for sable-nightly-bin charged novelty on the bare
+# homepage `https://github.com/SableClient/Sable`: the `url=` scalar, after
+# variable resolution expanded the `+url=` line - not a source-array
+# download URL.  scored_urls come from
+# ``extract_urls_from_diff(..., source_only=True)``, so a scalar-only change
+# must produce no URL novelty, while a genuinely new source entry must.
+
+
+def _novelty_reasons(fact):
+    return [e for e in fact.score_breakdown if e.rule_id == "NOVELTY"
+            and "URL" in e.reason]
+
+
+def test_scan_diff_url_scalar_change_alone_generates_no_url_novelty():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,5 @@\n"
+        " pkgname=demo\n"
+        "-pkgver=1.0\n+pkgver=1.1\n"
+        "-url=\"https://old.example/repo\"\n"
+        "+url=\"https://github.com/new/repo\"\n"
+        " source=(\"https://github.com/new/repo/releases/download/v1/x.tar.gz\")\n"
+    )
+    fact = scan_diff(diff, config={}, package_name="demo", seen_urls={},
+                     observation_count=30)
+    assert fact.source_changes.added_urls == []
+    assert fact.novelty_context.url_first_seen_globally is False
+    assert fact.novelty_context.url_first_seen_in_this_package is False
+    assert _novelty_reasons(fact) == []
+
+
+def test_scan_diff_resolved_url_reference_does_not_leak_the_homepage():
+    # The sable-nightly-bin shape: `${url}` expansion makes the resolved
+    # `+url=` line look like a URL gain, but no source-array entry changed.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,5 @@\n"
+        " pkgname=sable-nightly-bin\n"
+        "-pkgver=1\n+pkgver=2\n"
+        "-url=\"https://old.example/repo\"\n"
+        "+url=\"https://github.com/SableClient/Sable\"\n"
+        " source=(\"x.deb::${url}/releases/download/v2/x.deb\")\n"
+    )
+    fact = scan_diff(diff, config={}, package_name="sable-nightly-bin",
+                     seen_urls={}, observation_count=30)
+    assert fact.novelty_context.url_first_seen_globally is False
+    assert all("SableClient/Sable" not in e.reason
+               for e in _novelty_reasons(fact))
+
+
+def test_scan_diff_a_genuinely_new_source_url_still_scores_novelty():
+    # The gap check: an added source-array entry with a never-seen URL is
+    # exactly what NOVELTY exists for.
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+        " pkgname=demo\n"
+        "-source=(\"https://old.example/a.tar.gz\")\n"
+        "+source=(\"https://never-seen.example/evil.tar.gz\")\n"
+    )
+    fact = scan_diff(diff, config={}, package_name="demo", seen_urls={},
+                     observation_count=30)
+    assert fact.source_changes.added_urls == [
+        "https://never-seen.example/evil.tar.gz"
+    ]
+    assert fact.novelty_context.url_first_seen_globally is True
+    assert fact.novelty_context.url_first_seen_globally_url == \
+        "https://never-seen.example/evil.tar.gz"
+    reasons = _novelty_reasons(fact)
+    assert reasons
+    assert any("never-seen.example" in e.reason for e in reasons)
+
+
+def test_build_novelty_context_a_source_url_is_recorded_and_seen(db):
+    # The DB path mirrors it: a real source-array URL fires once, then the
+    # same normalized template reads as seen.
+    pkg_id = get_package_id("testpkg")
+    url = "https://newsource.example/pkg-1.0.tar.gz"
+    ctx = build_novelty_context([url], pkg_id, record=True)
+    assert ctx.url_first_seen_globally is True
+    ctx2 = build_novelty_context([url], pkg_id)
+    assert ctx2.url_first_seen_globally is False

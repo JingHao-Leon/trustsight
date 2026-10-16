@@ -82,8 +82,12 @@ NETWORK_CLIENT_ALTERNATIVES = (
     r"nc", r"ncat", r"netcat", r"socat", r"telnet",
     # FreeBSD's fetch.  `fetch -o "$srcdir"/stage URL` is the same download
     # as curl's; the `(?!\()` keeps a local `fetch()` helper function from
-    # reading as the client.
-    r"fetch(?!\()",
+    # reading as the client.  Anchored on a command boundary and the same
+    # wrapper prefix as the ssh arm: bare `fetch` is a word `git fetch` and
+    # a hundred build scripts already use, so a boundary anchor plus the
+    # wrapper group is what licenses the claim.  An absolute-path spelling
+    # (`/usr/bin/fetch`) is the same client behind a path.
+    r"(?:\A|[;&|()`{}])\s*(?:" + EXEC_WRAPPER + r")*(?:/[^\s;&|]+/)?fetch(?!\()",
     r"openssl\s+s_client",
     r"dig", r"host", r"nslookup", r"drill", r"kdig",
     # `git -C "$srcdir/x" pull` puts the repository path between the verb

@@ -119,7 +119,7 @@ def _collect_executions(body: str) -> list[str]:
     return paths
 
 _FETCH_CLIENT_RE = re.compile(
-    r"\b(?:" + _NETWORK_CLIENT + r")\b|(?:" + _INTERPRETER_FETCH + r")",
+    r"(?<![\w.-])(?:" + _NETWORK_CLIENT + r")\b|(?:" + _INTERPRETER_FETCH + r")",
     re.IGNORECASE,
 )
 

@@ -43,7 +43,7 @@ def test_hosts_and_checksums_match_the_summary_reference():
     for path in _sample_corpus():
         text = path.read_text(encoding="utf-8", errors="replace")
         delta = change_delta(text)
-        reference = extract_urls_from_diff(text)
+        reference = extract_urls_from_diff(text, source_only=True)
         added = {_host(u) for u in reference.added_urls if _host(u)}
         removed = {_host(u) for u in reference.removed_urls if _host(u)}
         assert set(delta.hosts_gained) == added - removed, path.name

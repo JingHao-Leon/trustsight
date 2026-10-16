@@ -259,7 +259,8 @@ X015_RE = re.compile(
     # requiring one meant the plainest spelling matched nothing.
     r"(?:crontab\b|at\s+(?:-\S+\s+)*(?:now|\+|[0-9])|batch\b"
     r"|systemd-run\b|incrontab\b|entr\b|inotifywait\b|inotifywatch\b"
-    r"|udevadm\s+control\b"
+    # Reloading udev's rules does not enqueue events or execute RUN directives.
+    # Those directives are detected separately below.
     # `enable --now` starts the unit; excluding `enable` outright let the
     # one spelling that both installs and runs it through.
     r"|systemctl\s+(?:--user\s+)?(?:start\b|enable\s+[^\n;&|]*--now\b))"

@@ -387,7 +387,7 @@ def change_delta(diff_text: str, pkgbase: str = "") -> ChangeDelta:
     # URLs' hosts minus removed URLs' hosts (and the mirror for lost), and
     # the checksum classification the same walk settles (including its
     # `checksum_array_removed` override for a declaration deleted whole).
-    url_changes = extract_urls_from_diff(diff_text)
+    url_changes = extract_urls_from_diff(diff_text, source_only=True)
     manifests = _manifest_deltas(doc)
     added_hosts = {_host(u) for u in url_changes.added_urls if _host(u)}
     removed_hosts = {_host(u) for u in url_changes.removed_urls if _host(u)}

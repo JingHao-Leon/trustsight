@@ -135,6 +135,54 @@ def test_g6_a_matching_install_declaration_does_not_fire():
     assert "C024" not in _ids(_install_pair("install=demo.install"))
 
 
+def _rename_pair() -> str:
+    """The bookshelfng-bin shape: the analysed commit's header names the old
+    install file, which a later rename removed from the snapshot."""
+    return (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgname=bookshelfng\n+pkgrel=2\n"
+        "--- a/bookshelfng-bin.install\n+++ b/bookshelfng-bin.install\n"
+        "@@ -1,3 +1,3 @@\n"
+        " post_install() {\n"
+        "-  echo old\n"
+        "+  echo new\n"
+        " }\n"
+    )
+
+
+def test_g6_a_renamed_out_install_file_is_a_phantom():
+    # The manifest proves the header-named file is gone from the snapshot;
+    # pacman never runs a hook the tree does not carry.
+    assert "C024" not in _addendum4_ids(
+        _rename_pair(),
+        [("PKGBUILD", b""), ("bookshelfng.install", b"")],
+    )
+
+
+def test_g6_a_genuinely_shipped_mismatched_install_file_still_fires():
+    # Gap check: the file IS in the snapshot and install= names another
+    # existing file - the dead-hook threat is real and must fire.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        "+install=good.install\n"
+        "--- a/evil.install\n+++ b/evil.install\n@@ -1,3 +1,3 @@\n"
+        " post_install() {\n"
+        "-  echo old\n"
+        "+  echo new\n"
+        " }\n"
+    )
+    assert "C024" in _addendum4_ids(
+        diff, [("PKGBUILD", b""), ("evil.install", b""), ("good.install", b"")]
+    )
+
+
+def test_g6_without_tree_knowledge_the_phantom_still_fires():
+    # Absence of evidence is not evidence of absence: no manifest, no
+    # suppression - the conservative read stands.
+    assert "C024" in _addendum4_ids(_rename_pair(), None)
+
+
 def test_g7_hardening_option_gained_fires():
     text = (
         "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"

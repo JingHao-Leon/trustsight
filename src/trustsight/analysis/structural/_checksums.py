@@ -243,55 +243,64 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
     # names a different file, so pacman never runs the shipped hook.
     if scope_doc is not None:
         declared = post.scalars.get("install", "") if post is not None else ""
-        # The diff reconstruction holds only what the hunks show, so an
-        # `install=` that is unchanged and sits outside the hunk reads as
-        # absent, and C024 fired on packages that do declare their install
-        # file (keymux/sonarr-develop: `install=keymux.install`).  The
-        # complete new recipe is authoritative whenever the caller has it.
-        if post_text:
-            try:
-                from ...recipedoc import parse_recipe
+        from ._install import declared_install_scripts
 
-                declared = parse_recipe(post_text).scalars.get("install", "")
-            except Exception:  # noqa: BLE001 - a refusal keeps the diff read
-                pass
-        declared_base = declared.rsplit("/", 1)[-1] if declared else ""
-        # A variable-bearing declaration cannot be basename-compared without
-        # resolution; treat it as declaring rather than guess a mismatch.
-        if "$" in declared:
-            declared_base = ""
+        declarations, unknown = ({declared} if declared else set()), "$" in declared
+        if post_text is not None:
+            declarations, unknown = declared_install_scripts(post_text)
+        # The `+++ b/<name>.install` header names what the *commit* shipped;
+        # a later rename can leave that file absent from the snapshot the
+        # analysis actually describes.  Pacman never runs a hook the tree
+        # does not carry, so a header-named file the manifest proves absent
+        # is a phantom and C024 must not fire on it.  Without the manifest
+        # absence proves nothing (the file may sit outside the diff), so the
+        # conservative fire stands - the same tree-knowledge contract C027
+        # keeps.
+        phantom_ok = False
+        if tree_manifest is not None:
+            tree_basenames = {
+                str(p).rsplit("/", 1)[-1] for p, _body in tree_manifest
+            }
+            phantom_ok = True
         for file in scope_doc.files:
             if not file.path.endswith(".install") or file.status == "removed":
                 continue
-            base = file.path.rsplit("/", 1)[-1]
-            if not declared:
+            if phantom_ok and file.path.rsplit("/", 1)[-1] not in tree_basenames:
+                continue
+            if file.path in declarations or unknown:
+                continue
+            if not declarations:
                 add("C024", "Install Script Not Declared", "MEDIUM",
                     "composition",
                     f"{file.path} is shipped but install= does not name "
                     "it; pacman never runs the hook",
                     file=file.path, line=None)
                 break
-            if declared_base and base and base != declared_base:
+            if declarations:
                 add("C024", "Install Script Not Declared", "MEDIUM",
                     "composition",
                     f"{file.path} is shipped but install= names "
-                    f"{declared_base}, not it; pacman never runs this hook",
+                    f"{', '.join(sorted(declarations))}, not it; pacman never runs this hook",
                     file=file.path, line=None)
                 break
         # G6(a) (C027): install= names a file the diff/tree does not carry -
         # a dangling declaration, almost always benign but worth an INFO.
         # Tree knowledge is required (never guess): without the manifest the
         # absence could just be an unchanged file outside the hunk.
-        if declared and tree_manifest is not None:
-            wanted = declared.rsplit("/", 1)[-1]
-            seen = {f.path.rsplit("/", 1)[-1] for f in scope_doc.files}
-            seen |= {str(p).rsplit("/", 1)[-1] for p, _body in tree_manifest}
-            if wanted not in seen:
-                add("C027", "Declared Install Script Is Absent", "INFO",
-                    "integrity",
-                    f"install= names {declared}, which the diff and the tree "
-                    "do not carry",
-                    file="PKGBUILD", line=None)
+        if tree_manifest is not None:
+            paths = {str(p) for p, _body in tree_manifest}
+            roots = {p[:-len("PKGBUILD")] for p in paths if p.endswith("/PKGBUILD")}
+            root = next(iter(roots)) if len(roots) == 1 else ""
+            seen = {p[len(root):] if root and p.startswith(root) else p
+                    for p in paths}
+            for wanted in sorted(declarations):
+                if "$" in wanted:
+                    continue
+                if wanted not in seen:
+                    add("C027", "Declared Install Script Is Absent", "INFO",
+                        "integrity",
+                        f"install= names {wanted}, which the tree does not carry",
+                        file="PKGBUILD", line=None)
 
     if pre is None or post is None:
         return

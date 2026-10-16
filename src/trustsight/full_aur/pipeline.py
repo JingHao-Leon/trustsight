@@ -939,7 +939,8 @@ def _run_baseline_build(
             log.warning("skipping reserved package name %r", name)
             return "reserved"
         (new_pkgbuild, tree_manifest, trailer_finding, snapshot_refused,
-         install_text) = fetched
+         install_scripts) = fetched
+        install_text = "\n".join(body for _, body in install_scripts) if install_scripts else None
         if new_pkgbuild is None:
             log.debug("could not fetch PKGBUILD for %s (base: %s)", name, _pkg_or_base(meta))
             return "fetch_failed"
@@ -970,7 +971,7 @@ def _run_baseline_build(
                 record=True,
                 popular_candidates=popular,
                 package_popularity=int((new_meta.get(name) or {}).get("NumVotes", 0) or 0),
-                install_text=install_text,
+                install_scripts=install_scripts,
             )
         except TokenizerUnavailable as exc:
             # The sandboxed tokenizer could not answer (A6).  The package is
@@ -1368,5 +1369,3 @@ def run_watch(
     except KeyboardInterrupt:
         _log(f"Watch stopped after {len(results)} cycle(s)")
     return results
-
-

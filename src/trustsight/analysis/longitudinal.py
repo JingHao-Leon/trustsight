@@ -24,6 +24,7 @@ objects are only emitted by ``update_properties`` once a value has held for
 """
 
 import json
+from urllib.parse import urlsplit
 
 from ..config import (
     DEFAULT_SECURITY_RELEVANT_FLAGS,
@@ -100,7 +101,7 @@ def _source_name(url: str) -> str:
 
 def _vendored_in_diff(diff_text: str, removed_deps: set[str]) -> set[str]:
     """Removed deps for which the diff adds a source whose name matches."""
-    added = extract_urls_from_diff(diff_text).added_urls
+    added = extract_urls_from_diff(diff_text, source_only=True).added_urls
     vendored: set[str] = set()
     for url in added:
         name = _source_name(url)
@@ -162,9 +163,32 @@ def _finding_for_break(diff_text, break_, config) -> list[dict]:
         })]
 
     if rule_id == "H049":
+        old, new = _changed_by(break_)
+        sources = extract_urls_from_diff(diff_text, source_only=True)
+        evidence = []
+        for urls in (sources.removed_urls, sources.added_urls):
+            values = set()
+            for url in urls:
+                try:
+                    parsed = urlsplit(url)
+                    host = parsed.hostname
+                except ValueError:
+                    continue
+                if host:
+                    org = parsed.path.strip("/").split("/")[0]
+                    if key == "source_hosts":
+                        values.add(host)
+                    elif org:
+                        values.add(f"{host}/{org}")
+            evidence.append(values)
+        # Persisted properties may predate resolver improvements. A property
+        # break alone is not evidence that the recipe replaced a source.
+        # A retained helper may still use the replaced source's host/org.
+        migration = bool(old & evidence[0] and (new - old) & evidence[1])
         return [stamp({
-            "rule_id": "H049", "name": "Source Host Changed",
-            "severity": "MEDIUM", "category": "source",
+            "rule_id": "H049", "name": "Source Host Changed" if migration else "Source Metadata Changed",
+            "severity": "MEDIUM" if migration else "INFO",
+            "category": "source" if migration else "context",
             "match": f"source {key} changed after {break_.stable_for_n} stable obs",
             "params": {"key": key,
                        "stable_for_n": break_.stable_for_n},
@@ -189,9 +213,11 @@ def _finding_for_break(diff_text, break_, config) -> list[dict]:
         })]
 
     if rule_id == "H054":
+        markers_changed = key == "build_system_markers"
         return [stamp({
-            "rule_id": "H054", "name": "Build System Changed",
-            "severity": "MEDIUM", "category": "build",
+            "rule_id": "H054", "name": "Build System Changed" if markers_changed else "Build Line Count Changed",
+            "severity": "MEDIUM" if markers_changed else "INFO",
+            "category": "build" if markers_changed else "context",
             "match": f"build {key} changed after {break_.stable_for_n} stable obs: "
                      f"{break_.old_value} -> {break_.new_value}",
             "params": {"key": key, "stable_for_n": break_.stable_for_n,

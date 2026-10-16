@@ -12,6 +12,7 @@ from trustsight.analysis.longitudinal import longitudinal_findings
 from trustsight.full_aur.properties import (
     STABILITY_FLOOR_DEFAULT,
     canonical,
+    extract_properties,
     stability_weight,
     update_properties,
 )
@@ -211,7 +212,60 @@ def test_h048_quiet_without_diff_source():
 
 def test_h049_source_host_change():
     b = _pb("source_hosts", {"github.com"}, {"evil.example"})
-    assert "H049" in _ids("", [b])
+    diff = "-source=('https://github.com/org/repo.tar.gz')\n+source=('https://evil.example/org/repo.tar.gz')\n"
+    findings = longitudinal_findings(diff, "pkg", [b])
+    assert findings[0]["rule_id"] == "H049"
+    assert findings[0]["severity"] == "MEDIUM"
+
+
+def test_h049_source_org_replacement_is_warning():
+    b = _pb("source_orgs", {"github.com/original"}, {"github.com/replacement"})
+    diff = "-source=('https://github.com/original/repo.tar.gz')\n+source=('https://github.com/replacement/repo.tar.gz')\n"
+    assert longitudinal_findings(diff, "pkg", [b])[0]["severity"] == "MEDIUM"
+
+
+def test_h049_replacement_with_retained_old_host_and_org_is_warning():
+    old = "source=('https://github.com/good/main.tar.gz' 'https://github.com/good/helper.tar.gz')"
+    new = old.replace("github.com/good/main", "evil.example/bad/main")
+    before, after = extract_properties(old), extract_properties(new)
+    breaks = [_pb(key, before[key], after[key])
+              for key in ("source_hosts", "source_orgs")]
+    findings = longitudinal_findings(f"-{old}\n+{new}\n", "pkg", breaks)
+    assert len(findings) == 2
+    assert all(f["rule_id"] == "H049" and f["severity"] == "MEDIUM"
+               for f in findings)
+
+
+def test_docscan_additive_sources_and_persisted_empty_hosts_are_context():
+    old = '''pkgname=docscan
+pkgver=1.0
+url=https://github.com/salehjg/docscan
+_uvdoc=0123456789abcdef
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+'''
+    new = old.replace(
+        'v$pkgver.tar.gz")',
+        'v$pkgver.tar.gz" "uvdoc-${_uvdoc::7}.pkl::https://github.com/tanguymagne/UVDoc/raw/$_uvdoc/model/best_model.pkl")',
+    )
+    before, after = extract_properties(old), extract_properties(new)
+    assert before["source_hosts"] == after["source_hosts"] == {"github.com"}
+    assert before["source_orgs"] == {"github.com/salehjg"}
+    assert after["source_orgs"] == {"github.com/salehjg", "github.com/tanguymagne"}
+    diff = "\n".join("-" + line for line in old.splitlines()) + "\n"
+    diff += "\n".join("+" + line for line in new.splitlines()) + "\n"
+    # The old regex persisted empty sets for the variable-only source.
+    for previous in (before, {"source_hosts": set(), "source_orgs": set()}):
+        breaks = [_pb(key, previous[key], after[key]) for key in previous
+                  if key.startswith("source_") and previous[key] != after[key]]
+        findings = longitudinal_findings(diff, "docscan", breaks)
+        assert findings
+        assert all(f["severity"] == "INFO" and f["category"] == "context"
+                   and f["name"] == "Source Metadata Changed" for f in findings)
+
+
+def test_h049_parser_only_replacement_needs_diff_evidence():
+    b = _pb("source_hosts", {"stale.example"}, {"github.com"})
+    assert longitudinal_findings("+pkgrel=2\n", "pkg", [b])[0]["severity"] == "INFO"
 
 
 def test_h050_version_scheme_is_context():
@@ -228,7 +282,21 @@ def test_h051_pkgdesc_change():
 
 def test_h054_build_system_change():
     b = _pb("build_system_markers", {"make"}, {"cmake"})
-    assert "H054" in _ids("", [b])
+    findings = longitudinal_findings("", "pkg", [b])
+    assert findings[0]["rule_id"] == "H054"
+    assert findings[0]["severity"] == "MEDIUM"
+    assert findings[0]["name"] == "Build System Changed"
+
+
+def test_h054_build_line_count_is_context_even_with_marker_change():
+    count = _pb("build_line_count", "0-5", "6-15")
+    marker = _pb("build_system_markers", {"make"}, {"cmake"})
+    for breaks in ([count], [count, marker]):
+        finding = longitudinal_findings("", "pkg", breaks)[0]
+        assert finding["rule_id"] == "H054"
+        assert finding["severity"] == "INFO"
+        assert finding["category"] == "context"
+        assert finding["name"] == "Build Line Count Changed"
 
 
 def test_h037_residue_property_change():

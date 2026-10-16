@@ -227,6 +227,25 @@ def test_multi_line_arrays_keep_their_opening_line_items():
     assert props["source_orgs"] == frozenset({"github.com/org", "gitlab.com/other"})
 
 
+def test_source_properties_resolve_variables_without_executing_shell(tmp_path):
+    from trustsight.full_aur.properties import extract_properties
+
+    sentinel = tmp_path / "executed"
+    pkgbuild = (
+        "url=https://github.com/org/repo\n"
+        "pkgver=1.2\n"
+        'source_aarch64=("archive.tar.gz::$url/archive/v$pkgver.tar.gz")\n'
+        "# source=('https://comment.example/archive.tar.gz')\n"
+        f'other=$(touch "{sentinel}")\n'
+        "build() { curl https://build.example/file; }\n"
+    )
+    props = extract_properties(pkgbuild)
+    assert props["source_hosts"] == {"github.com"}
+    assert props["source_orgs"] == {"github.com/org"}
+    assert not sentinel.exists()
+    assert extract_properties("url=https://homepage.example/project\n")["source_hosts"] == set()
+
+
 def test_one_line_function_bodies_are_recorded_and_closed():
     """``build() { make; }`` has a body, and it ends on the same line.
 

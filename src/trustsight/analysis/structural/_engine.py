@@ -4,6 +4,7 @@ import re
 from ...differ import (
     _touched_checksum_arrays,
     checksum_array_parity_in_text,
+    extract_urls_from_diff,
     is_skip_justified,
     map_diff_lines,
     source_array_has_command_substitution,
@@ -35,6 +36,7 @@ from ..persistence import (
 )
 from ..version import _epoch_findings
 from ...findings import stamp
+from ...buckets import classify_urls
 from ...recipedoc import recipe_states
 from ...rules import find_line_in_diff
 from ...diffdoc import parse_diff_lines
@@ -127,8 +129,10 @@ def _structural_findings(
         findings.append(stamp(finding))
 
     cs_behavior = source_changes.checksum_behavior
-    added = source_changes.added_urls
-    removed = source_changes.removed_urls
+    declared_changes = extract_urls_from_diff(diff_text, source_only=True)
+    added = declared_changes.added_urls
+    removed = declared_changes.removed_urls
+    download_changes = extract_urls_from_diff(diff_text)
     # The integrity rules' one definition of "the version moved": pkgver,
     # pkgrel or epoch by resolved value.  A pkgrel rebuild with a changed
     # checksum is C002, not the HIGH C001 that claims the version stood still.
@@ -140,10 +144,22 @@ def _structural_findings(
     # does leave the source unbacked.  Consolidated into the URL engine.
     from ..url_engine import URLContext, run_url_instances
 
-    urlctx = URLContext(diff_text, config or {}, source_changes=source_changes)
+    urlctx = URLContext(diff_text, config or {}, source_changes=download_changes)
     run_url_instances(urlctx, add, only=frozenset({"H003"}))
 
-    if cs_behavior == "changed_from_sha256_to_skip":
+    arch_skip = False
+    if _ARCH_SCOPED_SUMS.search(diff_text):
+        try:
+            checksum_pre, checksum_post = recipe_states(parse_diff_lines(split_lines(diff_text)))
+            arch_skip = any(
+                _ARCH_SCOPED_SUMS.fullmatch(name)
+                and entries != checksum_pre.arrays.get(name, ())
+                and any(entry.upper() in ("SKIP", "NONE") for entry in entries)
+                for name, entries in checksum_post.arrays.items()
+            )
+        except Exception:  # noqa: BLE001 - retain the ordinary checksum signal
+            pass
+    if cs_behavior == "changed_from_sha256_to_skip" or arch_skip:
         skip_reason = is_skip_justified(diff_text, current_text)
         suffix = f" ({skip_reason})" if skip_reason else ""
         add("H001", "Checksum Disabled", "INFO" if skip_reason else "HIGH", "integrity",
@@ -398,14 +414,18 @@ def _structural_findings(
     # a host the operator allow-listed as its distribution CDN) is not a
     # third-party fetch.  Computed once here so the two rules cannot disagree
     # about what "the upstream" is.
-    upstream_host = _head_upstream_host(diff_text, current_text) if added else ""
+    upstream_host = _head_upstream_host(diff_text, current_text) if download_changes.added_urls else ""
     upstream_reg = _registered_domain(upstream_host) if upstream_host else ""
     divergence_allow = _source_divergence_allow(config)
+    download_buckets = classify_urls([
+        url for url in download_changes.added_urls
+        if url not in source_buckets and _BINARY_ARTIFACT_RE.search(url)
+    ])
 
-    for url in added:
+    for url in download_changes.added_urls:
         if not _BINARY_ARTIFACT_RE.search(url):
             continue
-        bucket = source_buckets.get(url, "unknown")
+        bucket = source_buckets.get(url, download_buckets.get(url, "unknown"))
         if bucket in _TRUSTED_BUCKETS:
             continue
         source_reg = _registered_domain(_url_domain(url))
