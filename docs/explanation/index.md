@@ -65,10 +65,13 @@ Each severity level carries a weight that reflects its information value:
 | LOW | 5 | Weak signal; context-dependent |
 | INFO | 0 | Recorded for audit only |
 
-FATAL rules (R012, R013) short-circuit scoring. When a FATAL rule fires, the
-score is immediately set to 100 regardless of any other signal. FATAL rules
-contribute 0 to the additive sum because their weight would be irrelevant; the
-hard stop at 100 is their entire effect.
+FATAL rules (R012, R013) contribute weight 0 like any other finding. The
+score no longer jumps to 100 when one fires: the FATAL signal rides the
+verdict label (`Low (FATAL: R012)`) and the unsuppressible FATAL entry in
+`score_breakdown`. The shipped FATALs target the reviewer reading the report
+rather than the build machine, so a lone heuristic FATAL misfire no longer
+reads as a Critical package; a consumer triaging on score should also look
+for FATAL entries in `score_breakdown`.
 
 **Declared verification is reported, never credited.** Checksums, PGP keys, GPG
 verification and source pinning are emitted as weight-0 findings in the `P`
@@ -150,7 +153,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 ## Key numbers
 
-- The current test suite, **67.9% zero-rate** on the 3,739-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
+- The current test suite, **70.7% zero-rate** on the 3,739-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
 - **CRITICAL p5 = 60**, **benign p95 = 35**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 15 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).

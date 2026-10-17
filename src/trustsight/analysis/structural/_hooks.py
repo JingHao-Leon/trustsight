@@ -7,9 +7,10 @@ from ..persistence import (
     _WW_DIR_RE,
 )
 from ...findings import stamp
-from ...line_lex import strip_comment
+from ...line_lex import _printed_heredoc_body_indices, strip_comment
 from ...recipedoc import parse_recipe
 from ...diffdoc import parse_diff_lines
+from ...rules import _printer_quote_body_indices
 from ...tokenizer import split_lines
 
 __all__ = ['_HOOK_INTERPRETER_RE', '_ROOT_HOME_RE', '_RUNTIME_USER_RE', '_XDG_PREFIX_RE', '_hook_names', '_user_writable_target', 'install_script_findings', 'partial_install_files']
@@ -67,18 +68,23 @@ def partial_install_files(diff_text: str) -> list[str]:
             partial.append(file.path)
     return partial
 
-def install_script_findings(doc) -> list[dict]:
+def install_script_findings(doc, dead_hooks: frozenset[str] = frozenset()) -> list[dict]:
     """C016/C017 over complete ``.install`` scripts (re-filed).
 
     The file's post-state text is read as a ``RecipeDoc``; every hook body
     is a function.  Findings attribute to the ``.install`` file and its own
     line numbers via the recipe's spans.  A partial file is skipped here:
     :func:`partial_install_files` declares it as a coverage gap instead.
+    Hooks the recipe does not wire up (``install=`` never names the file)
+    are dead: pacman never runs them, so behavior claims inside them stand
+    down (C024 names the dead hook itself once).
     """
     cuts = {path for path, *_rest in doc.cut_hunks()}
     out: list[dict] = []
     for file in doc.files:
         if not file.path.endswith(".install") or file.status == "removed":
+            continue
+        if file.path in dead_hooks:
             continue
         if (file.status != "added"
                 and (not file.hunks or file.hunks[0].new_start != 1
@@ -114,7 +120,20 @@ def install_script_findings(doc) -> list[dict]:
                     "line": span.line if span else None,
                     "params": {"hook": name, "interpreter": match.group(0).strip()[:40]},
                 }))
-            for raw_line in split_lines(body):
+            body_lines = split_lines(body)
+            # Lines inside a printed heredoc (`cat <<MSG`, no redirect, no
+            # executor pipe) are output text, not executed shell: an
+            # advisory body that *mentions* a write must not fire C017
+            # (openxlr).  A heredoc feeding an interpreter stays scanned.
+            printed = _printed_heredoc_body_indices(body_lines)
+            # A printer's quoted string spans lines the same way the printed
+            # heredoc does: audirvana's `echo "` block carries mkdir/redirect
+            # *text* into this rule.  Lines inside a string a printer opened
+            # are output, not executed shell.
+            message_spans = _printer_quote_body_indices(body_lines)
+            for i, raw_line in enumerate(body_lines):
+                if i in printed or i in message_spans:
+                    continue
                 for target in _raw_targets(strip_comment(raw_line)):
                     if _user_writable_target(target):
                         out.append(stamp({

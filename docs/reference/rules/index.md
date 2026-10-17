@@ -18,7 +18,7 @@ series, which are reported outside the heuristic score.
 
 This page is the map. [The rule system reference](system.md) explains how
 the engine works and holds everything that is not an individual rule: the
-`rules.toml` field table, the severity weights, the FATAL short-circuit,
+`rules.toml` field table, the severity weights, the FATAL label mechanism,
 the measured fire rates, the series taxonomy, and the reserved identifier
 ranges. Each rule's own definition lives on the page for its category.
 

@@ -34,9 +34,13 @@ match_target = "resolved"
 [[rules]]
 id = "R003"
 name = "Base64 Decode and Execute"
-# The trailing bar must be a real pipe; escaped, the decode goes to
-# stdout and nothing consumes it.
-pattern = 'base64.*(?:\\-d|\\-\\-decode).*(?<!\\\\)\\|'
+# The decode flag must belong to the base64 command itself: the gap
+# between the verb and -d/--decode may hold other flags and operands but
+# must not cross a pipe or separator, so `base64 | tr -d ...` (the
+# random-key idiom: `head -c 48 /dev/urandom | base64 | tr -d ...`) does
+# not read as a decode.  The trailing bar must be a real pipe; escaped,
+# the decode goes to stdout and nothing consumes it.
+pattern = 'base64(?:(?![|;&]).)*?(?:\\-d|\\-\\-decode)\\b.*(?<!\\\\)\\|'
 severity = "CRITICAL"
 category = "obfuscation"
 match_target = "resolved"
@@ -113,6 +117,10 @@ name = "LLM Prompt Injection"
 #                    ('do not report bugs to Arch' is ordinary prose)
 #   7. verdict     - 'mark/classify/report ... as safe/benign/clean'
 #   8. addressed   - a named model told to ignore/approve/skip
+#                    something: the verb must take an object.  A
+#                    pkgdesc such as 'local LLM watches sessions and
+#                    decides what to approve' describes the tool;
+#                    it does not instruct the reader.
 #
 # include_comments is essential and not incidental: the payload is
 # always a comment, and comment lines are filtered out for every rule
@@ -120,7 +128,7 @@ name = "LLM Prompt Injection"
 #
 # Calibrated: 22/22 injection fixtures, 0 fires across 3,739 benign
 # corpus diffs (every alternative measured separately).
-pattern = '''\\b(?:ignore|disregard|forget|override|bypass)\\s+(?:all\\s+|any\\s+|the\\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\\b|^[^\\S\\n]*(?:#[^\\S\\n]*)?(?:system|assistant)[^\\S\\n]*:[^\\S\\n]*\\S|</?(?:system|instructions?|admin|prompt|assistant)\\s*>|\\byou\\s+are\\s+(?:an?|the)\\s+[^.\\n]{0,48}?(?:model|assistant|ai\\b)|\\bnew\\s+instructions?\\s*:|\\bdo(?:\\s+not|n['’]t)\\s+(?:flag|warn|analy[sz]e|review|scan)\\b|\\bdo(?:\\s+not|n['’]t)\\s+report\\s+(?:any\\s+|the\\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\\b|\\b(?:mark|classify|report|treat|label|approve)\\b[^.\\n]{0,24}?\\bas\\s+(?:safe|benign|clean|harmless|trusted|ok)\\b|\\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\\s+assistant)\\b[^.\\n]{0,60}?\\b(?:ignore|approve|skip|overlook|flag)\\b'''
+pattern = '''\\b(?:ignore|disregard|forget|override|bypass)\\s+(?:all\\s+|any\\s+|the\\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\\b|^[^\\S\\n]*(?:#[^\\S\\n]*)?(?:system|assistant)[^\\S\\n]*:[^\\S\\n]*\\S|</?(?:system|instructions?|admin|prompt|assistant)\\s*>|\\byou\\s+are\\s+(?:an?|the)\\s+[^.\\n]{0,48}?(?:model|assistant|ai\\b)|\\bnew\\s+instructions?\\s*:|\\bdo(?:\\s+not|n['’]t)\\s+(?:flag|warn|analy[sz]e|review|scan)\\b|\\bdo(?:\\s+not|n['’]t)\\s+report\\s+(?:any\\s+|the\\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\\b|\\b(?:mark|classify|report|treat|label|approve)\\b[^.\\n]{0,24}?\\bas\\s+(?:safe|benign|clean|harmless|trusted|ok)\\b|\\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\\s+assistant)\\b[^.\\n]{0,60}?\\b(?:ignore|approve|skip|overlook|flag)\\s+(?:this|that|the|these|those|all|any|it|them|above|previous|prior|suspicious|following|everything|anything)\\b'''
 severity = "FATAL"
 category = "injection"
 match_target = "resolved"
@@ -249,7 +257,10 @@ match_target = "resolved"
 [[rules]]
 id = "R046"
 name = "Source URL Uses IP Address"
-pattern = 'https?://\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'
+# Generated at load from config._ip_url_pattern(), which excludes the
+# non-routable blocks (loopback, RFC1918, link-local, unspecified); the text
+# here is the shipped-default expansion so an ungenerated copy stays coherent.
+pattern = 'https?://(?!(?:127\\.|10\\.|192\\.168\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.|169\\.254\\.|0\\.0\\.0\\.0))\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'
 severity = "MEDIUM"
 category = "network"
 match_target = "raw_line"
@@ -258,7 +269,7 @@ added_only = true
 [[rules]]
 id = "R047"
 name = "Source URL Uses Non-Standard Port"
-pattern = 'https?://[^/\\s:]+:(?!(?:80|443|8080|8443)(?:[/\\s"\\x27]|$))\\d{2,5}'
+pattern = 'https?://(?!(?:127\\.|10\\.|192\\.168\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.|169\\.254\\.|0\\.0\\.0\\.0))[^/\\s:]+:(?!(?:80|443|8080|8443)(?:[/\\s"\\x27]|$))\\d{2,5}'
 severity = "LOW"
 category = "network"
 match_target = "raw_line"
@@ -422,11 +433,27 @@ name = "Persistence Unit Outside Package Root"
 # corpus).  Including that group fired on 30 benign packages and would have
 # made the rule mean "this package installs files".
 #
+# Narrowed to writes *outside* the package root.  The rule's own name is
+# "outside package root", but a `$pkgdir/etc/...` or `$pkgdir/usr/lib/
+# systemd/...` target is the package's own staged content - every daemon
+# ships its systemd unit that way - and firing HIGH on it flagged ordinary
+# packages (monsoon-git's own user unit, bioma-shell's autostart entry).  The
+# dangerous shape is a build that writes a persistence path on the *live*
+# system (no `$pkgdir`): the file lands outside the package, survives
+# removal, and is not covered by any checksum.
+#
+# The `$pkgdir` exclusion is the `(?<!...})` before the path anchor: a
+# `$pkgdir` target is either unquoted (`$pkgdir/etc`, no anchor before the
+# path) or quoted such that the path follows a quote preceded by `}`
+# (`"${pkgdir}"/etc`).
+# A negative lookahead over the whole line expressed this too but tripped the
+# regex-safety audit, so the shipped rule never compiled.
+#
 # A *write*, not a mention.  The path alone matched
 # `if [[ -f /etc/profile.d/cuda.sh ]]`, which tests for a file rather than
 # planting one - and a rule that reads "persistence unit installed" must not
 # fire on a package checking whether one exists.
-pattern = '(?:\\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\\b|>)[^;&|\\n]*?(?:[\\s"\\x27]|\\$\\{?pkgdir\\}?)(?:(?:/etc/(?:cron\\.[a-z]+|cron\\.d|systemd/(?:system|user)|profile\\.d|bash\\.bashrc\\.d|zsh(?:/zshrc\\.d|rc\\.d)|X11/(?:Xsession|xinit/xinitrc)\\.d|xdg/autostart|dbus-1/(?:system|session)\\.d|sudoers\\.d|ld\\.so\\.conf\\.d|pam\\.d|security/pam_\\w+\\.conf|NetworkManager/dispatcher\\.d|xinetd\\.d|(?:init|rc)\\.d|logrotate\\.d|tmpfiles\\.d|sysusers\\.d|binfmt\\.d|sysctl\\.d|environment\\.d|polkit-1/(?:rules|actions)\\.d|polkit-1/(?:rules|actions)|skel|update-motd\\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\\.local|profile|bash\\.bashrc|ld\\.so\\.preload|environment|csh\\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\\w./-]))'
+pattern = '(?:\\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\\b|>)[^;&|\\n]*?(?<!\\})[\\s"\\x27](?:(?:/etc/(?:cron\\.[a-z]+|cron\\.d|systemd/(?:system|user)|profile\\.d|bash\\.bashrc\\.d|zsh(?:/zshrc\\.d|rc\\.d)|X11/(?:Xsession|xinit/xinitrc)\\.d|xdg/autostart|dbus-1/(?:system|session)\\.d|sudoers\\.d|ld\\.so\\.conf\\.d|pam\\.d|security/pam_\\w+\\.conf|NetworkManager/dispatcher\\.d|xinetd\\.d|(?:init|rc)\\.d|logrotate\\.d|tmpfiles\\.d|sysusers\\.d|binfmt\\.d|sysctl\\.d|environment\\.d|polkit-1/(?:rules|actions)\\.d|polkit-1/(?:rules|actions)|skel|update-motd\\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\\.local|profile|bash\\.bashrc|ld\\.so\\.preload|environment|csh\\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\\w./-]))'
 severity = "HIGH"
 category = "persistence"
 match_target = "raw_line"
@@ -583,6 +610,10 @@ domains = [
     "bitbucket.org",
     "sourceforge.net",
     "freedesktop.org",
+    # Fedora's community build service: user-produced builds and SRPMs,
+    # the same trust model as the forges above.  Classifying it `unknown`
+    # fired C005 on packages pulling a build straight from Copr.
+    "copr.fedorainfracloud.org",
 ]
 
 [official_projects]

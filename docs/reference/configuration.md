@@ -23,11 +23,11 @@ TOML file at `~/.config/trustsight/config.toml`.
 
 ### `[severity_weights]`
 
-Map each severity level to its numeric contribution to the base score. FATAL rules short-circuit to score 100 regardless of weight.
+Map each severity level to its numeric contribution to the base score. FATAL findings contribute their declared weight (0 by default) like any other finding; the FATAL signal is carried by the verdict label and the unsuppressible entry in `score_breakdown`, not by the number.
 
 | Key | Type | Default | Effect |
 |-----|------|---------|--------|
-| `FATAL` | int | `0` | Hard-stop score at 100; weight not used. |
+| `FATAL` | int | `0` | FATAL's weight. The signal itself rides the verdict label (`Low (FATAL: R012)`) and the unsuppressible `score_breakdown` entry; overrides cannot remove it. |
 | `CRITICAL` | int | `40` | Added to score for each CRITICAL rule fired. |
 | `HIGH` | int | `25` | Added to score for each HIGH rule fired. |
 | `MEDIUM` | int | `15` | Added to score for each MEDIUM rule fired. |
@@ -66,7 +66,7 @@ the selected policy too.
 
 | Profile | Default threshold | Intended use |
 |---------|-------------------|--------------|
-| `default` | `20` | Historical behavior; about 9.6% of locked benign-corpus diffs enter the review queue. |
+| `default` | `20` | Historical behavior; about 7.8% of locked benign-corpus diffs enter the review queue. |
 | `quiet` | `40` | Smaller queue; it does not claim the same labelled-fixture coverage as `default`. |
 | `strict` | `10` | Broader queue for operators who prefer sensitivity over review volume. |
 
@@ -145,8 +145,9 @@ weight_override = 15
 
 `enabled` and `weight_override` apply only to rules defined in `rules.toml`,
 which since the R/H split means every `R` id and only those. They only have an
-effective scoring use for non-FATAL rules: a FATAL rule cannot be disabled and
-always hard-stops the score at 100.
+effective scoring use for non-FATAL rules: a FATAL rule cannot be disabled, and
+its signal rides the verdict label and the unsuppressible `score_breakdown`
+entry rather than the score, so an override changes nothing visible.
 
 An `H` rule is a heuristic emitted from an analysis module and has no TOML
 definition, so a `[rules.H###]` block does nothing. That is what the prefix is

@@ -4,7 +4,8 @@
 
 These rules target the reviewer, not the shell. R012 and R013 are the two
 FATAL rules: reviewer-directed template text, and codepoints that make displayed
-text differ from executed text. Both hard-stop the score at 100. Neither
+text differ from executed text. Both contribute weight 0 and name themselves in
+the verdict label (`Low (FATAL: R012)`). Neither
 establishes an author's intent: R012 is a high-severity template tripwire for
 reviewer manipulation, while R013 identifies a concrete display/execution
 deception mechanism. When neither fires, nothing has been established.
@@ -34,16 +35,16 @@ severity weights and the reserved identifier ranges.
 ### R012: LLM Prompt Injection {#r012}
 
 - **Target:** `resolved`
-- **Severity:** FATAL (hard-stop at 100, weight 0)
+- **Severity:** FATAL (weight 0; names itself in the verdict label, e.g. `Low (FATAL: R012)`)
 - **Category:** `injection`
-- **Pattern:** `\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\b|^[^\S\n]*(?:#[^\S\n]*)?(?:system|assistant)[^\S\n]*:[^\S\n]*\S|</?(?:system|instructions?|admin|prompt|assistant)\s*>|\byou\s+are\s+(?:an?|the)\s+[^.\n]{0,48}?(?:model|assistant|ai\b)|\bnew\s+instructions?\s*:|\bdo(?:\s+not|n['’]t)\s+(?:flag|warn|analy[sz]e|review|scan)\b|\bdo(?:\s+not|n['’]t)\s+report\s+(?:any\s+|the\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\b|\b(?:mark|classify|report|treat|label|approve)\b[^.\n]{0,24}?\bas\s+(?:safe|benign|clean|harmless|trusted|ok)\b|\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\s+assistant)\b[^.\n]{0,60}?\b(?:ignore|approve|skip|overlook|flag)\b`
+- **Pattern:** `\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\b|^[^\S\n]*(?:#[^\S\n]*)?(?:system|assistant)[^\S\n]*:[^\S\n]*\S|</?(?:system|instructions?|admin|prompt|assistant)\s*>|\byou\s+are\s+(?:an?|the)\s+[^.\n]{0,48}?(?:model|assistant|ai\b)|\bnew\s+instructions?\s*:|\bdo(?:\s+not|n['’]t)\s+(?:flag|warn|analy[sz]e|review|scan)\b|\bdo(?:\s+not|n['’]t)\s+report\s+(?:any\s+|the\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\b|\b(?:mark|classify|report|treat|label|approve)\b[^.\n]{0,24}?\bas\s+(?:safe|benign|clean|harmless|trusted|ok)\b|\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\s+assistant)\b[^.\n]{0,60}?\b(?:ignore|approve|skip|overlook|flag)\s+(?:this|that|the|these|those|all|any|it|them|above|previous|prior|suspicious|following|everything|anything)\b`
 - **Comments:** scanned (`include_comments`)
-- **Description:** Detects template-shaped text addressed to whoever *reads* the PKGBUILD rather than to the shell that runs it: instruction overrides ("ignore the previous instructions"), role markers (`system:`, `assistant:`), tag-like injections (`<system>`, `<instructions>`), personas ("you are a helpful model..."), suppression orders ("do not flag/warn/analyze") and pre-declared verdicts ("mark this as safe"). Comment lines are scanned, unlike every rule that describes what the shell executes, because this is reviewer-facing text. Calibrated at 22/22 labelled injection fixtures with 0 fires across the historical 3,739-diff benign corpus. This is a **reviewer-directed template tripwire**, not proof of an author's intent or a general prompt-injection detector: a match requires reviewer scrutiny, and a non-match establishes nothing. Score hard-stops at 100 regardless of other signals.
+- **Description:** Detects template-shaped text addressed to whoever *reads* the PKGBUILD rather than to the shell that runs it: instruction overrides ("ignore the previous instructions"), role markers (`system:`, `assistant:`), tag-like injections (`<system>`, `<instructions>`), personas ("you are a helpful model..."), suppression orders ("do not flag/warn/analyze") and pre-declared verdicts ("mark this as safe"). Comment lines are scanned, unlike every rule that describes what the shell executes, because this is reviewer-facing text. Calibrated at 22/22 labelled injection fixtures with 0 fires across the historical 3,739-diff benign corpus. This is a **reviewer-directed template tripwire**, not proof of an author's intent or a general prompt-injection detector: a match requires reviewer scrutiny, and a non-match establishes nothing. The finding contributes weight 0; its signal is the unsuppressible FATAL entry in `score_breakdown` and the FATAL name in the verdict label.
 
 ### R013: Unicode Bidi Override {#r013}
 
 - **Target:** `raw_line`
-- **Severity:** FATAL (hard-stop at 100, weight 0)
+- **Severity:** FATAL (weight 0; names itself in the verdict label, e.g. `Low (FATAL: R012)`)
 - **Category:** `unicode`
 - **Pattern:** `[\u202A-\u202E\u2066-\u2069\u2060-\u2064\U000E0000-\U000E007F]|(?<![^\x00-\x7F])[\u200B-\u200F\uFEFF](?![^\x00-\x7F])`
 - **Description:** Detects directionality overrides, isolates, invisible operators, tag characters, and zero-width joiners placed between ASCII neighbours. These codepoints can make displayed text differ from executed text. The ASCII-neighbour restriction preserves attacks hidden inside ASCII commands or URLs while dropping legitimate use in localized `GenericName[...]` lines.
@@ -54,7 +55,7 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 
 **Fires only between ASCII neighbours**: zero-width and directional characters (U+200B-U+200F, U+FEFF). U+200B-U+200D are *mandatory* joiners in Malayalam, Lao, Devanagari and other scripts: a localized `GenericName[ml]=` line in a browser package legitimately contains U+200D. Because R013 is FATAL, firing on one scored an entirely benign package 100/100. Two packages in the benign corpus (`brave-origin-bin`, `zen-browser-bin`) did exactly this. Requiring ASCII on both sides preserves the attack (a joiner hidden inside an ASCII command or URL, such as `https://evil.com<U+200D>/pkg.tar.gz`) while dropping the false positive.
 
-- **Note:** Score hard-stops at 100 regardless of other signals. The previous pattern omitted U+200E/U+200F, U+2060-U+2064 and the tag block, which is where the documented recall gap came from; `unicode.py` already listed them.
+- **Note:** Contributes weight 0; the FATAL signal rides the unsuppressible `score_breakdown` entry and the FATAL name in the verdict label. The previous pattern omitted U+200E/U+200F, U+2060-U+2064 and the tag block, which is where the documented recall gap came from; `unicode.py` already listed them.
 
 ### H012: Strace detection attempt (TracerPid check) {#h012}
 

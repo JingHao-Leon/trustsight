@@ -228,10 +228,13 @@ _VCS_SOURCE_RE = re.compile(
     r"\b(?:git|hg|svn|bzr|fossil)\+(?P<url>[^\s'\"()]+)", re.IGNORECASE
 )
 
-#: A fragment that names an immutable object.  Everything else - `#branch=`,
-#: `#tag=`, or no fragment at all - resolves at build time.
-_PINNED_FRAGMENT_RE = re.compile(
-    r"#(?:commit|revision)=(?P<rev>[0-9a-f]{7,40}|\$\{?[A-Za-z_]\w*\}?)",
+#: A fragment that declares which object to fetch: an immutable commit
+#: (`#commit=`/`#revision=`) or a tag (`#tag=`).  Both are *declared* pins -
+#: reported as P005 and P006 - so neither is an absence of one.  `#branch=`
+#: and a bare `git+url` are what P008 is for.
+_DECLARED_PIN_RE = re.compile(
+    r"#(?:commit|revision)=(?:[0-9a-f]{7,40}|\$\{?[A-Za-z_]\w*\}?)"
+    r"|#tag=(?:[^\s'\"()&]+)",
     re.IGNORECASE,
 )
 
@@ -240,18 +243,20 @@ def unpinned_source_refs(text: str) -> list[str]:
     """VCS source entries whose content is chosen after this analysis.
 
     ``git+https://example/x.git#commit=<sha>`` names one immutable tree, and
-    changing it changes the diff.  ``#branch=main``, ``#tag=v1`` and a bare
-    ``git+url`` do not: makepkg resolves them when the package is built, so
-    what gets compiled and run is whatever upstream publishes at that
-    moment.  Two builds of the identical recipe can execute different code
-    and neither the recipe nor its diff records that.
+    changing it changes the diff; ``#tag=v1`` names a tag, which is reported
+    as P006.  ``#branch=main`` and a bare ``git+url`` declare no such pin:
+    makepkg resolves them when the package is built, so what gets compiled
+    and run is whatever upstream publishes at that moment.  Two builds of the
+    identical recipe can execute different code and neither the recipe nor
+    its diff records that.
 
     H033 already reports the *transition* - a commit pin replaced by a
     movable ref is an edit, and an edit is evidence.  It cannot report the
     steady state, because a package that has always tracked a branch never
-    edits anything, and that is the case this gap covers.  A tag is included
-    deliberately: a tag is a name upstream can repoint, which is H033's own
-    stated reasoning.
+    edits anything, and that is the case this gap covers.  A tag is *not*
+    included: a tag is a declared pin with its own line (P006), so listing it
+    here would call a pinned source unpinned - the reason text below says
+    "branch or unpinned ref", and a tag is neither.
 
     Reported as P008, a declared-practice fact at weight 0, not as a
     coverage gap: the statement is true of every VCS package by design, and
@@ -273,7 +278,7 @@ def unpinned_source_refs(text: str) -> list[str]:
             continue
         for match in _VCS_SOURCE_RE.finditer(body):
             entry = match.group(0)
-            if _PINNED_FRAGMENT_RE.search(entry):
+            if _DECLARED_PIN_RE.search(entry):
                 continue
             if entry not in found:
                 found.append(entry[:120])
@@ -532,6 +537,28 @@ def resolution_coverage(resolved, unresolved, triggered_rules,
     }
 
 
+def _function_local_rows(rows, recipe) -> list[dict]:
+    """Rows naming a ``local``/``declare`` assignment inside a function body.
+
+    Function locals are ordinary build machinery (``local kernver="$(make
+    kernelrelease)"``): they stay in ``recipe.unresolved`` - a rule must
+    still treat the name as "not seen" - but they are not a coverage
+    boundary the reader can act on, so the report surface drops them.
+    """
+    function_lines = {
+        raw.strip()
+        for body in recipe.functions.values()
+        for raw in split_lines(body)
+    }
+    return [
+        row for row in rows
+        if not (
+            row["line"].startswith(("local ", "declare "))
+            and row["line"] in function_lines
+        )
+    ]
+
+
 def unresolved_assignment_rows(
     text: str, file: str = "", origins=None, extra_lines=None
 ) -> list[dict]:
@@ -543,14 +570,17 @@ def unresolved_assignment_rows(
     time is kept as a literal line by the tokenizer but is still a value
     the analysis never sees); duplicates are dropped.  Additive: the value
     is still "not seen" to every rule, and this only names the boundary.
+    ``local``/``declare`` assignments inside function bodies are excluded:
+    build-local machinery, not a boundary the reader can act on.
     """
     from .recipedoc import _ASSIGNMENT_SHAPE_RE, parse_recipe
 
-    rows = [
-        a.to_dict()
-        for a in parse_recipe(text, file=file, origins=origins)
-        .unresolved_assignments
-    ] if text else []
+    rows = []
+    recipe = None
+    if text:
+        recipe = parse_recipe(text, file=file, origins=origins)
+        rows = [a.to_dict() for a in recipe.unresolved_assignments]
+        rows = _function_local_rows(rows, recipe)
     seen = {row["line"] for row in rows}
     for line in extra_lines or ():
         key = str(line).strip()[:200]

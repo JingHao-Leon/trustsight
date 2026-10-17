@@ -1,12 +1,77 @@
 import tomllib
 
 from trustsight.config import (
+    GETENT_ENUMERATION_FRAGMENT,
     configured_baseline_tag,
     ensure_default_configs,
     load_config,
     load_domains,
+    load_patterns,
     load_rules,
 )
+
+
+def _cfg_dirs(tmp_path, monkeypatch):
+    cfg_dir = tmp_path / ".config" / "trustsight"
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr(
+        "trustsight.config.DATA_DIR", tmp_path / ".local" / "share" / "trustsight")
+    monkeypatch.setattr(
+        "trustsight.config.CACHE_DIR", tmp_path / ".cache" / "trustsight")
+    return cfg_dir
+
+
+def test_refresh_legacy_recon_commands_repairs_the_old_getent_fragment(
+        tmp_path, monkeypatch):
+    """Installs that predate the getent narrowing carry the old fragment in
+    patterns.toml forever (the file is written once, never synced); the
+    repair swaps the one line in place and leaves user edits alone."""
+    import trustsight.config as config_module
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "patterns.toml"
+    new_line = "    \"" + GETENT_ENUMERATION_FRAGMENT.replace("\\", "\\\\") + "\",\n"
+    old_line = "    \"(?:\\\\A\\\\s*|[;&|]\\\\s*)getent\\\\b\",\n"
+    text = path.read_text()
+    assert new_line in text
+    path.write_text(text.replace(new_line, old_line))
+    config_module._toml_cache.pop("patterns.toml", None)
+
+    assert config_module._refresh_legacy_recon_commands() is True
+    assert old_line not in path.read_text()
+    assert "getent" in path.read_text()
+    # The cache is invalidated so the next load sees the repair.
+    assert any(
+        "getent\\s+" in frag
+        for frag in load_patterns()["patterns"]["recon_commands"]
+    )
+    # A second run is a no-op.
+    assert config_module._refresh_legacy_recon_commands() is False
+
+
+def test_refresh_legacy_recon_commands_preserves_custom_probes(
+        tmp_path, monkeypatch):
+    import trustsight.config as config_module
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "patterns.toml"
+    text = path.read_text()
+    new_line = "    \"" + GETENT_ENUMERATION_FRAGMENT.replace("\\", "\\\\") + "\",\n"
+    old_line = "    \"(?:\\\\A\\\\s*|[;&|]\\\\s*)getent\\\\b\",\n"
+    text = text.replace(new_line, old_line)
+    # A user-added probe alongside the stale fragment: the repair swaps
+    # only the shipped line and keeps the customisation.
+    text = text.replace(
+        "recon_commands = [\n",
+        "recon_commands = [\n    \"custom-probe\",\n", 1)
+    path.write_text(text)
+    config_module._toml_cache.pop("patterns.toml", None)
+    assert config_module._refresh_legacy_recon_commands() is True
+    repaired = path.read_text()
+    assert "custom-probe" in repaired
+    assert old_line not in repaired
 
 
 def test_load_config_creates_default(tmp_path, monkeypatch):
@@ -635,7 +700,11 @@ def test_the_legacy_r012_pattern_is_upgradable(tmp_path, monkeypatch):
 
     monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
     config._toml_cache.clear()
-    legacy = next(iter(config.LEGACY_RULE_PATTERNS["R012"]))
+    # The pre-2026-08-03 one-phrasing pattern; deterministic pick (the
+    # set also holds the pre-2026-10-16 eight-alternative pattern,
+    # which contains quotes and cannot sit in a TOML literal string).
+    legacy = next(p for p in config.LEGACY_RULE_PATTERNS["R012"]
+                  if "claude" not in p)
     (tmp_path / "rules.toml").write_text(
         '[[rules]]\nid = "R012"\nname = "LLM Prompt Injection"\n'
         f"pattern = '{legacy}'\n"
@@ -651,6 +720,30 @@ def test_the_legacy_r012_pattern_is_upgradable(tmp_path, monkeypatch):
     assert rule["include_comments"] is True
     assert "do not" not in rule["pattern"]  # escaped form, not prose
     assert "assistant" in rule["pattern"]
+
+
+def test_the_2026_10_16_legacy_r012_pattern_is_upgradable(tmp_path, monkeypatch):
+    """An install carrying the object-less alternative 8 must catch up too."""
+    import json
+    import trustsight.config as config
+
+    monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+    config._toml_cache.clear()
+    legacy = next(p for p in config.LEGACY_RULE_PATTERNS["R012"]
+                  if "claude" in p)
+    (tmp_path / "rules.toml").write_text(
+        '[[rules]]\nid = "R012"\nname = "LLM Prompt Injection"\n'
+        f"pattern = {json.dumps(legacy)}\n"
+        'severity = "FATAL"\ncategory = "injection"\nmatch_target = "resolved"\n'
+    )
+
+    assert "R012" in config.outdated_shipped_rules()
+    _, updated = config.sync_rules(update_outdated=True)
+    config._toml_cache.clear()
+
+    assert "R012" in updated
+    rule = [r for r in config.load_rules() if r["id"] == "R012"][0]
+    assert "this|that|the" in rule["pattern"]  # the object requirement
 
 
 # --- the test fixture must not describe a config the tool does not ship ----

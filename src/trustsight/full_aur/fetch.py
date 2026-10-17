@@ -227,7 +227,9 @@ def _pkgbuild_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
     return raw.decode("utf-8", errors="replace")
 
 
-def _install_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
+def _install_from_tarfile(
+    tf: tarfile.TarFile, name: str,
+) -> Optional[tuple[str, str]]:
     """The first top-level ``*.install`` scriptlet in the snapshot, or None.
 
     The corpus path must scan the install scriptlet: an unconditional fetch
@@ -235,6 +237,13 @@ def _install_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
     and that is where a trojanised repackage hides its payload (the
     ``yyay`` shape).  A snapshot holds at most one install file; the first
     ``*.install`` member is read under the same member cap as the PKGBUILD.
+
+    Returns ``(text, basename)``.  The name matters: the synthesized diff
+    hunk is headed ``+++ b/<name>``, and a wrong name both mislabels R007's
+    evidence and makes C024 compare the shipped file against ``install=``
+    under a name the recipe never uses (monsoon-git ships ``monsoon.install``;
+    naming the hunk after the package produced a permanent "install= names
+    monsoon.install, not it").
     """
     for seen, member in enumerate(tf):
         if seen >= MAX_TAR_MEMBERS:
@@ -251,7 +260,8 @@ def _install_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
             except ReadTooLarge:
                 log.warning("install member of %s refused by the read cap", name)
                 return None
-            return raw.decode("utf-8", errors="replace")
+            return raw.decode("utf-8", errors="replace"), \
+                member.name.rsplit("/", 1)[-1]
     return None
 
 
@@ -309,10 +319,11 @@ def fetch_pkgbuild_with_tree(
     name: str,
 ) -> tuple[
     Optional[str], Optional[list[tuple[str, bytes]]], Optional[dict], bool,
-    Optional[str],
+    Optional[str], Optional[str],
 ]:
     """PKGBUILD text, the tree manifest, an H070 finding, a refusal flag,
-    and the ``.install`` scriptlet text (or None).
+    the ``.install`` scriptlet text (or None), and that scriptlet's real
+    basename (or None).
 
     Downloads the AUR snapshot tarball directly so the corpus path sees the
     same committed file tree the git path does (H066-tree).  The tarball is
@@ -347,8 +358,12 @@ def fetch_pkgbuild_with_tree(
                     # PKGBUILD has already consumed this one.
                     with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf2:
                         install = _install_from_tarfile(tf2, name)
+                    if install is not None:
+                        install_text, install_name = install
+                    else:
+                        install_text, install_name = None, None
                     return (pkgbuild, manifest, check_archive_trailer(body),
-                            False, install)
+                            False, install_text, install_name)
         except ReadTooLarge as e:
             # Not benign, and not silent: warning level, and the flag rides
             # out to the result so the analysis cannot read as complete.
@@ -360,7 +375,7 @@ def fetch_pkgbuild_with_tree(
             # bootstrap of tens of thousands of packages does not spam the
             # progress bar with one line per VCS/-bin package.
             log.debug("snapshot tarball for %s unusable: %s", name, e)
-    return fetch_pkgbuild(name), None, None, refused, None
+    return fetch_pkgbuild(name), None, None, refused, None, None
 
 
 def default_resume_path() -> Path:

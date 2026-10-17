@@ -580,6 +580,14 @@ def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
             z = (len(members) - mean) / max(mean, 1.0)
         if z < z_score:
             continue
+        # A bulk packager bumping their own sibling packages in lockstep
+        # (linux-lts510, -docs, -headers, ...) is one logical update spread
+        # over a naming family, not a deviation from the maintainer's
+        # baseline - the same shape G003 already stands down for.  Only a
+        # surge spanning *unrelated* packages is the xz-style signal.
+        from ..analysis.correlation import _one_related_cluster
+        if len(members) > 1 and _one_related_cluster(members):
+            continue
         out.append(_cluster(
             "H058",
             "Maintainer Baseline Deviation",
@@ -788,12 +796,24 @@ def run_cycle_instances(snapshot: HistorySnapshot) -> list[dict]:
 
 
 def source_repos_from_pkgbuild(pkgbuild_text: str | None) -> set[str]:
-    """Normalized upstream URLs declared by a full PKGBUILD text."""
+    """Normalized upstream URLs declared by a full PKGBUILD text.
+
+    Variables are resolved first: the raw spelling left ``$_name`` literal
+    in the URL, so a package pulling its sdist by a declared variable
+    (python-ten-vad-bin: ``${_name}-$pkgver.tar.gz``) had its repo path
+    tokenized as ``$_name`` - which shares no token with anything and fired
+    H059 on a name the resolved URL matches.
+    """
     from ..differ import extract_source_array_urls
+    from ..expansion import resolve_text, text_variable_table
 
     if not pkgbuild_text:
         return set()
-    wrapped = "\n".join(" " + line for line in pkgbuild_text.splitlines())
+    table = text_variable_table(pkgbuild_text)
+    wrapped = "\n".join(
+        " " + resolve_text(line, table)
+        for line in pkgbuild_text.splitlines()
+    )
     return {normalize_url(url) for url in extract_source_array_urls(wrapped, side="after")}
 
 

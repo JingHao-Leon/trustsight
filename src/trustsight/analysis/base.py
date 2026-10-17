@@ -131,16 +131,39 @@ def _url_domain(url: str) -> str:
     return canonical_host(urlparse(url).netloc)
 
 
+#: A VCS source, by its local name.  ``urls_from_pkgbuild_text`` keeps the
+#: ``.git`` (it drops only the ``git+`` scheme), so the suffix identifies it.
+_VCS_URL_RE = re.compile(r"\.git(?:[#?]|$)", re.IGNORECASE)
+
+
 def _aggregate_pinning(
-    diff_text: str, added_urls: list[str], checksum_behavior: str = ""
+    diff_text: str,
+    added_urls: list[str],
+    checksum_behavior: str = "",
+    declared_urls=None,
 ) -> str:
+    """The weakest pin among the recipe's sources.
+
+    *declared_urls* is the post-diff ``source=()`` set (resolved); when given
+    it replaces *added_urls*, because a pin is a property of what the recipe
+    now declares, not only of what this diff touched.  A source whose URL is
+    unchanged - a tag-pinned ``git+`` source, typically - otherwise never had
+    its pin read at all.
+
+    A VCS source is never checksum-pinned: makepkg fetches it at build time
+    and its checksum is ``SKIP``, so applying the recipe's checksum to it made
+    a tag pin read as a checksum pin.
+    """
     has_checksum = (
         _has_checksum_in_post_diff(diff_text)
         and checksum_behavior not in _NO_CHECKSUM_BEHAVIORS
     )
+    urls = sorted(declared_urls) if declared_urls else added_urls
     levels = [
-        classify_pinning_level(url, checksum_present=has_checksum)
-        for url in added_urls
+        classify_pinning_level(
+            url, checksum_present=has_checksum and not _VCS_URL_RE.search(url)
+        )
+        for url in urls
     ]
     if not levels:
         return "unpinned"

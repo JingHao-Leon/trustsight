@@ -168,6 +168,12 @@ _INDIRECT_VALUE_RE = re.compile(
 )
 
 X024_RE = re.compile(
+    # Left boundary: the name must not be the tail of a longer word.
+    # `CGO_CFLAGS` (underscore prefix) and `EXTRA_PATH` must still match,
+    # but `unix:path=$runtime` inside a DBus address value is the string
+    # 'path=', not the PATH assignment this rule hunts - the previous
+    # boundary-less form fired on every `env unix:path=$x` payload.
+    r"(?<![a-z0-9:])"
     r"(?:" + _SENSITIVE_VAR_RE.pattern + r")"
     r"(?:\s*[\"'\(]*\s*)"  # optional quotes/parens between = and value
     r"(?:" + _INDIRECT_VALUE_RE.pattern + r")",

@@ -630,6 +630,23 @@ def test_h058_immature_history_is_quiet(thresholds):
     assert _fire("H058", new, old, maintainer_history=history) == []
 
 
+def test_h058_lockstep_sibling_bump_is_not_a_deviation(thresholds):
+    """The in-window H058 fires were almost all one maintainer bumping a
+    naming family in lockstep (kernel -docs/-headers splits, bettbox x6):
+    one logical update, not an xz-style surge onto unrelated packages."""
+    thresholds({"h058": {"min_history_cycles": 3, "z_score": 2.0, "min_activity": 2}})
+    siblings = ["linux-lts510", "linux-lts510-docs", "linux-lts510-headers",
+                "linux-lts612", "linux-lts612-docs", "linux-lts612-headers"]
+    old = _snapshot(siblings, "alice")
+    new = copy.deepcopy(old)
+    for name in siblings:
+        new[name]["LastModified"] = NOW + 1
+    history = [{"maintainer": "alice", "cycle_time": 1, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 2, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 3, "activity": 1}]
+    assert _fire("H058", new, old, maintainer_history=history) == []
+
+
 # --- H059 name/repo divergence -------------------------------------------------
 
 
@@ -642,6 +659,25 @@ def test_h059_fires_on_name_repo_divergence(thresholds):
                      source_repos={"chrome-helper": {"https://evil.example/malware"}})
     assert len(findings) == 1
     assert findings[0]["severity"] == "MEDIUM"
+
+
+def test_h059_resolves_variables_in_the_source_url(thresholds):
+    """python-ten-vad-bin: `source=(\".../${_name}-$pkgver.tar.gz\")` left
+    `$_name` literal in the repo tokens, so the name shared no token with
+    its own sdist URL and H059 fired on a matching package."""
+    thresholds({})
+    old = _snapshot(["base"], "alice")
+    new = copy.deepcopy(old)
+    new["python-ten-vad-bin"] = _snapshot(
+        ["python-ten-vad-bin"], "alice")["python-ten-vad-bin"]
+    text = (
+        "_name=ten_vad\n"
+        "source=(\"https://files.pythonhosted.org/packages/source/"
+        "${_name::1}/$_name/$_name-$pkgver.tar.gz\")\n"
+    )
+    repos = source_repos_from_pkgbuild(text)
+    assert _fire("H059", new, old,
+                 source_repos={"python-ten-vad-bin": repos}) == []
 
 
 def test_h059_matching_repo_is_quiet(thresholds):

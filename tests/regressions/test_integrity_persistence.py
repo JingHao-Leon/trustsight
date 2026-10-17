@@ -152,7 +152,7 @@ def test_the_autostart_surface_is_a_persistence_plant():
     for path in ("etc/xdg/autostart/e.desktop", "usr/lib/systemd/user/e.service",
                  "etc/profile.d/e.sh", "etc/sudoers.d/e",
                  "etc/X11/Xsession.d/99e", "etc/dbus-1/system.d/e.conf"):
-        fired = _shipped_ids([f'  install -Dm644 e "$pkgdir/{path}"'],
+        fired = _shipped_ids([f'  install -Dm644 e "/{path}"'],
                              declared=False, fn="package")
         assert "R054" in fired, path
 
@@ -404,39 +404,63 @@ def test_ld_so_conf_d_is_a_persistence_plant():
     zero of the 3,739 benign diffs.
     """
     assert "R054" in _shipped_ids(
-        ['  install -Dm644 e.conf "$pkgdir/etc/ld.so.conf.d/e.conf"'],
+        ['  install -Dm644 e.conf "/etc/ld.so.conf.d/e.conf"'],
         declared=False, fn="package",
     )
     # `tmpfiles.d` creates files at boot rather than loading code, and
     # ordinary packages ship it.
     assert "R054" not in _shipped_ids(
-        ['  install -Dm644 e.conf "$pkgdir/usr/lib/tmpfiles.d/e.conf"'],
+        ['  install -Dm644 e.conf "/usr/lib/tmpfiles.d/e.conf"'],
         declared=False, fn="package",
     )
 
 
 def test_r054_staging_a_committed_unit_is_not_a_persistence_plant():
     """et-rs-bin: `install -Dm644 systemctl/et.service "$pkgdir/..."` ships
-    the package's own committed unit file.  R054 claims a unit dropped from
-    somewhere the reader cannot see, and the committed file *is* read."""
+    the package's own unit, inside the package root.  R054 is "outside
+    package root", so a `$pkgdir` target never fires - committed, a heredoc,
+    or `/dev/stdin` alike."""
     manifest = [("PKGBUILD", b"x"), ("systemctl/et.service", b"[Unit]\n")]
-    line = ('  install -Dm644 systemctl/et.service '
-            '"$pkgdir/usr/lib/systemd/system/et.service"')
-    assert "R054" not in _shipped_ids(
-        [line], declared=False, fn="package", manifest=manifest,
-    )
-    # `/dev/stdin` and a source outside the tree keep firing.
-    for source in ("/dev/stdin", "other/x.service"):
-        assert "R054" in _shipped_ids(
+    for source in ("systemctl/et.service", "/dev/stdin", "other/x.service"):
+        assert "R054" not in _shipped_ids(
             [f'  install -Dm644 {source} '
              '"$pkgdir/usr/lib/systemd/system/x.service"'],
             declared=False, fn="package", manifest=manifest,
         ), source
-    # A heredoc body is content the recipe creates, not a committed file.
-    assert "R054" in _shipped_ids(
+    # A heredoc body staged into $pkgdir is still inside the package root.
+    assert "R054" not in _shipped_ids(
         ["  install -Dm644 /dev/stdin "
          "\"$pkgdir/usr/lib/systemd/system/x.service\" <<'EOF'"],
         declared=False, fn="package", manifest=manifest,
+    )
+    # A write to the *live* persistence path is outside the package root.
+    assert "R054" in _shipped_ids(
+        ['  install -Dm644 /dev/stdin "/usr/lib/systemd/system/x.service"'],
+        declared=False, fn="package", manifest=manifest,
+    )
+
+
+def test_r054_in_place_filter_rewrite_is_not_a_persistence_plant():
+    """bioma-shell: a removal hook reads a surface file, drops only the lines
+    the package itself inserted under its marker, and writes the file back
+    through a temp round-trip (`awk ... /etc/pam.d/greetd > "$tmp" && cat
+    "$tmp" > /etc/pam.d/greetd`).  That is symmetric cleanup, not planting.
+    Copying the filtered content onto a *different* surface file keeps the
+    finding, as does any plain write."""
+    manifest = [("PKGBUILD", b"x")]
+    assert "R054" not in _shipped_ids(
+        ['  cat /etc/pam.d/greetd > "$tmp" && cat "$tmp" > /etc/pam.d/greetd'],
+        declared=False, fn="post_remove", manifest=manifest,
+    )
+    # Same idiom onto a different target file: still a write to the surface.
+    assert "R054" in _shipped_ids(
+        ['  cat /etc/pam.d/greetd > "$tmp" && cat "$tmp" > /etc/pam.d/other'],
+        declared=False, fn="post_remove", manifest=manifest,
+    )
+    # No read-back round-trip: a direct write still fires.
+    assert "R054" in _shipped_ids(
+        ['  cat "$tmp" > /etc/pam.d/greetd'],
+        declared=False, fn="post_remove", manifest=manifest,
     )
 
 

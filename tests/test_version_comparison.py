@@ -134,6 +134,18 @@ def test_an_unresolved_pkgver_yields_nothing_rather_than_a_guess():
     assert full_version_from_pkgbuild("") == ""
 
 
+def test_a_variable_pkgver_is_resolved_from_the_recipe():
+    """``pkgver=${_pkgver//-/_}`` with ``_pkgver`` assigned is knowable."""
+    text = "_pkgver=13.9.0\npkgver=${_pkgver//-/_}\npkgrel=1\nepoch=2\n"
+    assert full_version_from_pkgbuild(text) == "2:13.9.0-1"
+
+
+def test_a_parameter_expansion_is_not_mangled_into_a_version():
+    """The single-regex reader turned ``${_pkgver//-/_}`` into garbage."""
+    text = "_pkgver=13.9.0\npkgver=${_pkgver//-/_}\n"
+    assert "$" not in full_version_from_pkgbuild(text)
+
+
 def test_a_pkgver_function_is_not_an_assignment():
     """``pkgver()`` declares nothing; reading it as a value would be a lie."""
     assert full_version_from_pkgbuild("pkgver() {\n  git describe\n}\n") == ""
@@ -403,6 +415,21 @@ def test_pkgver_variable_move_reads_the_post_diff_file():
     assert (old, new) == ("1.2.3", "1.2.4")
 
 
+def test_a_parameter_expansion_pkgver_move_is_resolved():
+    from trustsight.analysis.version import pkgver_move_in_diff
+
+    diff = (
+        "@@ -1,4 +1,4 @@\n"
+        "-_pkgver=13.8.0\n"
+        "+_pkgver=13.9.0\n"
+        " pkgver=${_pkgver//-/_}\n"
+        " pkgrel=1\n"
+    )
+    moved, old, new = pkgver_move_in_diff(diff)
+    assert moved is True
+    assert (old, new) == ("13.8.0", "13.9.0")
+
+
 def test_a_stable_pkgver_is_not_a_move():
     from trustsight.analysis.version import pkgver_move_in_diff
 
@@ -425,3 +452,20 @@ def test_any_version_scalar_moved_reads_values_not_tokens():
     assert any_version_scalar_moved("-epoch=0\n+epoch=1\n") is True
     # A no-op token that changes no value must not read as a move.
     assert any_version_scalar_moved("+epoch=0\n") is False
+
+
+def test_any_version_scalar_moved_reads_a_variable_pkgver_outside_the_hunk():
+    """The ``pkgver=`` line can sit outside every hunk when the change is in
+    the variable it references; the post-diff recipe names the reference."""
+    from trustsight.analysis.version import any_version_scalar_moved
+
+    diff = (
+        "@@ -1,3 +1,3 @@\n"
+        " _pkgname=firedragon\n"
+        "-_pkgver=13.6.0\n"
+        "+_pkgver=13.6.1\n"
+        " _branding=dr460nized\n"
+    )
+    post = "_pkgver=13.6.1\npkgver=${_pkgver//-/_}\npkgrel=1\n"
+    assert any_version_scalar_moved(diff) is False
+    assert any_version_scalar_moved(diff, post) is True

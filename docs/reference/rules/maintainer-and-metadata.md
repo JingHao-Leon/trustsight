@@ -167,7 +167,11 @@ at once, under a name the reviewers already trust. This is a prompt to look, not
 proof. A maintainer with a genuinely busy day, or one who legitimately adopted
 several packages at once, can trip it; adoption is reported on its own by
 [H074](#h074) and [H086](#h086) from the maintainer field, without needing a
-burst.
+burst. Bumping one project's own naming family in lockstep (a kernel's
+`-docs`/`-headers` splits, `foo`/`foo-bin`/`foo-qt` released together) is one
+logical update spread over several package names, not a deviation, so the
+rule stands down when every active package belongs to a single
+relatedness cluster.
 
 ### H074: Adopt-then-Modify {#h074}
 

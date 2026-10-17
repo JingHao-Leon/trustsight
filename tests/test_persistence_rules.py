@@ -248,6 +248,30 @@ def test_h040_ignores_mention_in_string():
     assert "H040" not in ids
 
 
+def test_h040_ignores_a_targeted_getent_lookup():
+    """`getent passwd <name>` before useradd is standard provisioning, not
+    host reconnaissance (crossmacromacro-git's install hook fired on it)."""
+    ids = rule_ids(structural(_diff(
+        "post_install() {\n  getent passwd crossmacro || useradd crossmacro\n}\n"
+    )))
+    assert "H040" not in ids
+
+
+def test_h040_fires_on_a_keyless_getent_dump():
+    """`getent <db>` with no key enumerates the database - the recon shape."""
+    ids = rule_ids(structural(_diff(
+        "build() {\n  getent passwd\n}\n"
+    )))
+    assert "H040" in ids
+
+
+def test_h040_fires_on_a_getent_dump_piped_away():
+    ids = rule_ids(structural(_diff(
+        "build() {\n  getent passwd | grep -q root\n}\n"
+    )))
+    assert "H040" in ids
+
+
 def test_h040_ignores_mention_in_comment():
     ids = rule_ids(structural(_diff(
         "build() {\n  # whoami is handy for debugging\n  make\n}\n"

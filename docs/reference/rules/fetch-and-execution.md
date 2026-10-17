@@ -172,16 +172,16 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `network`
-- **Pattern:** `https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`
-- **Description:** A source URL pointing at a bare IP address bypasses DNS and any domain reputation the bucket classifier could apply.
+- **Pattern:** `https?://(?!(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0))\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`
+- **Description:** A source URL pointing at a bare IP address bypasses DNS and any domain reputation the bucket classifier could apply. Loopback and private addresses are excluded: they distribute nothing, so a local URL a recipe only prints is not a source. A line that only prints text (`echo`/`printf`/`cat`) is excluded for the same reason.
 
 ### R047: Source URL Uses Non-Standard Port {#r047}
 
 - **Target:** `raw_line`
 - **Severity:** LOW (weight 5)
 - **Category:** `network`
-- **Pattern:** `https?://[^/\s:]+:(?!(?:80|443|8080|8443)(?:[/\s"\x27]|$))\d{2,5}`
-- **Description:** A source URL on a port other than 80, 443, 8080, or 8443. Unusual ports suggest a service that is not a conventional distribution host.
+- **Pattern:** `https?://(?!(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0))[^/\s:]+:(?!(?:80|443|8080|8443)(?:[/\s"\x27]|$))\d{2,5}`
+- **Description:** A source URL on a port other than 80, 443, 8080, or 8443. Unusual ports suggest a service that is not a conventional distribution host. Loopback and private addresses, and lines that only print text, are excluded, as for R046.
 
 ### R048: Source URL On Free Registrar TLD {#r048}
 

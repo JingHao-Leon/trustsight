@@ -109,6 +109,8 @@ def _dispatch(op: str, payload: object) -> object:
         return engine._joined_indexed(payload)
     if op == "resolve_added":
         return engine.resolve_added_lines(payload)
+    if op == "resolve_removed":
+        return engine.resolve_removed_lines(payload)
     if op == "indexed":
         resolved, unresolved, indices = engine.tokenize_and_resolve_indexed(payload)
         return [resolved, unresolved, indices]

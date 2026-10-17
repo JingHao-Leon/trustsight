@@ -11,14 +11,14 @@
   "calibration": {
     "labelled_fixtures": 205,
     "corpus_diffs": 3739,
-    "benign_zero_rate_pct": 67.9,
+    "benign_zero_rate_pct": 70.7,
     "benign_p95": 35,
     "malicious_p5": 60,
     "malicious_minimum": 50,
-    "benign_above_threshold_pct": 9.6,
-    "threshold_percentile": 90.4,
+    "benign_above_threshold_pct": 7.8,
+    "threshold_percentile": 92.2,
     "separation_margin": 25,
-    "ruleset_trigger_rate_pct": 35.5
+    "ruleset_trigger_rate_pct": 33.1
   },
   "doc_claims": {
     "README.md": [
@@ -32,7 +32,7 @@
     ],
     "docs/explanation/fire-rates.md": [
       "| benign 95th percentile | 35 |",
-      "| benign diffs scoring 0 | 67.9% |",
+      "| benign diffs scoring 0 | 68.0% |",
       "| benign diffs above the 20-point threshold | 9.6% |",
       "| percentile at which 20 sits | 90.4th |",
       "| malicious 5th percentile | 60 |",
@@ -42,28 +42,28 @@
     "docs/explanation/benchmarks-and-methodology.md": [
       "- **Benign** p95 = 35",
       "- Gap = +25 points",
-      "| Benign zero-rate | 67.9% |",
-      "| Ruleset trigger rate | 35.5% |",
+      "| Benign zero-rate | 68.0% |",
+      "| Ruleset trigger rate | 35.4% |",
       "| Benign flag rate | 9.6% |",
       "| Benign p95 | 35 |",
-      "The 67.9% zero-rate means 67.9% of benign diffs score 0, while **9.6% exceed the 20-point threshold**",
+      "The 68.0% zero-rate means 68.0% of benign diffs score 0, while **9.6% exceed the 20-point threshold**",
       "205 self-authored fixtures"
     ],
     "docs/tutorial/reading-a-report.md": [
-      "**67.9 % of diffs score 0**",
+      "**68.0 % of diffs score 0**",
       "benign packages score **35**",
       "5th percentile of **60** and a minimum of **50**",
       "sits at the 90.4th, so about **9.6 %**"
     ],
     "docs/guides/using-in-ci.md": [
       "| Benign | p95 (95th percentile) | **35** |",
-      "| Zero-rate (benign scored 0) | percentage | **67.9%** |",
+      "| Zero-rate (benign scored 0) | percentage | **68.0%** |",
       "the published figures separate the two tails by 25 points: benign p95 = 35, CRITICAL p5 = 60, measured on the locked 3,739-diff corpus"
     ],
     "docs/explanation/index.md": [
       "The benign p95 (95th percentile of benign package scores) is 35",
       "The 25-point gap between these two measured percentiles",
-      "**67.9% zero-rate** on the 3,739-diff locked corpus",
+      "**68.0% zero-rate** on the 3,739-diff locked corpus",
       "**benign p95 = 35**"
     ],
     "docs/security.md": [
@@ -71,7 +71,7 @@
     ],
     "docs/security/what-a-result-claims.md": [
       "| benign 95th percentile | 35 |",
-      "| benign diffs scoring 0 | 67.9% |",
+      "| benign diffs scoring 0 | 68.0% |",
       "| benign diffs above 20 | 9.6% |",
       "| percentile that 20 now sits at | 90.4th |",
       "| malicious 5th percentile | 60 |",
@@ -86,12 +86,12 @@
       "about 9.6 % of benign diffs enter the review queue"
     ],
     "docs/reference/rules/system.md": [
-      "| Benign zero-rate | 67.9 % |",
+      "| Benign zero-rate | 68.0 % |",
       "| Benign p95 | 35 |",
       "| CRITICAL p5 | 60 |"
     ],
     "docs/guides/tuning-false-positives.md": [
-      "zero-rate of **67.9%**",
+      "zero-rate of **68.0%**",
       "| Benign p95 | 35 |"
     ],
     "docs/explanation/cold-start-and-maturity.md": [

@@ -77,3 +77,44 @@ def test_r1_no_pointer_when_nothing_is_unresolved():
         "unresolved_lines": 0,
     })
     assert "x026_pointer" not in evaluate_fact(fact)["resolution_coverage"]
+
+
+def test_empty_arrays_are_not_reported_as_unresolved():
+    """``depends=()`` declares nothing: an empty array is a KNOWN value,
+    not a coverage boundary, and must not appear in the unresolved rows
+    or the W008 name list."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n"
+            " pkgname=ddnsto\n pkgver=1.2\n"
+            "+depends=()\n"
+            "+makedepends=()\n"
+            "+optdepends=()\n")
+    fact = scan_diff(diff, package_name="ddnsto")
+    assert fact.unresolved_assignments == []
+    assert "W008" not in {e.rule_id for e in fact.score_breakdown}
+
+
+def test_a_function_local_is_not_reported_as_unresolved():
+    """``local kernver="$(make kernelrelease)"`` inside build() is build
+    machinery: it stays "not seen" to rules, but it is not a boundary the
+    reader can act on, so neither the rows nor W008 name it."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,6 @@\n"
+            " pkgname=lts510\n pkgver=5.10\n"
+            "+build() {\n"
+            "+  local kernver=\"$(make kernelrelease)\"\n"
+            "+}\n")
+    fact = scan_diff(diff, package_name="lts510")
+    assert fact.unresolved_assignments == []
+    assert "W008" not in {e.rule_id for e in fact.score_breakdown}
+
+
+def test_an_array_collection_failure_stays_reportable():
+    """The deliberate choice: a mid-array shlex failure leaves the
+    contents statically UNKNOWN (unlike an empty array, a known value),
+    so the refusal is still surfaced rather than the array going
+    invisible."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n"
+            " pkgname=demo\n pkgver=1.0\n"
+            "+depends=('a \"unterminated)\n")
+    fact = scan_diff(diff, package_name="demo")
+    assert any(row["name"] == "depends"
+               for row in fact.unresolved_assignments)

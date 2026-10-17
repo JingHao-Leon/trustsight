@@ -210,6 +210,81 @@ def test_a_corpus_delta_has_typed_files(path):
         assert file.status in ("added", "removed", "modified")
 
 
+def test_an_unterminated_source_array_does_not_leak_following_arrays():
+    """A hunk showing ``source=(`` without its ``)`` used to read every
+    following line - ``_makeopts=(CC=gcc-15 CXX=g++-15)`` - as source
+    entries.  The delta must fail closed: the array never closes inside
+    the post-state projection, so nothing is gained."""
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        "+source=(\n"
+        "+_makeopts=(CC=gcc-15 CXX=g++-15)\n"
+    )
+    delta = change_delta(text)
+    assert delta.sources.gained == ()
+    assert delta.sources.lost == ()
+
+
+def test_a_multiline_source_array_that_closes_still_diffs():
+    """The fail-closed drop must not eat a multiline array whose closing
+    paren IS visible in the projection."""
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        "+source=(\n"
+        "+  'https://x.example/a.tar.gz'\n"
+        "+)\n"
+    )
+    assert change_delta(text).sources.gained == (
+        "https://x.example/a.tar.gz",
+    )
+
+
+def test_reemitted_relational_arrays_resolve_through_pkgbase():
+    """ddnsto: ``provides``/``conflicts`` re-emitted with the makepkg
+    default ``pkgbase=$pkgname`` (``ddnsto-bin``) and the ``${pkgbase%-bin}``
+    form resolve to the same names on both sides, so a semantic no-op
+    reports no gain or loss - in both the raw delta and the extractor."""
+    from trustsight.deps import extract_dependency_changes
+
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,5 @@\n"
+        " pkgname=ddnsto-bin\n pkgver=1.2\n"
+        "-provides=('ddnsto')\n"
+        "+provides=('${pkgbase%-bin}')\n"
+        "-conflicts=('ddnsto')\n"
+        "+conflicts=('${pkgbase%-bin}')\n"
+    )
+    delta = change_delta(text, "ddnsto-bin")
+    assert delta.provides.gained == ()
+    assert delta.provides.lost == ()
+    assert delta.conflicts.gained == ()
+    assert delta.conflicts.lost == ()
+    extracted = extract_dependency_changes(text, "ddnsto-bin")
+    assert extracted["provides"] == set()
+    assert extracted["conflicts"] == set()
+
+
+def test_a_real_relational_gain_still_reports():
+    """The resolution must not stand the rule down: a genuinely new
+    provided name still reads as a gain on both surfaces."""
+    from trustsight.deps import extract_dependency_changes
+
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+        " pkgname=ddnsto-bin\n pkgver=1.2\n"
+        "-provides=('ddnsto')\n"
+        "+provides=('ddnsto' 'ddnsto-cli')\n"
+    )
+    delta = change_delta(text, "ddnsto-bin")
+    assert delta.provides.gained == ("ddnsto-cli",)
+    assert delta.provides.lost == ()
+    assert extract_dependency_changes(text, "ddnsto-bin")["provides"] == {
+        "ddnsto-cli",
+    }
+
+
 def test_dependency_facts_are_a_normalised_view_beside_the_raw_delta():
     """Divergence (recorded): the summary's dependency entry is the
     *normalised* `extract_dependency_changes` view; the delta's dependency

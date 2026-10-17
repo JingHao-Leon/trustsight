@@ -15,6 +15,7 @@ from ...differ import (
     detect_verification_evidence,
     extract_urls_from_diff,
     map_diff_lines,
+    resolved_source_urls,
 )
 from ...findings import stamp
 from ...novelty import (
@@ -102,7 +103,7 @@ def scan_diff(
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, current_text
     )
-    version_moved = any_version_scalar_moved(diff_text)
+    version_moved = any_version_scalar_moved(diff_text, current_text)
 
     source_buckets = classify_urls(
         source_changes.added_urls,
@@ -193,7 +194,8 @@ def scan_diff(
     rule_ids = [r["rule_id"] for r in triggered_rules]
 
     aggregate_pinning = _aggregate_pinning(
-        diff_text, source_changes.added_urls, source_changes.checksum_behavior
+        diff_text, source_changes.added_urls, source_changes.checksum_behavior,
+        declared_urls=resolved_source_urls(current_text),
     )
     verification_evidence = detect_verification_evidence(
         diff_text, source_changes.checksum_behavior

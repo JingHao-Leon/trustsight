@@ -623,6 +623,33 @@ def test_top_dependency_names_still_returns_names_only(db):
     assert top_dependency_names() == ["only"]
 
 
+# --- is_established_package ---
+
+def test_is_established_package_prefers_official_names(db, monkeypatch):
+    """Official-repo membership is an exact answer and binds even for short
+    names the observation fallback would reject."""
+    from trustsight.db import is_established_package
+    monkeypatch.setattr(
+        "trustsight.db.official_package_names", lambda: frozenset({"ax"}))
+    assert is_established_package("ax") is True
+
+
+def test_is_established_package_fallback_ignores_short_names(db, monkeypatch):
+    """The observation fallback cannot certify short names: the corpus
+    records every depends/provides/pkgname field, so two- and three-letter
+    strings accumulate observations as abbreviation collisions rather than
+    as packages (archix-git's ``conflicts=('ax')``, with 'ax' at 24
+    observations and no package by that name anywhere, fired D004/H064).
+    A >= 4-char name at the same count still reads as established."""
+    from trustsight.db import is_established_package, record_dependency_names
+    monkeypatch.setattr(
+        "trustsight.db.official_package_names", lambda: frozenset())
+    record_dependency_names(["ax"] * 24)
+    record_dependency_names(["somehelper"] * 10)
+    assert is_established_package("ax") is False
+    assert is_established_package("somehelper") is True
+
+
 # --- schema migration ---
 
 def test_forget_package_deletes_everything(db):

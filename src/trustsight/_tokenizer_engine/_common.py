@@ -5,7 +5,9 @@ import threading
 
 __all__ = ['_ARRAY_ASSIGNMENT_RE', '_ASSIGNMENT_RE', '_MAX_EXPANSION_PASSES', '_MAX_LINE_LEN', '_MAX_TABLE_BYTES', '_MAX_VALUE_LEN', '_MEMO_ENTRIES', '_VAR_REF_RE', '_memo', '_memoised', '_split_top_level', '_tail_continues']
 
-_MAX_EXPANSION_PASSES = 16
+# The cap now lives with the shared resolver so the analysis and the worker
+# read one value; re-exported here for the engine's own imports.
+from ..expansion import _MAX_EXPANSION_PASSES  # noqa: E402
 
 _memo = threading.local()
 

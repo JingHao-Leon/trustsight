@@ -31,6 +31,8 @@ PINNED_LOOPS = {
     # over a body's lines (payload text), not a diff walk.
     "analysis/structural/_checksums.py": 1,
     "analysis/structural/_hooks.py": 1,
+    "analysis/refusals.py": 1,
+    "coverage.py": 1,
     # A local file the operator hands in, read whole; not a diff.
     "cli/lint.py": 2,
     # Hostile-input parsers over a manifest's own committed bytes (payload

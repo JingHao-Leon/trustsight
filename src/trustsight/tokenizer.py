@@ -32,6 +32,7 @@ __all__ = [
     "reconstruct_lines",
     "reconstruct_literals",
     "resolve_added_lines",
+    "resolve_removed_lines",
     "split_lines",
     "strip_boms",
     "tokenize_and_resolve",
@@ -104,6 +105,11 @@ def reconstruct_lines(lines: list[str]) -> list[tuple[str, bool]]:
 def resolve_added_lines(diff_text: str) -> list[str]:
     """Diff lines with each added line replaced by its resolved form."""
     return request("resolve_added", diff_text)
+
+
+def resolve_removed_lines(diff_text: str) -> list[str]:
+    """Diff lines with each removed line replaced by its resolved form."""
+    return request("resolve_removed", diff_text)
 
 
 def tokenize_and_resolve_indexed(

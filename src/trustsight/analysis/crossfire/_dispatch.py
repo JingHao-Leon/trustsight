@@ -36,7 +36,8 @@ X007_MIN_TECHNIQUES = 2
 
 def _crossfire_findings(diff_text, config, add, previous_diff: str = "",
                         previous_commit: str = "",
-                        current_commit: str = "") -> None:
+                        current_commit: str = "",
+                        current_text: str | None = None) -> None:
     """Emit X001-X006 and the X007 cluster.
 
     Each rule reports once per diff: a second `${A[0]}` tells the reader
@@ -44,7 +45,7 @@ def _crossfire_findings(diff_text, config, add, previous_diff: str = "",
     recipe outscore a careful attack.  *previous_diff* is the immediately
     preceding recorded review of the same package, for X028.
     """
-    techniques = crossfire_techniques(diff_text)
+    techniques = crossfire_techniques(diff_text, current_text)
 
     for rule_id in ("X001", "X002", "X003", "X004", "X005", "X006", "X008",
                     "X009", "X010", "X011", "X012", "X013", "X014", "X015",

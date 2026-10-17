@@ -42,6 +42,96 @@ def canonical_host(netloc: str) -> str:
     return host.rstrip(".").lower()
 
 
+def host_is_non_routable(netloc: str) -> bool:
+    """True when *netloc* is loopback, private, link-local or unspecified.
+
+    Such an address resolves only on the machine reading the recipe, so it
+    can never be a distribution source.  Reading one as a source URL fired
+    the whole source-URL family on a URL that a recipe only *printed* (a
+    local admin console) and, worse, trained reviewers to dismiss the HIGH
+    ``raw-ip-source`` signal.  ``localhost`` is included: it is the same
+    non-routable host by name.
+    """
+    import ipaddress
+
+    host = canonical_host(netloc)
+    if not host:
+        return False
+    if host.startswith("["):
+        close = host.find("]")
+        literal = host[1:close] if close != -1 else host.strip("[]")
+    else:
+        literal = host.split(":", 1)[0]
+    if literal.lower() == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(literal)
+    except ValueError:
+        return False
+    return bool(
+        ip.is_loopback or ip.is_private or ip.is_link_local
+        or ip.is_unspecified or ip.is_reserved or ip.is_multicast
+    )
+
+
+def url_host_is_non_routable(url: str) -> bool:
+    """True when *url*'s host is non-routable (see host_is_non_routable)."""
+    if "://" not in url:
+        return False
+    return host_is_non_routable(url.split("://", 1)[1].split("/", 1)[0])
+
+
+#: A `source=()`/`source_x86_64=()` array opener (the shape differ uses).
+_SOURCE_ARRAY_START_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*\+?=\s*\(")
+#: A scalar `url=`/`*_url=` declaration.
+_URL_DECL_RE = re.compile(r"^\s*(?:url|[A-Za-z_][A-Za-z0-9_]*_url)\s*=")
+#: A command that only prints or consumes text - a URL it names is neither
+#: declared nor fetched.  Anchored at a command position so a word like
+#: `mydata-echo` is not a match.
+_INERT_URL_COMMAND_RE = re.compile(
+    r"(?:^\s*|[;&|]\s*|\b(?:exec|sudo|env|command|nohup|time)\b\s+(?:\S+\s+)*)"
+    r"(?:echo|printf|cat|tee|logger)\b"
+)
+
+_FETCH_COMMAND_RE = None
+
+
+def _fetch_command_re() -> re.Pattern:
+    global _FETCH_COMMAND_RE
+    if _FETCH_COMMAND_RE is None:
+        from .config._defaults_executor import NETWORK_CLIENT
+        # A left boundary keeps short client names from hiding inside other
+        # words: the `host` DNS client must not match the `host` inside
+        # `localhost`, or an echoed localhost URL reads as a fetch and the
+        # inert-printer stand-down never applies.
+        _FETCH_COMMAND_RE = re.compile(
+            r"(?<![\w./$-])(?:" + NETWORK_CLIENT + r")", re.IGNORECASE
+        )
+    return _FETCH_COMMAND_RE
+
+
+def is_url_source_context(text: str) -> bool:
+    """True when *text* declares or fetches a URL (not merely prints one)."""
+    if _SOURCE_ARRAY_START_RE.search(text) or _URL_DECL_RE.search(text):
+        return True
+    return bool(_fetch_command_re().search(text))
+
+
+def url_line_is_inert(text: str) -> bool:
+    """A line that only prints/consumes text: not a declaration, not a fetch.
+
+    A URL such a line names is documentation, not a source.  ``echo`` in a
+    ``.install`` that prints a local admin console URL otherwise fired the
+    whole source-URL family (X006 HIGH, the bucket tier, H003, C011).  A
+    leading diff marker is stripped first so a raw-line rule candidate
+    (``+echo …``) reads the same as the body.
+    """
+    text = text.lstrip("+-\t ")
+    if is_url_source_context(text):
+        return False
+    return bool(_INERT_URL_COMMAND_RE.search(text))
+
+
 def _extract(url: str):
     """Split *url* using a tldextract instance that never hits the network.
 
@@ -336,23 +426,25 @@ def classify_urls(
 
 # A path component that looks like a version number (e.g. v1.0.0, 2.0, 3.1.4)
 _VERSION_LIKE_RE = re.compile(r"(?:^|/)(?:v\d+(?:\.\d+)*|\d+(?:\.\d+){1,})(?:/|$|\.)")
-# Explicit branch refs
+# Explicit branch refs, as a path or a ``#branch=`` git fragment
 _BRANCH_REF_RE = re.compile(
-    r"(?:/branches?/|/heads/|/refs/heads/|/master[\./\"]|/main[\./\"]|/develop[\./\"])",
+    r"(?:/branches?/|/heads/|/refs/heads/|/master[\./\"]|/main[\./\"]"
+    r"|/develop[\./\"]|#branch=)",
     re.IGNORECASE,
 )
-# Tag or release paths
+# Tag or release paths, plus a ``#tag=`` git fragment
 _TAG_PATH_RE = re.compile(
-    r"(?:/releases?/|/tags?/|/download/)",
+    r"(?:/releases?/|/tags?/|/download/|#tag=)",
     re.IGNORECASE,
 )
 
-# A fragment that names one immutable object.  This is the same predicate
-# `coverage.unpinned_source_refs` uses, kept in step with it: a
-# `#commit=`/`#revision=` ref is a commit pin, whether it carries a literal
-# digest or a variable that resolves to one.  A commit pin is not the same
-# declared fact as a checksummed tarball, and treating them as one is what
-# made a checksummed source report P005 "pinned to a full commit hash".
+# A fragment that names one immutable object: a `#commit=`/`#revision=` ref,
+# whether it carries a literal digest or a variable that resolves to one.
+# `coverage.unpinned_source_refs` widens this to also treat `#tag=` as a
+# declared pin (P006), so a tag-pinned source is not called unpinned.  A
+# commit pin is not the same declared fact as a checksummed tarball, and
+# treating them as one is what made a checksummed source report P005
+# "pinned to a full commit hash".
 _COMMIT_REF_RE = re.compile(
     r"#(?:commit|revision)=(?:[0-9a-f]{7,40}|\$\{?[A-Za-z_]\w*\}?)",
     re.IGNORECASE,

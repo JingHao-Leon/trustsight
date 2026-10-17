@@ -3,6 +3,8 @@ from trustsight.buckets import (
     classify_url,
     classify_urls,
     has_homograph,
+    host_is_non_routable,
+    url_host_is_non_routable,
 )
 
 DOMAIN_CONFIG = {
@@ -29,6 +31,20 @@ def test_trusted_forge_codeberg():
 
 def test_trusted_forge_bitbucket():
     bucket, matched = classify_url("https://bitbucket.org/user/repo.zip", DOMAIN_CONFIG)
+    assert bucket == "trusted_forge"
+
+
+def test_trusted_forge_copr_download_host():
+    """skwd-paper-plasma: a build pulled from Fedora's Copr is a forge
+    artifact like a GitHub release, not an unknown-bucket binary."""
+    config = {
+        "trusted_forges": {"domains": ["github.com", "copr.fedorainfracloud.org"]},
+        "official_projects": {"domains": []},
+        "raw_hosting": {"domains": []},
+    }
+    bucket, _ = classify_url(
+        "https://download.copr.fedorainfracloud.org/results/p/x/srpm-builds/1/p.src.rpm",
+        config)
     assert bucket == "trusted_forge"
 
 
@@ -181,6 +197,23 @@ def test_pinning_branch_path():
     assert classify_pinning_level("https://github.com/user/proj/archive/refs/heads/main.tar.gz") == "branch_pinned"
 
 
+def test_pinning_tag_fragment():
+    """A ``#tag=`` git ref is a tag pin, literal or variable."""
+    assert classify_pinning_level(
+        "git+https://github.com/user/proj.git#tag=v1.2.3"
+    ) == "tag_pinned"
+    assert classify_pinning_level(
+        "git+https://github.com/user/proj.git#tag=$_tag"
+    ) == "tag_pinned"
+
+
+def test_pinning_branch_fragment():
+    """A ``#branch=`` git ref is a branch pin, not unpinned."""
+    assert classify_pinning_level(
+        "git+https://github.com/user/proj.git#branch=main"
+    ) == "branch_pinned"
+
+
 def test_pinning_unpinned():
     assert classify_pinning_level("https://mirror.example.com/somefile.tar.gz") == "unpinned"
 
@@ -310,3 +343,62 @@ def test_plain_ascii_domains_are_never_flagged():
     from trustsight.buckets import has_homograph
     for domain in ("github.com", "cdn-1.example.co.uk", "sourceforge.net"):
         assert has_homograph(domain) is False, domain
+
+
+# --- Non-routable hosts (loopback/private) ---
+
+def test_non_routable_hosts_are_recognised():
+    for host in ("127.0.0.1", "127.0.0.1:8787", "10.0.0.1", "192.168.1.1",
+                 "172.16.0.1", "172.31.255.255", "169.254.1.1", "0.0.0.0",
+                 "localhost", "localhost:8787", "[::1]", "[::1]:8787"):
+        assert host_is_non_routable(host) is True, host
+
+
+def test_routable_hosts_are_not_excluded():
+    # 172.15/172.32 sit just outside the RFC1918 172.16/12 block.
+    for host in ("8.8.8.8", "1.1.1.1:443", "172.15.0.1", "172.32.0.1",
+                 "example.org", "cdn.example.com", "github.com:8443"):
+        assert host_is_non_routable(host) is False, host
+
+
+def test_url_host_non_routable_reads_the_host_only():
+    assert url_host_is_non_routable("http://127.0.0.1:8787/admin") is True
+    assert url_host_is_non_routable("https://192.168.0.1/x") is True
+    assert url_host_is_non_routable("http://8.8.8.8:8787/x") is False
+    assert url_host_is_non_routable("not-a-url") is False
+
+
+# --- Inert URL contexts (printed, not fetched/declared) ---
+
+def test_an_echoed_url_is_inert():
+    from trustsight.buckets import url_line_is_inert
+
+    assert url_line_is_inert('echo "see http://8.8.8.8:8787/status"') is True
+    assert url_line_is_inert('  printf "see http://8.8.8.8/x\\n"') is True
+    assert url_line_is_inert('+  cat "http://8.8.8.8/x"') is True
+
+
+def test_localhost_does_not_read_as_the_host_dns_client():
+    """The `host` arm of the fetch-client vocabulary must not match the
+    `host` inside `localhost`, or an echoed localhost URL reads as a fetch
+    and the inert-printer stand-down never applies (R047 fired on a printed
+    `http://localhost:20128/` dashboard URL)."""
+    from trustsight.buckets import url_line_is_inert
+
+    assert url_line_is_inert('echo "dashboard: http://localhost:20128/"') is True
+    assert url_line_is_inert("echo see http://127.0.0.1:9090/ui/") is True
+    # A real `host` DNS lookup at a command position is still a fetch.
+    assert url_line_is_inert("host example.com") is False
+    # getent is a resolver, not a fetch client or a printer.
+    assert url_line_is_inert("getent hosts example.com") is False
+
+
+def test_a_declared_or_fetched_url_is_not_inert():
+    from trustsight.buckets import url_line_is_inert
+
+    assert url_line_is_inert("source=('http://8.8.8.8/x')") is False
+    assert url_line_is_inert("url=http://8.8.8.8/x") is False
+    assert url_line_is_inert("curl -O http://8.8.8.8/x") is False
+    assert url_line_is_inert('echo ok && curl http://8.8.8.8/x') is False
+    # A word that merely contains `echo` is not a printer.
+    assert url_line_is_inert("mydata-echo http://8.8.8.8/x") is False

@@ -132,7 +132,7 @@ def _structural_findings(
     # The integrity rules' one definition of "the version moved": pkgver,
     # pkgrel or epoch by resolved value.  A pkgrel rebuild with a changed
     # checksum is C002, not the HIGH C001 that claims the version stood still.
-    version_moved = any_version_scalar_moved(diff_text)
+    version_moved = any_version_scalar_moved(diff_text, current_text)
 
     # H003 is about sources that arrive with *no* checksum backing at all.
     # Removing one hash still leaves the array in place, so it is not this
@@ -247,9 +247,15 @@ def _structural_findings(
                     client=client[:40])
 
     # C016/C017 (re-filed from H102/H103): a
-    # complete .install script's hook bodies, read as functions.
+    # complete .install script's hook bodies, read as functions.  Hooks the
+    # recipe does not wire up are dead: behavior claims inside them stand
+    # down (patent-bin's rc write in a hook install= never names).
     if scope_doc is not None:
-        findings.extend(install_script_findings(scope_doc))
+        from ..edges import _dead_hook_files, _declared_install_basename
+        declared = _declared_install_basename(diff_text, current_text)
+        dead = _dead_hook_files(
+            {i: f.path for i, f in enumerate(scope_doc.files)}, declared)
+        findings.extend(install_script_findings(scope_doc, dead_hooks=dead))
         # the L1 structural rules over the typed DiffFile
         # metadata (mode, rename) and empty-file shape.
         diff_structure_findings(scope_doc, add)
@@ -281,7 +287,30 @@ def _structural_findings(
         capability = None
         if version_moved and gate:
             capability = capability_in_diff(diff_text, current_text)
-        if not version_moved or capability:
+        # F9 (nuvio-desktop): at a standing version, the HIGH claim is the
+        # *surgical* shape - checksum arrays are the only substantive change
+        # in the diff.  A checksum refresh in the middle of a broader
+        # maintenance revision (pkgdesc, options, build() rewritten at the
+        # same version) is routine packaging work, so the same observation
+        # files as C002 unless the maintainer of record also changed (the
+        # takeover shape keeps HIGH regardless of diff breadth).
+        # Gated by `[thresholds] c001.require_isolated_change` (default
+        # true); one config flip restores the old fire.
+        isolated_gate = ((config or {}).get("thresholds", {})
+                         .get("c001", {}).get("require_isolated_change", True))
+        isolated = True
+        if not version_moved and isolated_gate:
+            from ._checksums import substantive_change_outside_checksums
+
+            isolated = not substantive_change_outside_checksums(diff_text)
+        if not version_moved and isolated_gate and not isolated \
+                and not maintainer_changed:
+            add("C002", "Checksum Updated Without Version Change", "INFO",
+                "integrity",
+                "sha256sums changed at an unchanged version amid other "
+                "recipe changes (not the surgical swap shape)",
+                line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
+        elif not version_moved or capability:
             match = (
                 "sha256sums changed but source URLs and pkgver/pkgrel/epoch "
                 "unchanged"
@@ -358,9 +387,19 @@ def _structural_findings(
     # fired.  Both now arrive through `checksum_behavior`, so the rule, the
     # summary and the verification evidence cannot disagree about whether a
     # checksum change happened at all.
+    # A pure one-for-one hash replacement (a versioned URL refreshed, the
+    # old and new hash both present) keeps the family's entry count level:
+    # |post| - |pre| == gained - lost over the delta, so a strictly smaller
+    # post-recipe checksum set is required.  Without it, a misclassified
+    # `checksum_entry_removed` on a bump whose source lines are context
+    # became C004 whenever the added/removed URL sets were both empty.
+    checksums_shrank = (
+        cdelta is not None
+        and len(cdelta.checksums.gained) < len(cdelta.checksums.lost)
+    )
     if set(removed) == set(added) and cs_behavior in (
         "checksum_array_removed", "checksum_entry_removed",
-    ):
+    ) and checksums_shrank:
         # A hash "removed" from one array but moved to an arch-scoped one
         # (`sha256sums` -> `sha256sums_x86_64`/`_aarch64`) is a layout
         # refactor, not weakened verification: the hash is still in the
@@ -500,7 +539,8 @@ def _structural_findings(
     _crossfire_findings(diff_text, config or {}, add,
                         previous_diff=previous_diff,
                         previous_commit=previous_commit,
-                        current_commit=current_commit)
+                        current_commit=current_commit,
+                        current_text=current_text)
     _sabotage_findings(diff_text, config or {}, add)
     _dependency_findings(
         diff_text, package_name, config or {}, add, current_text=current_text,

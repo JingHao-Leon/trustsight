@@ -186,15 +186,23 @@ def test_coverage_appears_in_the_breakdown_without_scoring():
     assert level == "Inconclusive"
 
 
-def test_a_fatal_finding_still_caps_at_100_with_a_gap():
-    """The gap is recorded, but a FATAL verdict is not softened by it."""
+def test_a_fatal_finding_still_reports_with_a_gap():
+    """The gap is recorded, and a FATAL verdict is not softened by it - but
+    it no longer inflates the score to 100 on its own.  The gap keeps the
+    verdict Inconclusive; the FATAL rides the breakdown entry."""
     from trustsight.schema import NoveltyContext
 
     triggered = [{"rule_id": "R012", "severity": "FATAL", "name": "injection"}]
     score, breakdown, level = calculate_score(
         triggered, {}, NoveltyContext(), coverage_gaps=[DIFF_TRUNCATED],
     )
-    assert score == 100 and level == "Critical"
+    assert score == 0
+    # The downgrade applies to the clean and merely-elevated bands only: a
+    # HIGH-or-worse entry stands on its own evidence, and the FATAL is in
+    # the breakdown (fail_closed), so the band stays Low rather than going
+    # Inconclusive.
+    assert level == "Low"
+    assert any(e.rule_id == "R012" and e.severity == "FATAL" for e in breakdown)
     assert any(e.rule_id == "COVERAGE" for e in breakdown)
 
 

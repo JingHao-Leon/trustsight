@@ -12,7 +12,7 @@ no verdict.
 A **score** is a heuristic aggregate of weighted findings: a measurement of how many risk signals fired during analysis and how much those signals weigh. It is **not** a probability of malice, and it is **not** a guarantee of safety.
 
 - A package scoring **0** has no detectable risk signals. That does not mean it is safe: only that nothing in the diff triggered a rule. Attackers can use subtle techniques that leave no trace in PKGBUILD structure. See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md).
-- A package scoring **100** has one or more FATAL signals (R012 prompt injection or R013 unicode bidi override) that hard-stop at maximum severity. The score floors at 0 and caps at 100.
+- A package with one or more FATAL signals (R012 prompt injection, R013 unicode bidi override, or a confirmed H056 IOC match) carries a FATAL entry in `score_breakdown` at weight 0 and names the rule in the verdict label, e.g. `Low (FATAL: R012)`. The score itself is the sum of finding weights, floored at 0 and capped at 100; it does not jump to 100 when a FATAL fires. A FATAL names active deception of the reviewer, so do not install without understanding why, whatever the number says.
 
 The scoring is **deterministic**: same diff, same instrument, same database state → same score, every time. Runs are read-only by default, so the database state does not change between two runs; `--record` is the explicit opt-in that persists observations and analysis history.
 
@@ -26,9 +26,9 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 A Low verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**67.9 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **50**. The calibration gates re-measure both figures against the shipped configuration on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the strict separation gate; see [using TrustSight in CI](../guides/using-in-ci.md) and [benchmarks and methodology](../explanation/benchmarks-and-methodology.md)). These numbers are the tails measured on the locked 3,739-diff corpus, not a claim that the two distributions as a whole do not overlap. Run `uv run --with pytest python -m pytest` for the current test count.
+**70.7 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **50**. The calibration gates re-measure both figures against the shipped configuration on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the strict separation gate; see [using TrustSight in CI](../guides/using-in-ci.md) and [benchmarks and methodology](../explanation/benchmarks-and-methodology.md)). These numbers are the tails measured on the locked 3,739-diff corpus, not a claim that the two distributions as a whole do not overlap. Run `uv run --with pytest python -m pytest` for the current test count.
 
-The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 90.4th, so about **9.6 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
+The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 92.2nd, so about **7.8%** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
 ### Medium / High / Critical (score > 20)
 
@@ -38,14 +38,14 @@ One or more risk signals fired. The severity category tells you the strongest si
 |-------|-------|----------------|
 | 21-50 | Medium | Novelty, unknown domains, or single moderate signals |
 | 51-80 | High | Multiple signals or strong structural changes |
-| 81-100 | Critical | Strong evidence, or FATAL rules (R012/R013) |
+| 81-100 | Critical | Strong evidence |
 
 #### How to use these bands
 
 - Score 21-34: inspect with `trustsight inspect <name>` to understand context.
 - Score 35-50: manual review recommended before `yay -Syu`.
 - Score 51+: treat as suspicious. Investigate fully before updating.
-- Score 100: a FATAL rule fired. **Do not install** without understanding why.
+- A FATAL entry in `score_breakdown` (R012/R013): active deception of the reviewer. **Do not install** without understanding why, whatever the score says.
 
 ### Inconclusive
 
@@ -139,7 +139,7 @@ Break this down left to right:
 | Part | Meaning |
 |------|---------|
 | `+25` | Weight contributed to the total score. Never negative: nothing lowers a score. `0` marks an annotation, a coverage gap, or a declared-practice `P` finding. |
-| `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (hard-stop at 100). |
+| `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (weight 0; names itself in the verdict label). |
 | `H001` | Rule identifier from the published R/H/C/D/S/X catalog; P001-P008 are declared-practice findings and W001-W010 are unverifiable findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
 | `Checksum Disabled` | Rule name. |
 | `sha256sums=SKIP` | Match reason : the exact text or summary that triggered the rule. |

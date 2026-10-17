@@ -99,6 +99,33 @@ def shared_added_literal(records, min_packages: int = 2,
     return out
 
 
+def _one_related_cluster(members) -> bool:
+    """True when every member name belongs to one relatedness cluster.
+
+    Union-find over :func:`~trustsight.deps.is_related_package`: two names
+    share an edge when either is a variant/companion/sibling of the other.
+    A single cluster covering every member means the group is one project's
+    naming family (``appattic``/``appattic-bin``/``appattic-qt``), which is
+    H052's shape regardless of whether repo data exists yet.
+    """
+    from ..deps import is_related_package
+
+    names = sorted(members)
+    parent = {name: name for name in names}
+
+    def find(name: str) -> str:
+        while parent[name] != name:
+            parent[name] = parent[parent[name]]
+            name = parent[name]
+        return name
+
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            if is_related_package(a, b):
+                parent[find(a)] = find(b)
+    return len({find(name) for name in names}) == 1
+
+
 def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
     """G003: one maintainer key adopting *min_members* unrelated packages.
 
@@ -112,6 +139,14 @@ def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
     not a coordinated takeover.  When every member has repo data and they
     share a common repo, G003 stands down; any member without repo data keeps
     the group firing, because an unproven relationship is not evidence of one.
+
+    New packages land in the window with no repo data yet, which used to make
+    the repo test vacuous for exactly the case it exists for: a maintainer
+    releasing ``appattic``, ``appattic-bin`` and ``appattic-qt`` in one cycle
+    is the same variant family by name even where the corpus has not learned
+    the repos.  A naming-relatedness pass (``is_related_package``) therefore
+    stands the group down the same way: one cluster of related names is one
+    project, not a campaign.
     """
     by_maintainer: dict[str, set[str]] = defaultdict(set)
     predicates: dict[str, set[str]] = defaultdict(set)
@@ -134,6 +169,11 @@ def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
                 # Every member sources from the same repo: H052's family, not
                 # a coordinated adoption.
                 continue
+        if _one_related_cluster(members):
+            # Every member is a naming variant of one project (the
+            # appattic/appattic-bin/appattic-qt release shape): H052's
+            # family by name, not a coordinated adoption.
+            continue
         which = sorted(predicates[maintainer])
         all_repos = sorted({r for rs in member_repos for r in rs})
         out.append({

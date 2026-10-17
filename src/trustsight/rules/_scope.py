@@ -7,12 +7,12 @@ from ..config import load_rules
 from ..deps import _strip_comment
 from ..file_kinds import shell_lines
 from ..findings import stamp
-from ..line_lex import lex_lines
+from ..line_lex import _heredoc_body_indices, _printed_heredoc_body_indices, lex_lines
 from ..tokenizer import (
     clean_lines,
     strip_boms,
 )
-from ._clamp import _COMMENT_OR_DEP_RE, _DEP_DECLARATION_RE, _is_message_line, _to_pairs, clamp, filter_raw_lines
+from ._clamp import _COMMENT_OR_DEP_RE, _DEP_DECLARATION_RE, _is_message_line, _to_pairs, _unquoted_redirect_after, clamp, filter_raw_lines
 from ._compiled import _compiled, resolve_generated_patterns
 
 __all__ = ['ScopeResolver', '_CLASSIFY_ENTRIES', '_FUNCTION_CLOSE_RE', '_FUNCTION_NAME_CLASS', '_FUNCTION_NAME_RE', '_FUNCTION_OPEN_RE', '_blank_quoted', '_caller_closure_map', '_classified', '_classify_caller_closure', '_classify_enclosing_function', '_classify_line_context', '_classify_memo', '_enclosing_function_map', '_enclosing_function_map_cached', '_function_bodies', '_inline_body', '_scope_matches', '_starts_a_new_file', 'apply_rules']
@@ -30,6 +30,11 @@ _FUNCTION_NAME_RE = re.compile(
     rf"^\s*(?:function\s+({_FUNCTION_NAME_CLASS})\s*(?:\(\s*\))?"
     rf"|({_FUNCTION_NAME_CLASS})\s*\(\s*\))\s*\{{"
 )
+
+#: A display-metadata scalar assignment (`pkgdesc=`, `url=`).  The value is
+#: rendered by the AUR as display text, never read as code; even the
+#: reader-facing rules (R012/R013) skip it - see the reader_candidates build.
+_METADATA_SCALAR_RE = re.compile(r"^(?:\+|)\s*(?:pkgdesc|url)\s*\+?=")
 
 def _starts_a_new_file(line: str, previous: str) -> bool:
     """True when *line* begins a new file's section of the diff.
@@ -73,21 +78,62 @@ def _classify_line_context(lines: list[str]) -> dict[int, str]:
     contexts: dict[int, str] = {}
     depth = 0
     previous = ""
+    # A message can span lines inside one quoted string: audirvana's hook is
+    # ``echo "`` followed by instructions-to-the-user lines and a closing
+    # quote several lines later.  Only the first line matches
+    # ``_MESSAGE_LINE_RE``; the continuation lines carried mkdir/redirect
+    # text into C017/H017/H032 as if they ran.  Track the open quote and
+    # classify every line inside a message-opened string as "message".
+    open_quote = ""
+    message_quote = False
     for i, lex in enumerate(lex_lines(lines, fragment=True)):
         line = lex.text
         if _starts_a_new_file(line, previous):
             depth = 0
             contexts[i] = "other"
             previous = line
+            open_quote = ""
+            message_quote = False
             continue
         previous = line
         code = lex.code.lstrip("+").lstrip()
         if _is_message_line(line):
             contexts[i] = "message"
+        elif message_quote and open_quote:
+            # Continuation of a printer's quoted string.  A `>` inside the
+            # spanning quote is literal text; only a quote that closes on
+            # this line and is followed by an unquoted `>` (``more" >
+            # ~/.bashrc``) is a real write, which falls through to the
+            # function-body classification so the write rules see it.
+            if not _unquoted_redirect_after(lex.text, open_quote):
+                contexts[i] = "message"
         elif depth > 0 or _inline_body(code):
             contexts[i] = "function_body"
         else:
             contexts[i] = "other"
+        # Advance the quote state on the raw text: escapes close no quote,
+        # a `#` outside a quote starts a comment, and the state carries to
+        # the next line, which is what makes the continuation visible.
+        j = 0
+        n = len(line)
+        while j < n:
+            char = line[j]
+            if open_quote == "'":
+                if char == "'":
+                    open_quote = ""
+                    message_quote = False
+            elif open_quote == '"':
+                if char == "\\":
+                    j += 1
+                elif char == '"':
+                    open_quote = ""
+                    message_quote = False
+            elif char in "\"'":
+                open_quote = char
+                message_quote = contexts[i] == "message"
+            elif char == "#" and (j == 0 or line[j - 1] in " \t"):
+                break
+            j += 1
         if _FUNCTION_OPEN_RE.search(code):
             depth += 1
             # Opened and closed on one line, so it must not leave the
@@ -375,6 +421,38 @@ def _scope_matches(
         return False
     return bool(caller_map.get(enclosing, frozenset()).intersection(scope))
 
+#: Raw-line rules that read a URL out of any line.  They stand down on a
+#: line that only prints text (``echo``/``printf``/``cat``); the URLs these
+#: rules exist for are declared or fetched, not printed.  Ids rather than a
+#: rule field because a shipped field would not reach an existing install's
+#: rules.toml until a migration.
+_INERT_URL_RULES = frozenset({"R046", "R047"})
+
+#: Rules that make no sense inside an install scriptlet.  A hook runs as
+#: root on the *target* system after pacman unpacks the package, so an
+#: absolute-path chmod/setcap/write there is packaging - the chrome-sandbox
+#: 4755 fix and the old-DTB backup under /boot that Electron and kernel
+#: packages ship in post_install - not the build-host privilege change or
+#: live-filesystem write these rules exist for.
+_HOOK_SCRIPTLET_EXCLUDED_RULES = frozenset({"R053", "R058", "R059"})
+
+#: Rules that must not match the body of a *printed* heredoc.  A printed
+#: heredoc body is literal output text, not executed shell: `cat <<MSG` with
+#: no redirect and no pipe into an executor.  Write patterns (R052 matched
+#: the openxlr .install script's advisory text as if it ran) must not fire
+#: on it.  Reader-facing rules (R012/R013) deliberately keep seeing heredoc
+#: bodies - their payload is aimed at whoever reads the file.
+_PRINTED_HEREDOC_EXCLUDED_RULES = frozenset({"R052"})
+
+#: Rules that must not match ANY literal heredoc body.  A body is data at
+#: this position: text a later reader (or the installed artifact) consumes,
+#: not a command the build runs.  R058 claims a build-time write outside the
+#: package root; the launcher-script text inside a file-writing heredoc runs
+#: at application runtime, so claiming its `cp` as a build write is the
+#: bluebubbles false positive.
+_HEREDOC_BODY_EXCLUDED_RULES = frozenset({"R058"})
+
+
 def apply_rules(
     resolved_strings: list[str],
     raw_diff_lines: list[str],
@@ -432,6 +510,39 @@ def apply_rules(
         ctx_map = {to_split[i]: ctx for i, ctx in ctx_map.items()}
         fn_map = {to_split[i]: fn for i, fn in fn_map.items()}
 
+    # Track which lines belong to an install-scriptlet file section, so
+    # _HOOK_SCRIPTLET_EXCLUDED_RULES can skip them: `+++ b/<name>` opens a
+    # section and the next such header (or EOF) closes it.
+    hook_raw: set[int] = set()
+    _hook_file = False
+    for _i, _ln in enumerate(raw_diff_lines):
+        if _ln.startswith("+++ "):
+            _hook_file = _ln[4:].strip().endswith(".install")
+        if _hook_file:
+            hook_raw.add(_i)
+    hook_lines = (
+        {to_split[i] for i in hook_raw} if to_split is not None else hook_raw
+    )
+
+    # Printed-heredoc body lines, in the same split-lines domain as the
+    # raw candidates below: the helper reads +/-/plain line text, so run
+    # it on raw_diff_lines and remap with to_split exactly like hook_lines.
+    printed_raw = _printed_heredoc_body_indices(raw_diff_lines)
+    printed_lines = (
+        {to_split[i] for i in printed_raw} if to_split is not None
+        else printed_raw
+    )
+    # Every literal heredoc body (printed, written to a file, or fed to a
+    # config consumer): data, not executed shell at this position.  R058's
+    # build-time write claim must not fire on script TEXT shipped inside a
+    # `cat <<EOF > /usr/bin/launcher` body (bluebubbles): those commands run
+    # later, as the installed artifact, not during the build.
+    heredoc_raw = _heredoc_body_indices(raw_diff_lines)
+    heredoc_lines = (
+        {to_split[i] for i in heredoc_raw} if to_split is not None
+        else heredoc_raw
+    )
+
     # These three candidate lists do not vary per rule, but used to be
     # rebuilt inside the loop: with ~75 rules that was 75 filtering passes
     # over every line of the diff.  Built once and shared, read-only.
@@ -476,17 +587,39 @@ def apply_rules(
     # model summarising it - so what matters is every line the new revision
     # shows a reader.  Removals are excluded: text this diff deletes is text
     # the reader will not see.
+    #
+    # Display-metadata scalars are the one exclusion for a *raw-line* reader
+    # rule: a pkgdesc/url value is rendered by the AUR as display text, never
+    # read as code, so an invisible character in marketing copy is cosmetic
+    # (ddnsto-bin's R013 FATAL on a zero-width char in pkgdesc).  R013 has no
+    # business there at all.  A resolved reader rule (R012) still sees the
+    # metadata lines through the additive path below: its payload is aimed at
+    # whoever reads the file, and pkgdesc is exactly such text.
     # The BOM strip applies here too: R013 is the rule that reads this list
     # and the rule a byte-order mark used to fire, at FATAL.
     reader_pairs = _to_pairs(raw_diff_lines)
     stripped_reader = strip_boms([ln for _i, ln in reader_pairs])
-    reader_candidates = [
-        (to_split[i] if to_split is not None else i, stripped)
-        for (i, ln), stripped in zip(reader_pairs, stripped_reader)
-        if not ln.startswith("-") and not _DEP_DECLARATION_RE.match(ln)
-    ]
+
+    def _reader(keep_metadata: bool) -> list:
+        return [
+            (to_split[i] if to_split is not None else i, stripped)
+            for (i, ln), stripped in zip(reader_pairs, stripped_reader)
+            if not ln.startswith("-") and not _DEP_DECLARATION_RE.match(ln)
+            and (keep_metadata or not _METADATA_SCALAR_RE.match(ln))
+        ]
+
+    reader_candidates = _reader(keep_metadata=False)
+    reader_with_metadata = _reader(keep_metadata=True)
     rules_by_id = {rule["id"]: rule for rule in rules}
 
+    # R007 claims an install-file modification.  Its pattern is deliberately
+    # broad (a PKGBUILD may add the file without a header), which also let it
+    # fire on a `.install` name inside `source=()` - a file reference, not a
+    # modification (bettbox).  Only a file header or an `install=` change is
+    # a modification; whether a fully-added scriptlet file is genuinely new
+    # is the watcher's business (it alone knows the baseline), and the
+    # full-aur path already withholds unchanged scriptlets, so headers stay
+    # claimed here.
     for rule in rules:
         if rule.get("enabled") is False:
             continue
@@ -514,8 +647,11 @@ def apply_rules(
                 reader_candidates if match_target == "raw_line"
                 # The *unfiltered* resolved list here: a rule that opts into
                 # comments must see them in the text resolution produced,
-                # not only in the raw lines.
-                else resolved_candidates + reader_candidates
+                # not only in the raw lines.  The reader set is the
+                # metadata-preserving variant: for a resolved rule (R012)
+                # pkgdesc is reader-facing text, while a raw-line reader
+                # rule (R013) already got the metadata-filtered set above.
+                else resolved_candidates + reader_with_metadata
             )
 
         compiled = _compiled(rule["pattern"], rule_id=rule.get("id", ""))
@@ -531,6 +667,40 @@ def apply_rules(
 
         for idx, item in candidates:
             if compiled.search(item):
+                if rule["id"] in _HOOK_SCRIPTLET_EXCLUDED_RULES \
+                        and idx in hook_lines:
+                    # A chmod/setcap on an absolute path inside a hook is
+                    # the package configuring its own payload at install
+                    # time, not a build-host privilege change.
+                    continue
+                if rule["id"] in _PRINTED_HEREDOC_EXCLUDED_RULES \
+                        and idx in printed_lines:
+                    # A printed heredoc body is text for the user, not a
+                    # command; write patterns must not match it (openxlr).
+                    continue
+                if rule["id"] in _HEREDOC_BODY_EXCLUDED_RULES \
+                        and idx in heredoc_lines:
+                    # Any literal heredoc body is data at this position;
+                    # script text shipped inside a file-writing heredoc is
+                    # not a build-time command (bluebubbles' launcher).
+                    continue
+                if rule["id"] in _INERT_URL_RULES:
+                    # A URL on a line that only prints text is documentation,
+                    # not a source (the reported `echo http://127.0.0.1:…`
+                    # case).  The predicate exempts source declarations and
+                    # fetch commands, so this only drops inert printers.
+                    from ..buckets import url_line_is_inert
+                    if url_line_is_inert(item):
+                        continue
+                if rule["id"] == "R007":
+                    # See the note above: a source=() mention of the file
+                    # name is a reference, not a modification.  Headers and
+                    # install= wiring stay claimed (`install = ...` with
+                    # spaces included).
+                    stripped_item = item.lstrip("+").lstrip()
+                    if not item.startswith("+++") and not re.match(
+                            r"install\s*=", stripped_item):
+                        continue
                 if rule_scope and not _scope_matches(
                     rule_scope, idx, ctx_map, fn_map, caller_map
                 ):

@@ -261,7 +261,7 @@ the wording of a rule in one place. Neutral facts are reported the same way
 (new files, dependency additions, version bumps), at weight 0, so that "nothing
 scored" and "nothing happened" stay distinguishable.
 
-The sum of all `weight` values, floored at 0 and capped at 100, equals `final_score`. FATAL rules short-circuit: if any entry has severity `"FATAL"`, the score is 100 regardless of other entries.
+The sum of all `weight` values, floored at 0 and capped at 100, equals `final_score`. A FATAL entry contributes weight 0 like any other entry; its signal rides the unsuppressible FATAL entry in `score_breakdown` and the verdict label, which names the rule (`Low (FATAL: R012)`).
 
 ---
 

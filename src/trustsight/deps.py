@@ -14,6 +14,7 @@ from functools import lru_cache
 from .config import DEFAULT_ECOSYSTEM_PREFIXES, DEFAULT_VARIANT_SUFFIXES, load_naming
 from .diffdoc import parse_diff_lines
 from .tokenizer import resolve_added_lines
+from .tokenizer import resolve_removed_lines
 from .tokenizer import split_lines
 
 DEP_FIELDS = (
@@ -359,21 +360,23 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
 _SCALAR_ASSIGN_RE = re.compile(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*\+?=\s*[^(\s]")
 
 
-def _with_context_assignments(diff_text: str) -> str:
-    """*diff_text* with context-line scalar assignments marked as added.
+def _with_context_assignments(diff_text: str, marker: str = "+") -> str:
+    """*diff_text* with context-line scalar assignments marked as *marker*.
 
     ``resolve_added_lines`` builds its variable table from ``+`` lines only,
     so ``depends=("$_evil")`` added beside a *context* ``_evil=malware``
     resolved to nothing and the dependency disappeared.  A context scalar
     assignment is a fact about the file the diff is applied to, so it is
     promoted for the resolution pass.  Only scalar assignments are promoted:
-    a promoted array opener would be read as an added dependency.
+    a promoted array opener would be read as an added dependency.  The
+    ``-`` side is resolved by the same routine with ``marker="-"``, so a
+    removed line's variables resolve against the recipe it came from.
     """
     out: list[str] = []
     for line in parse_diff_lines(split_lines(diff_text)).lines:
         if (line.side == "context" and not line.raw.rstrip().endswith("\\")
                 and _SCALAR_ASSIGN_RE.match(line.content)):
-            out.append("+" + line.content)
+            out.append(marker + line.content)
         else:
             out.append(line.raw)
     return "\n".join(out)
@@ -390,11 +393,17 @@ def extract_dependency_changes(
     # Resolved so that depends=("$_pkgname-x11") is compared by its real
     # name where the value is known; positions are preserved.  Context
     # assignments are promoted so a variable declared outside the hunk still
-    # resolves the added line that uses it.
+    # resolves the added line that uses it.  Both sides are resolved: the
+    # removed side with its own table, so a re-emitted array entry holding
+    # ``${pkgbase%-bin}`` resolves to the same names it held before the
+    # diff instead of the raw literal failing the package-name filter and
+    # dropping out of the before set.
     after = _side_names(
-        resolve_added_lines(_with_context_assignments(diff_text)), "+"
+        resolve_added_lines(_with_context_assignments(diff_text, "+")), "+"
     )
-    before = _side_names(split_lines(diff_text), "-")
+    before = _side_names(
+        resolve_removed_lines(_with_context_assignments(diff_text, "-")), "-"
+    )
 
     added: dict[str, set[str]] = {}
     for f in DEP_FIELDS:

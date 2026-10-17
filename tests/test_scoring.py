@@ -260,25 +260,29 @@ def test_breakdown_entries_have_reason():
     assert "Remote Exec" in breakdown[0].reason
 
 
-def test_fatal_rule_hard_stops_at_100():
+def test_fatal_rule_contributes_its_declared_weight():
+    """A lone FATAL no longer hard-stops at 100: it contributes its declared
+    weight (0), the score is the sum of finding weights, and the signal
+    rides the breakdown entry and the verdict label instead."""
     triggered = [
         {"rule_id": "R012", "severity": "FATAL", "name": "Prompt Injection", "match": "ignore all instructions"},
     ]
     score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), SHARED_CONFIG)
-    assert score == 100
-    assert level == "Critical"
+    assert score == 0
+    assert level == "Low"
     assert any(e.rule_id == "R012" for e in breakdown)
     assert all(e.weight == 0 for e in breakdown)  # FATAL contributes 0 weight
 
 
-def test_fatal_overrides_lower_score():
+def test_fatal_alongside_weighted_findings_does_not_inflate_the_score():
     triggered = [
         {"rule_id": "R001", "severity": "HIGH", "name": "Something", "match": "x"},
-        {"rule_id": "R013", "severity": "FATAL", "name": "Bidi", "match": "\u202E"},
+        {"rule_id": "R013", "severity": "FATAL", "name": "Bidi", "match": "\u202e"},
     ]
     score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), SHARED_CONFIG)
-    assert score == 100
-    assert level == "Critical"
+    assert score == 25
+    assert level == "Medium"
+    assert any(e.rule_id == "R013" and e.severity == "FATAL" for e in breakdown)
 
 
 def test_verification_evidence_does_not_reduce_the_score():

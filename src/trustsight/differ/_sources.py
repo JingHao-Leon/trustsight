@@ -2,14 +2,15 @@
 
 import re
 from ..diffdoc import parse_diff_lines
+from ..expansion import resolve_text, text_variable_table, variable_table
 from ..schema import SourceChanges
-from ..line_lex import strip_comment_stateful
+from ..line_lex import _heredoc_body_indices, strip_comment_stateful
 from ..tokenizer import split_lines
 from ._bounds import MAX_URLS_PER_SIDE, MAX_URL_TOKEN_BYTES
 from ._checksums import detect_checksum_changes, detect_checksum_removed
 from ._common import _SOURCE_ARRAY_START_RE, _clean_url, _post_diff_lines
 
-__all__ = ['_ARRAY_TOKEN_RE', '_CMD_SUBST_RE', '_DKMS_RE', '_GIT_PKG_RE', '_SIG_SRC_RE', '_SKIP_JUSTIFICATION_CHECKS', '_SOURCE_CMD_SUBST_RE', '_SOURCE_OPEN_RE', '_URL_TOKEN_RE', '_VALIDPGPKEYS_RE', '_VCS_SOURCE_RE', 'extract_source_array_urls', 'extract_urls_from_diff', 'is_skip_justified', 'local_source_names', 'source_array_has_command_substitution', 'urls_from_pkgbuild_text']
+__all__ = ['_ARRAY_TOKEN_RE', '_CMD_SUBST_RE', '_DKMS_RE', '_GIT_PKG_RE', '_SIG_SRC_RE', '_SKIP_JUSTIFICATION_CHECKS', '_SOURCE_CMD_SUBST_RE', '_SOURCE_OPEN_RE', '_URL_TOKEN_RE', '_VALIDPGPKEYS_RE', '_VCS_SOURCE_RE', 'extract_source_array_urls', 'extract_urls_from_diff', 'is_skip_justified', 'local_source_names', 'resolved_source_urls', 'source_array_has_command_substitution', 'urls_from_pkgbuild_text']
 
 _VCS_SOURCE_RE = re.compile(
     r"^[+ ](?:.*\b(?:git\+https?://|git://|svn://|hg://|bzr://|svn\+https?://|git\+ssh://))",
@@ -103,8 +104,22 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     # typed document supplies them unchanged.  The quote state is carried
     # across lines: a line that starts with `#` inside a multi-line quoted
     # string is data in bash, and a per-line scan dropped the URL on it.
+    doc = parse_diff_lines(split_lines(diff_text))
+    lines = [line.raw for line in doc.lines]
+    # A source URL is often built from the recipe's own variables
+    # (``source=($url/...$pkgver...)``).  The literal token names no host, so
+    # resolving each side against its own assignments is what lets the
+    # buckets, novelty and pinning see the URL that will actually be fetched.
+    old_table = variable_table(lines, frozenset({"-", " "}))
+    new_table = variable_table(lines, frozenset({"+", " "}))
+    from ..buckets import url_host_is_non_routable, url_line_is_inert
+
+    # A heredoc body is data, not a command: a URL printed in a message or
+    # written into a config file is not a source.  Executed bodies
+    # (`bash <<EOF`, `cat <<EOF | sh`) stay eligible.
+    heredoc_bodies = _heredoc_body_indices(split_lines(diff_text))
     quote = ""
-    for line in parse_diff_lines(split_lines(diff_text)).lines:
+    for line in doc.lines:
         raw = line.raw
         if raw.startswith("+++ "):
             # A new file cannot continue a quote from the previous one.
@@ -119,14 +134,29 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
         # fragment (``x#sha256=``) or in ``${var#…}`` is data, so a plain
         # split on `#` would cut a real URL.
         body, quote = strip_comment_stateful(raw[len(prefix):], quote)
-        if prefix == "+" and "http" in body:
-            for u in _URL_TOKEN_RE.findall(body):
-                if len(added_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
-                    added_urls.add(_clean_url(u))
-        elif prefix == "-" and "http" in body:
-            for u in _URL_TOKEN_RE.findall(body):
-                if len(removed_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
-                    removed_urls.add(_clean_url(u))
+        if prefix not in ("+", "-") or line.index in heredoc_bodies:
+            continue
+        resolved = resolve_text(body, new_table if prefix == "+" else old_table)
+        if "http" not in resolved:
+            continue
+        # A line that only prints text (``echo``/``printf``/``cat``/``tee``)
+        # names no source; harvesting its URL fed H003, C011, the buckets and
+        # novelty a URL no fetch ever touches.  Anything else is kept: a bare
+        # URL line, a multi-line string assigned and later fetched, and a
+        # ``source=()`` continuation all reach the build, and a narrower
+        # allowlist dropped them (evaluated and rejected - it opened a recall
+        # gap on exactly those shapes).
+        if url_line_is_inert(resolved):
+            continue
+        target = added_urls if prefix == "+" else removed_urls
+        for u in _URL_TOKEN_RE.findall(resolved):
+            if len(target) >= MAX_URLS_PER_SIDE or len(u) > MAX_URL_TOKEN_BYTES:
+                continue
+            # A loopback/private host distributes nothing; it is not a source.
+            cleaned = _clean_url(u)
+            if url_host_is_non_routable(cleaned):
+                continue
+            target.add(cleaned)
 
     checksum_behavior = detect_checksum_changes(diff_text)
     # A declaration deleted with no replacement is also a checksum change,
@@ -269,3 +299,17 @@ def urls_from_pkgbuild_text(pkgbuild_text: str) -> set[str]:
         if ")" in raw:
             in_array = False
     return urls
+
+
+def resolved_source_urls(pkgbuild_text: str) -> set[str]:
+    """URLs in a whole PKGBUILD's ``source=()`` arrays, variables resolved.
+
+    A recipe that writes ``source=($url/...$pkgver.tar.gz)`` names no host in
+    the literal text, so the URL that will actually be fetched is visible only
+    after resolving the recipe's own assignments.  This is what pinning must
+    read to state a source's pin at all.
+    """
+    if not pkgbuild_text:
+        return set()
+    resolved = resolve_text(pkgbuild_text, text_variable_table(pkgbuild_text))
+    return urls_from_pkgbuild_text(resolved)

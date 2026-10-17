@@ -54,11 +54,13 @@ def test_g4_removing_every_array_is_h002_not_c022():
 
 
 def test_g5_ip_literal_gained_host_fires():
+    # Public literals; a loopback/private/documentation host distributes
+    # nothing and is excluded from the source-URL family.
     assert "C023" in _ids(_diff(
-        "source=('https://203.0.113.7/payload')\n"
+        "source=('https://8.8.8.8/payload')\n"
     ))
     assert "C023" in _ids(_diff(
-        "source=('https://[2001:db8::1]/payload')\n"
+        "source=('https://[2606:4700:4700::1111]/payload')\n"
     ))
 
 

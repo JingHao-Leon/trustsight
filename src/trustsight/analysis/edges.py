@@ -22,9 +22,12 @@ from ..differ import extract_source_array_urls, urls_from_pkgbuild_text
 from ..diffdoc import parse_diff_lines
 from ..findings import stamp
 from ..novelty import normalize_url
+from ..recipedoc import parse_recipe
 from ..rules import ScopeResolver
 from ..rules import _classify_line_context
 from ..tokenizer import resolve_added_lines, split_lines
+
+
 from .build import (
     _recipe_lines,
     edge_foreign_pkg,
@@ -43,7 +46,9 @@ from .delivery import (
     _COMMITTED_CARRIER_RE,
     _COMMITTED_PAYLOAD_RE,
     _declared_source_basenames,
+    _declared_extraction_dirs,
     _declared_source_urls,
+    _unpinned_source_basenames,
     _heredoc_body_indices,
     _printed_heredoc_body_indices,
     edge_fetch_then_execute,
@@ -52,6 +57,79 @@ from .delivery import (
     edge_unread_execution,
     edge_write_execute,
 )
+
+
+def _declared_install_basename(
+    diff_text: str, current_text: str | None,
+) -> tuple[str, bool] | None:
+    """The basename ``install=`` declares.
+
+    Returns ``None`` when the declaration carries a variable - it declares
+    *something* whose basename cannot be compared, so callers must not
+    gate on it.  Otherwise ``(basename, certain)``: ``certain`` is False
+    when neither the complete recipe nor any diff line shows the
+    declaration - a fragment whose hunks miss the line is *unknown*, not
+    absent, and behavior rules must keep firing rather than stand down on a
+    guess.  The complete recipe is authoritative when the caller has it;
+    added or context lines of the diff otherwise.
+    """
+    declared = ""
+    certain = False
+    if current_text:
+        try:
+            declared = parse_recipe(current_text).scalars.get("install", "")
+            certain = True
+        except Exception:  # noqa: BLE001 - a refusal keeps the diff read
+            declared = ""
+    if not certain:
+        # Read through the typed core: a raw split_lines loop here is what
+        # the adoption gate exists to prevent.  Only PKGBUILD lines count:
+        # an .install hook or a patch can carry `install=`-shaped text that
+        # is not the recipe's declaration, and misreading it would stand
+        # behavior rules down on a live hook.  Lines with no file
+        # attribution (a bare fragment) stay eligible.
+        try:
+            doc = parse_diff_lines(split_lines(diff_text))
+        except Exception:  # noqa: BLE001 - an unreadable diff declares nothing
+            doc = None
+        for line in (doc.lines if doc else []):
+            if line.side == "remove":
+                continue
+            if line.file and not line.file.endswith("PKGBUILD"):
+                continue
+            stripped = line.content.strip()
+            if stripped.startswith("install=") or stripped.startswith("install ="):
+                declared = stripped.split("=", 1)[1].strip().strip("\"'")
+                certain = True
+                break
+    if not certain:
+        return ("", False)
+    if "$" in declared:
+        return None
+    return (declared.rsplit("/", 1)[-1], True)
+
+
+def _dead_hook_files(
+    line_files: dict[int, str], declared: tuple[str, bool] | None,
+) -> frozenset[str]:
+    """``.install`` paths pacman will never run.
+
+    Behavior rules (H017, X015) must not claim work scheduled or privileged
+    setup in a hook the recipe does not wire up: C024 already names that nit
+    once, and a dead hook does nothing.  ``declared=None`` (variable
+    declaration) declares an unknown file and ``("", False)`` means the
+    declaration could not be seen at all; neither is positive evidence of a
+    dead hook, so only a certain declaration gates.
+    """
+    if declared is None:
+        return frozenset()
+    base, certain = declared
+    if not certain:
+        return frozenset()
+    return frozenset(
+        path for path in set(line_files.values())
+        if path.endswith(".install") and path.rsplit("/", 1)[-1] != base
+    )
 
 
 @dataclass
@@ -76,6 +154,12 @@ class GraphContext:
     heredoc_body: set[int] = field(default_factory=set)
     #: Basenames that arrive via the declared ``source=()`` array.
     source_basenames: set[str] = field(default_factory=set)
+    #: Directories the declared source archives extract to under
+    #: ``$srcdir`` (archive name minus one archive suffix; VCS clone dirs).
+    extraction_dirs: set[str] = field(default_factory=set)
+    #: Of those, the ones with no real checksum (``SKIP`` or no array):
+    #: content the host decides at fetch time, which is H083's target.
+    unpinned_source_basenames: frozenset = field(default_factory=frozenset)
     #: Normalized URLs the declared ``source=()`` array carries.
     declared_urls: frozenset[str] = field(default_factory=frozenset)
     #: H016's declared set: the post-diff PKGBUILD where the caller has it,
@@ -89,6 +173,24 @@ class GraphContext:
     line_context: dict = field(default_factory=dict)
     #: Indices of heredoc bodies that only *print* (message context).
     printed_heredoc: frozenset[int] = field(default_factory=frozenset)
+    #: Which file each diff line belongs to (``+++ b/...`` attribution).
+    line_files: dict[int, str] = field(default_factory=dict)
+    #: ``.install`` paths the recipe does not wire up via ``install=``:
+    #: pacman never runs them, so behavior claims inside them stand down.
+    dead_hook_files: frozenset[str] = field(default_factory=frozenset)
+
+
+def _line_file_map(lines: list[str]) -> dict[int, str]:
+    """Map each diff-line index to its ``+++ b/...`` file path."""
+    try:
+        doc = parse_diff_lines(split_lines("\n".join(lines)))
+    except Exception:  # noqa: BLE001 - unattributed lines gate nothing
+        return {}
+    out: dict[int, str] = {}
+    for idx, line in enumerate(doc.lines):
+        if line.file:
+            out[idx] = line.file
+    return out
 
 
 def build_context(
@@ -102,6 +204,7 @@ def build_context(
     """Compute the shared pipeline facts exactly once."""
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
+    line_files = _line_file_map(lines)
     declared_src = (
         urls_from_pkgbuild_text(current_text)
         if current_text
@@ -117,6 +220,8 @@ def build_context(
         scopes=scopes,
         heredoc_body=_heredoc_body_indices(lines),
         source_basenames=_declared_source_basenames(diff_text, current_text),
+        extraction_dirs=_declared_extraction_dirs(diff_text, current_text),
+        unpinned_source_basenames=_unpinned_source_basenames(diff_text, current_text),
         declared_urls=_declared_source_urls(diff_text),
         declared_urls_full=frozenset(normalize_url(u) for u in declared_src),
         declared_hosts=frozenset(
@@ -125,6 +230,9 @@ def build_context(
         ),
         line_context=_classify_line_context(lines),
         printed_heredoc=frozenset(_printed_heredoc_body_indices(lines)),
+        line_files=line_files,
+        dead_hook_files=_dead_hook_files(
+            line_files, _declared_install_basename(diff_text, current_text)),
     )
 
 

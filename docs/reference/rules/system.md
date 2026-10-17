@@ -22,7 +22,7 @@ base += novelty_weights scaled by maturity (Tier C)
 final = clamp(base, 0, 100)
 ```
 
-If a FATAL rule fires, the score is immediately set to 100 regardless of all other signals.
+A FATAL finding (R012, R013, or a confirmed H056) contributes weight 0 like any other finding: the numeric score stays the strict sum of weights, and the FATAL signal rides the verdict label and the unsuppressible entry in `score_breakdown`.
 
 ### How severity weight maps to risk
 
@@ -30,7 +30,7 @@ Each severity level carries a weight that reflects its information value: how of
 
 | Severity | Weight | Fire rate on benign corpus | Meaning |
 |----------|--------|---------------------------|---------|
-| FATAL | 0 (hard-stop) | Never | Score immediately set to 100. Package is attempting to deceive the reviewer. |
+| FATAL | 0 | Never | Contributes no weight; names itself in the verdict label (`Low (FATAL: R012)`). Package is attempting to deceive the reviewer. |
 | CRITICAL | 40 | Rare | Almost certainly malicious if triggered. curl pipe bash, sudo in functions. |
 | HIGH | 25 | Low | Strong signal. Checksum manipulation, unexpected downloads. |
 | MEDIUM | 15 | Moderate | Notable but not definitive. Install file changes. |
@@ -327,7 +327,7 @@ Configured in `config.toml` `[severity_weights]`:
 
 | Severity | Weight |
 |----------|--------|
-| FATAL | 0 (hard-stop score at 100) |
+| FATAL | 0 |
 | CRITICAL | 40 |
 | HIGH | 25 |
 | MEDIUM | 15 |
@@ -336,7 +336,7 @@ Configured in `config.toml` `[severity_weights]`:
 
 ### FATAL rules {#fatal-rules}
 
-R012 and R013 are shipped FATAL rules. H056 can also emit a FATAL finding when a current package fact matches an IOC whose confidence is `confirmed`; lower-confidence IOC matches use lower severities. A `pkgbuild_pattern` entry is the exception: it matches a regular-expression shape rather than an exact artefact, so it is capped at CRITICAL whatever its tier and can never reach FATAL. FATAL findings contribute **0 weight** to the running total but immediately set `final_score = 100` and risk level `"Critical"`. No other rules are evaluated for weight contribution after a FATAL fires; the short-circuit is in `calculate_score()` at `src/trustsight/scoring.py`. R012 and R013 are the shipped rules protected from configuration removal or downgrade; H056's severity is derived from the signed/local indicator confidence tier.
+R012 and R013 are shipped FATAL rules. H056 can also emit a FATAL finding when a current package fact matches an IOC whose confidence is `confirmed`; lower-confidence IOC matches use lower severities. A `pkgbuild_pattern` entry is the exception: it matches a regular-expression shape rather than an exact artefact, so it is capped at CRITICAL whatever its tier and can never reach FATAL. FATAL findings contribute **0 weight** to the running total: the numeric score remains the strict sum of finding weights, and the FATAL signal rides (a) the unsuppressible FATAL entry appended to `score_breakdown` - no override can remove it - and (b) the verdict label, where `_fatal_label()` in `src/trustsight/scoring.py` names the rule, e.g. `Low (FATAL: R012)` or, alongside weighted findings, `Medium (FATAL: R013)`. The shipped FATALs target the reviewer reading the report rather than the build machine, so a lone heuristic FATAL misfire no longer reads as a Critical package; a consumer triaging on score should also look for FATAL entries in `score_breakdown`. R012 and R013 are the shipped rules protected from configuration removal or downgrade; H056's severity is derived from the signed/local indicator confidence tier.
 
 ---
 
@@ -1648,6 +1648,6 @@ Measured against the TrustSight test corpus.
 | CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
 | R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 67.9 % | Percentage of benign diffs scoring 0. |
+| Benign zero-rate | 70.7 % | Percentage of benign diffs scoring 0. |
 | Benign p95 | 35 | 95th percentile score on benign corpus. |
 | CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |

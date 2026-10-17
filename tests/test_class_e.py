@@ -354,7 +354,8 @@ def test_benign_shapes_never_fire_against_a_populated_list(diff):
 
 
 def test_scan_diff_reports_a_confirmed_indicator_as_fatal(monkeypatch):
-    """End to end: the rule reaches the score, and FATAL means 100."""
+    """End to end: the rule reaches the score at FATAL severity and weight 0,
+    and no longer inflates the package-risk number to 100 by itself."""
     from trustsight.analysis.pipeline import scan_diff
     from trustsight.config import load_config
 
@@ -370,7 +371,9 @@ def test_scan_diff_reports_a_confirmed_indicator_as_fatal(monkeypatch):
     hits = [e for e in fact.score_breakdown if e.rule_id == "H056"]
     assert len(hits) == 1
     assert hits[0].severity == "FATAL"
-    assert fact.final_score == 100
+    assert hits[0].weight == 0
+    assert fact.final_score == sum(
+        e.weight for e in fact.score_breakdown)
 
 
 def test_scan_diff_reads_the_current_file_when_given(monkeypatch):

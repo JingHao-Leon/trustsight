@@ -667,7 +667,7 @@ def _iter_prefetched(names, fetch_fn, workers: int):
     Analysis stays serial and ordered (novelty reads the observations earlier
     packages recorded), so only the fetch is parallelised: a bounded window of
     fetches is kept in flight and consumed in order.  A fetch that raises
-    yields ``(None, None, None, False, None)`` - the same shape ``_fetch_one``
+    yields ``(None, None, None, False, None, None)`` - the same shape ``_fetch_one``
     returns for a vanished package - rather than aborting the run.
     """
     names = list(names)
@@ -683,7 +683,7 @@ def _iter_prefetched(names, fetch_fn, workers: int):
             try:
                 result = future.result()
             except Exception:
-                result = (None, None, None, False, None)
+                result = (None, None, None, False, None, None)
             yield name, result
             if idx < len(names):
                 inflight.append((names[idx], pool.submit(fetch_fn, names[idx])))
@@ -925,7 +925,7 @@ def _run_baseline_build(
     def _fetch_one(name):
         meta = new_meta.get(name)
         if meta is None:
-            return (None, None, None, False, None)
+            return (None, None, None, False, None, None)
         return fetch_pkgbuild_with_tree(_pkg_or_base(meta))
 
     def _store(name, fetched) -> str:
@@ -939,7 +939,7 @@ def _run_baseline_build(
             log.warning("skipping reserved package name %r", name)
             return "reserved"
         (new_pkgbuild, tree_manifest, trailer_finding, snapshot_refused,
-         install_text) = fetched
+         install_text, install_name) = fetched
         if new_pkgbuild is None:
             log.debug("could not fetch PKGBUILD for %s (base: %s)", name, _pkg_or_base(meta))
             return "fetch_failed"
@@ -971,6 +971,9 @@ def _run_baseline_build(
                 popular_candidates=popular,
                 package_popularity=int((new_meta.get(name) or {}).get("NumVotes", 0) or 0),
                 install_text=install_text,
+                install_name=install_name,
+                old_install_text=(old_snapshot.get("install_text")
+                                  if old_snapshot else None),
             )
         except TokenizerUnavailable as exc:
             # The sandboxed tokenizer could not answer (A6).  The package is

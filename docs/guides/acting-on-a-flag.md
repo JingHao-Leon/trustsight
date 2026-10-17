@@ -34,7 +34,7 @@ Every rule in the output references the line(s) that triggered it. Cross-referen
 | **MEDIUM** | Run `trustsight inspect` and read the diff manually. Check upstream release notes for the version bump. |
 | **HIGH** | Strong signal. Do **not** update this package until you understand why the rule fired. |
 | **CRITICAL** | Do **not** install. Investigate thoroughly; checksum removal combined with an unknown domain is a common attack pattern. |
-| **FATAL** (R012/R013) | Prompt injection or unicode manipulation detected. Score is forced to 100. **Do not install.** Report to the AUR maintainer or the TUR. |
+| **FATAL** (R012/R013) | Prompt injection or unicode manipulation detected: active deception of the reviewer. The FATAL entry in `score_breakdown` means **do not install** without understanding why. Report to the AUR maintainer or the TUR. |
 
 ## When to trust INCONCLUSIVE
 

@@ -111,7 +111,13 @@ def test_r045_ignores_xxd_to_header():
 # --- Source provenance ---
 
 def test_r046_ip_address_source():
-    assert fires("R046", ['+source=("http://192.168.1.5/pkg.tar.gz")'])
+    assert fires("R046", ['+source=("http://8.8.8.8/pkg.tar.gz")'])
+
+
+def test_r046_ignores_a_private_ip_source():
+    # A loopback/private host distributes nothing, so it is not a source.
+    assert not fires("R046", ['+source=("http://192.168.1.5/pkg.tar.gz")'])
+    assert not fires("R046", ['+source=("http://127.0.0.1/pkg.tar.gz")'])
 
 
 def test_r046_ignores_domain_source():
@@ -229,17 +235,18 @@ def test_r054_persistence_outside_package_root():
 
 
 @pytest.mark.parametrize("line", [
-    # The idiomatic split-quote form always matched.  The merged-quote and
-    # unquoted forms stage the identical root-level unit and used to slip
-    # the [\s"'] anchor (the char before the path is } or r).
+    # A unit staged into $pkgdir is the package's own content.  The rule is
+    # "outside package root": the staged form used to fire HIGH on ordinary
+    # packages shipping their own unit
+    # (monsoon-git's user unit, bioma-shell's autostart .desktop).
     '+  install -Dm644 t.service "${pkgdir}"/usr/lib/systemd/system/t.service',
     '+  install -Dm644 t.service "${pkgdir}/usr/lib/systemd/system/t.service"',
     '+  install -Dm644 t.service $pkgdir/usr/lib/systemd/system/t.service',
     '+  install -Dm644 job "$pkgdir/etc/cron.d/job"',
 ])
-def test_r054_fires_on_pkgdir_units_in_any_quoting_style(line):
-    """A unit staged into $pkgdir is still a persistent root-level unit."""
-    assert fires("R054", [line])
+def test_r054_ignores_pkgdir_staged_units(line):
+    """Staging into $pkgdir is inside the package root."""
+    assert not fires("R054", [line])
 
 
 @pytest.mark.parametrize("line", [
@@ -255,16 +262,14 @@ def test_r054_ignores_non_persistence_paths(line):
 
 
 @pytest.mark.parametrize("line", [
-    '+  install -Dm644 t.service "$pkgdir/usr/lib/systemd/user/t.service"',
-    '+  install -Dm644 t.desktop "$pkgdir/etc/xdg/autostart/t.desktop"',
-    '+  install -Dm644 t.sh "$pkgdir/etc/profile.d/t.sh"',
-    '+  install -Dm644 t "$pkgdir/etc/sudoers.d/t"',
+    '+  install -Dm644 t.service /usr/lib/systemd/user/t.service',
+    '+  install -Dm644 t.desktop /etc/xdg/autostart/t.desktop',
+    '+  install -Dm644 t.sh /etc/profile.d/t.sh',
+    '+  install -Dm644 t /etc/sudoers.d/t',
 ])
-def test_r054_claims_the_whole_autostart_surface(line):
-    """A systemd *user* unit was pinned as non-persistence; it starts with
-    the user's login, which needs no root and is if anything more reliable
-    than a system unit.  `profile.d` runs in every new shell, `xdg/autostart`
-    with every session, and `sudoers.d` decides who may become root.
+def test_r054_claims_the_live_autostart_surface(line):
+    """A write to a *live* persistence path (no $pkgdir) is outside the
+    package root: it survives removal and is covered by no checksum.
     """
     assert fires("R054", [line])
 

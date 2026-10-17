@@ -259,7 +259,10 @@ X015_RE = re.compile(
     # requiring one meant the plainest spelling matched nothing.
     r"(?:crontab\b|at\s+(?:-\S+\s+)*(?:now|\+|[0-9])|batch\b"
     r"|systemd-run\b|incrontab\b|entr\b|inotifywait\b|inotifywatch\b"
-    r"|udevadm\s+control\b"
+    # `udevadm control --reload-rules` was listed here, but a config reload
+    # schedules nothing: in a hook it is the documented-required step after
+    # installing udev rules (logibar, linux-g13-driver-git), and in a build
+    # it is a no-op the builder cannot even perform.
     # `enable --now` starts the unit; excluding `enable` outright let the
     # one spelling that both installs and runs it through.
     r"|systemctl\s+(?:--user\s+)?(?:start\b|enable\s+[^\n;&|]*--now\b))"

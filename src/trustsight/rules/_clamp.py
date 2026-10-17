@@ -7,7 +7,7 @@ from ..tokenizer import (
 )
 from ._common import MAX_RULE_LINE_BYTES, MAX_SCANNED_LINES, _log
 
-__all__ = ['_COMMAND_CHAIN_RE', '_COMMENT_OR_DEP_RE', '_DEP_DECLARATION_RE', '_MESSAGE_LINE_RE', '_WHITESPACE_RUN_RE', '_has_unquoted_redirect', '_is_message_line', '_to_pairs', 'clamp', 'clamp_diff_lines', 'clamp_text', 'filter_raw_lines', 'get_raw_diff_lines', 'get_raw_diff_lines_indexed']
+__all__ = ['_COMMAND_CHAIN_RE', '_COMMENT_OR_DEP_RE', '_DEP_DECLARATION_RE', '_MESSAGE_LINE_RE', '_WHITESPACE_RUN_RE', '_has_unquoted_redirect', '_is_message_line', '_printer_quote_body_indices', '_to_pairs', 'clamp', 'clamp_diff_lines', 'clamp_text', 'filter_raw_lines', 'get_raw_diff_lines', 'get_raw_diff_lines_indexed']
 
 _COMMENT_OR_DEP_RE = re.compile(
     r"^(?:\+|)\s*(?:"
@@ -59,6 +59,25 @@ def _has_unquoted_command_chain(line: str) -> bool:
         i += 1
     return False
 
+def _unquoted_redirect_after(line: str, quote: str) -> bool:
+    """True when *line* redirects outside quotes, starting in state *quote*.
+
+    Carries *quote* in from a previous line: inside a spanning ``echo "``
+    string every ``>`` is literal text (audirvana's hook), while a quote
+    that *closes* on this line and is followed by ``>`` (``more" >
+    ~/.bashrc``) is a real write on a message-shaped line.
+    """
+    for char in line:
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in "\"'":
+            quote = char
+        elif char == ">":
+            return True
+    return False
+
+
 def _has_unquoted_redirect(line: str) -> bool:
     """True when *line* redirects outside any quoted text.
 
@@ -83,6 +102,7 @@ def _has_unquoted_redirect(line: str) -> bool:
             quote = char
         elif char == ">":
             return True
+    return False
     return False
 
 def clamp_diff_lines(diff_text: str, package_name: str = "") -> tuple[str, bool]:
@@ -183,6 +203,58 @@ def _is_message_line(line: str) -> bool:
         and not _has_unquoted_command_chain(line)
         and not _has_unquoted_redirect(line)
     )
+
+def _printer_quote_body_indices(lines: list[str]) -> set[int]:
+    """Indices of lines inside a printer's multi-line quoted string.
+
+    ``echo "`` followed by instruction text and a closing quote several
+    lines later (audirvana's install hook) prints the whole span; the
+    continuation lines are output text, not executed shell, and write rules
+    must not read ``mkdir -p ~/.config/...`` inside it as a command.  A
+    closing line whose quote ends in an unquoted redirect (``more" >
+    ~/.bashrc``) is a real write and is not skipped.
+    """
+    bodies: set[int] = set()
+    open_quote = ""
+    message_span = False
+    for i, line in enumerate(lines):
+        if not open_quote:
+            message_span = bool(_MESSAGE_LINE_RE.match(line))
+        else:
+            # Inside a quoted string opened earlier.
+            has_redirect_after_close = False
+            quote = open_quote
+            for char in line:
+                if quote:
+                    if char == quote:
+                        quote = ""
+                elif char in "\"'":
+                    quote = char
+                elif char == ">":
+                    has_redirect_after_close = True
+            if message_span and not has_redirect_after_close:
+                bodies.add(i)
+        # Advance the quote state on the raw text.
+        j = 0
+        n = len(line)
+        while j < n:
+            char = line[j]
+            if open_quote == "'":
+                if char == "'":
+                    open_quote = ""
+            elif open_quote == '"':
+                if char == "\\":
+                    j += 1
+                elif char == '"':
+                    open_quote = ""
+            elif char in "\"'":
+                open_quote = char
+            elif char == "#" and (j == 0 or line[j - 1] in " \t"):
+                break
+            j += 1
+        if not open_quote:
+            message_span = False
+    return bodies
 
 def get_raw_diff_lines_indexed(diff_text: str) -> tuple[list[str], list[int]]:
     """Return non-empty diff lines with continuations joined, plus the

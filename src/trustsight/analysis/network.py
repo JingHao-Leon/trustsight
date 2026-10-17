@@ -289,7 +289,7 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
     # `+epoch=0` silenced H033 on a real pin move, and a variable-driven bump
     # (`-_gtkver=1.2.3/+_gtkver=1.2.4`, context `pkgver=${_gtkver}`) fired it
     # on a version that did move.  Resolution, not text, is what decides.
-    if any_version_scalar_moved(diff_text):
+    if any_version_scalar_moved(diff_text, current_text):
         return
 
     # --- ref moved under a stable version ---------------------------------

@@ -86,6 +86,31 @@ def test_coordinated_adoption_keeps_firing_without_repo_data():
     assert [f["rule_id"] for f in coordinated_adoption(records, 3)] == ["G003"]
 
 
+def test_coordinated_adoption_stands_down_for_a_variant_family_by_name():
+    """New packages land in the window with no repo data yet, which made
+    the repo relatedness test vacuous for exactly the case it exists for:
+    a maintainer releasing appattic, appattic-bin and appattic-qt in one
+    cycle is one project by name, not a coordinated adoption."""
+    records = [
+        {"package": "appattic", "maintainer": "m", "adoption": True},
+        {"package": "appattic-bin", "maintainer": "m", "adoption": True},
+        {"package": "appattic-qt", "maintainer": "m", "adoption": True},
+    ]
+    assert coordinated_adoption(records, min_members=3) == []
+
+
+def test_coordinated_adoption_fires_when_one_member_is_unrelated():
+    """Two variants plus one genuinely unrelated adoption stays a group:
+    the unrelated member is the signal, not noise."""
+    records = [
+        {"package": "appattic", "maintainer": "m", "adoption": True},
+        {"package": "appattic-bin", "maintainer": "m", "adoption": True},
+        {"package": "unrelated-tool", "maintainer": "m", "adoption": True},
+    ]
+    found = coordinated_adoption(records, min_members=3)
+    assert [f["rule_id"] for f in found] == ["G003"]
+
+
 def test_correlate_honors_configured_thresholds():
     config = {"thresholds": {
         "g_host": {"min_packages": 3},

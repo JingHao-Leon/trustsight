@@ -195,16 +195,14 @@ def verdict_label(fact) -> str:
 def _fatal_label(level: str, fact) -> str:
     """Name the FATAL rule behind a band, when one fired.
 
-    A FATAL caps the score at 100, so it always arrives as ``Critical`` -
-    and so does a score that merely accumulated to 81. Those are different
-    claims: a FATAL rule is unsuppressible by construction (B4) and the two
-    shipped ones target the *reviewer* rather than the machine, which is a
-    different threat class from a package that scored badly.
-
-    The distinction rides ``risk_label`` rather than a new band, because
-    ``risk`` is a closed enum consumers gate on and no information is lost
-    without it: the severity is in ``score_breakdown`` either way. This is
-    the same "band plus its cause" shape ``inconclusive_label`` uses.
+    A FATAL finding contributes weight 0 to the score, so the band alone
+    cannot distinguish "a weighted finding reached Critical" from "a FATAL
+    fired alongside a quiet score".  The distinction rides ``risk_label``
+    rather than a new band, because ``risk`` is a closed enum consumers
+    gate on and no information is lost without it: the severity is in
+    ``score_breakdown`` either way, where overrides cannot suppress it.
+    This is the same "band plus its cause" shape ``inconclusive_label``
+    uses.
     """
     fatal = [
         e for e in getattr(fact, "score_breakdown", ()) or ()
@@ -337,7 +335,6 @@ def calculate_score(
 
     base = 0
     breakdown: list[ScoreEntry] = []
-    has_fatal = False
 
     severity_weights = config.get("severity_weights", {})
     for rule in triggered_rules:
@@ -347,7 +344,6 @@ def calculate_score(
         template = rule.get("template", "")
         evidence = rule.get("evidence", params)
         if rule["severity"] == "FATAL":
-            has_fatal = True
             breakdown.append(
                 ScoreEntry(
                     rule_id=rule["rule_id"],
@@ -395,8 +391,15 @@ def calculate_score(
             )
         )
 
-    if has_fatal:
-        return 100, breakdown, "Critical"
+    # A FATAL finding contributes its declared weight - which is 0 by
+    # shipped configuration - and never more.  The two shipped FATALs
+    # (R012/R013) target the reviewer reading the report, not the machine
+    # building the package, so capping the package-risk number at 100 on
+    # their strength alone was a category error: one heuristic misfire
+    # (a benign pkgdesc string) read as Critical.  The signal is not lost.
+    # It rides the verdict label ("Critical (FATAL: R012)") and the
+    # unsuppressible breakdown entry, which overrides cannot remove; only
+    # the numeric score now equals the sum of finding weights.
 
     bucket_weights = config.get("source_bucket_weights", {})
     forge_urls: list[str] = []

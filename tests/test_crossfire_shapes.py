@@ -538,6 +538,16 @@ def test_x024_still_fires_when_the_value_is_not_the_same_variable(command):
     assert "X024" in _fire(command)
 
 
+@pytest.mark.parametrize("command", [
+    # skwd-wall-v2: a DBus address value, not a PATH assignment.
+    'runuser -u "$user" -- env XDG_RUNTIME_DIR="$runtime" '
+    'DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" systemctl --user',
+    'env DISPLAY=:0 XAUTHORITY="unix:path=$x/auth"',
+])
+def test_x024_ignores_a_path_substring_inside_a_value(command):
+    assert "X024" not in _fire(command)
+
+
 # ---------------------------------------------------------------------------
 # X025: multi-line function shadow
 # ---------------------------------------------------------------------------
@@ -605,6 +615,21 @@ def test_x011_ignores_a_dependency_description():
 
 def test_x011_still_fires_on_the_line_that_runs_it():
     assert "X011" in _fire("cargo install wasm-bindgen-cli")
+
+
+def test_x011_ignores_a_distro_install_inside_a_hook():
+    """tape16-bin: `pacman -S xorg-xwayland` in post_install pulls the
+    distribution's own signed packages at install time - not fetched code
+    at build time."""
+    diff = ("--- a/tape16-bin.install\n+++ b/tape16-bin.install\n@@ -0,0 +1,5 @@\n"
+            "+post_install() {\n"
+            "+  pacman -S --noconfirm xorg-xwayland\n"
+            "+}\n")
+    assert "X011" not in set(crossfire_techniques(diff))
+
+
+def test_x011_still_fires_on_a_package_manager_in_a_build():
+    assert "X011" in _fire("pip install requests")
 
 
 def test_x015_ignores_a_printed_heredoc():

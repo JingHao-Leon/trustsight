@@ -63,7 +63,7 @@ Each rule carries a severity weight, derived from its information value:
 | LOW | 5 |
 | INFO | 0 |
 
-FATAL rules are special: they set the score to 100 and contribute zero weight. If a FATAL rule fires, the score is 100 regardless of other signals.
+FATAL findings contribute weight 0 like any other finding. The score no longer jumps to 100 when one fires: the FATAL signal rides the verdict label (`Low (FATAL: R012)`) and the unsuppressible FATAL entry in `score_breakdown`.
 
 ## Pinning and source buckets
 
@@ -119,7 +119,7 @@ Matched against resolved strings because the URL or flags might be in a variable
 
 FATAL rules (R012 prompt injection, R013 unicode bidi, and a confirmed H056 IOC match) are fundamentally different from CRITICAL rules. A CRITICAL rule like `curl | bash` fires on a specific command pattern that is almost always malicious. A FATAL rule fires on a pattern that, when present, indicates active manipulation of the reviewer's perception.
 
-Prompt injection and unicode bidi overrides are attacks on the reviewer, not on the build process. They attempt to hide what the PKGBUILD does. When these fire, the score hard-stops at 100 because a package that tries to deceive the reviewer cannot be trusted regardless of other signals. The 0 weight means they contribute nothing to the additive score; the hard stop is their entire effect.
+Prompt injection and unicode bidi overrides are attacks on the reviewer, not on the build process. They attempt to hide what the PKGBUILD does. When these fire, the FATAL entry they leave in `score_breakdown` and the rule name in the verdict label (`Low (FATAL: R012)`) carry the signal, because a package that tries to deceive the reviewer cannot be trusted regardless of other signals. They contribute weight 0 to the additive score; the label and the unsuppressible breakdown entry are their entire effect. This is deliberate: the shipped FATALs target the reviewer reading the report rather than the build machine, so a lone heuristic FATAL misfire no longer reads as a Critical package. A consumer triaging on score should also look for FATAL entries in `score_breakdown`.
 
 Low recall is acceptable for these rules. R012 has 17% detection on the labelled injection fixtures. It is a tripwire: when it fires, the package is almost certainly malicious. When it does not, nothing can be concluded.
 

@@ -283,6 +283,10 @@ allow = [
     # different registered domain than the `url=` they declare
     # (code.visualstudio.com declares, *.prss.microsoft.com serves).
     "microsoft.com",
+    # secureblue declares its source repo (github.com/secureblue/trivalent)
+    # and serves the hardened-chromium build from its own repo host
+    # (repo.secureblue.dev), the download named by the project's own docs.
+    "secureblue.dev",
 ]
 """
 
@@ -352,6 +356,9 @@ DEFAULT_PATTERNS = (
     "# expressions or variable values never fire; `env`, `dmidecode` and\n"
     "# systemd-detect-virt are deliberately absent (they belong to H067 or\n"
     "# produce benign false positives).  A lone `uname -m` fires H040 at INFO.\n"
+    "# The getent fragment is the keyless-enumeration shape only: `getent\n"
+    "# passwd <name>` is the standard provisioning lookup before useradd and\n"
+    "# must not fire.\n"
     "recon_commands = " + _toml_str_list(DEFAULT_RECON_COMMANDS) + "\n"
     "\n"
     "\n"

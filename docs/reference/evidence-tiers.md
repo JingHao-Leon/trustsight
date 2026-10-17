@@ -179,7 +179,7 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 
 | Tier | Name | Cold? | Maturity-gated? | Direction | Max contribution per signal |
 |------|------|-------|-----------------|-----------|---------------------------|
-| A | Structural | Yes | No | Positive | 40 (CRITICAL) or 100 (FATAL) |
+| A | Structural | Yes | No | Positive | 40 (CRITICAL); a FATAL finding contributes weight 0 and names itself in the verdict label |
 | B | Priors/Context | Yes | No | Positive only | +30 (homograph); trusted forge is 0 |
 | C | History/Novelty | No : zero without a seed | Yes (×0→1) | Positive only | +15 (maintainer) |
 | D | Verification | Yes | No | Reported, never scored | 0 (`P001`-`P008`) |

@@ -71,14 +71,14 @@ Each severity level carries a weight reflecting its information value:
 
 | Severity | Weight | Meaning |
 |----------|--------|---------|
-| FATAL | 0 (hard-stop at 100) | Active deception of the reviewer (R012, R013) |
+| FATAL | 0 | Active deception of the reviewer (R012, R013); names itself in the verdict label, e.g. `Low (FATAL: R012)` |
 | CRITICAL | 40 | Almost certainly malicious if triggered |
 | HIGH | 25 | Strong signal |
 | MEDIUM | 15 | Notable but not definitive |
 | LOW | 5 | Weak signal, context-dependent |
 | INFO | 0 | Recorded for audit only |
 
-FATAL rules (R012, R013) short-circuit scoring. When a FATAL rule fires, the score is immediately set to 100 regardless of any other signal. A CRITICAL finding floors the risk band at High: a lone fork bomb or `rm -rf /` would otherwise read as Medium on arithmetic that says nothing about severity.
+FATAL rules (R012, R013) contribute weight 0 like any other finding; the score is the strict sum of weights and does not jump to 100 when one fires. The FATAL signal rides the verdict label (`Low (FATAL: R012)`) and the unsuppressible FATAL entry in `score_breakdown`. A CRITICAL finding floors the risk band at High: a lone fork bomb or `rm -rf /` would otherwise read as Medium on arithmetic that says nothing about severity.
 
 Source bucket modifiers adjust for domain trustworthiness: `unknown` adds 20, `homograph_attack` adds 30, `trusted_forge` and `official` add 0. Novelty weights add to the score when maturity allows: `url_first_globally` adds 10, `url_first_in_package` adds 5, `maintainer_first_in_package` adds 15, each scaled by `min(1, observations/50)`.
 
@@ -160,7 +160,7 @@ For the full rule catalog, see [Rules Reference](../reference/rules/index.md).
 
 Controls weights, limits, review profiles, and per-rule overrides.
 
-**`[severity_weights]`** maps each severity level to its numeric contribution to the base score. FATAL rules hard-stop at 100; their weight is not used.
+**`[severity_weights]`** maps each severity level to its numeric contribution to the base score. FATAL findings contribute their declared weight (0 by default) like any other finding; the FATAL signal rides the verdict label and the unsuppressible `score_breakdown` entry, not a score shortcut.
 
 ```toml
 [severity_weights]
@@ -172,7 +172,7 @@ LOW = 5
 INFO = 0
 ```
 
-**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 9.6 % of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
+**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 7.8% of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
 
 ```toml
 [review]
@@ -271,7 +271,7 @@ Domain classification lists for source bucket assignment: `trusted_forges` (gith
 
 ### iocs.toml
 
-A versioned indicator list of known-bad package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. Matches are emitted as `H056` findings and scored: the confidence tier sets the severity, so `confirmed` is FATAL, `high` is CRITICAL and `medium` is HIGH, and a `confirmed` match alone hard-stops the score at 100. (The separate IOC federation baseline is reported on `PackageFact.ioc_matches` without affecting the score.) An expired indicator is reported as expired rather than silently dropped.
+A versioned indicator list of known-bad package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. Matches are emitted as `H056` findings and scored: the confidence tier sets the severity, so `confirmed` is FATAL, `high` is CRITICAL and `medium` is HIGH. A confirmed FATAL match contributes weight 0 like any other finding and names itself in the verdict label; the FATAL entry in `score_breakdown` is the do-not-install signal. (The separate IOC federation baseline is reported on `PackageFact.ioc_matches` without affecting the score.) An expired indicator is reported as expired rather than silently dropped.
 
 ---
 

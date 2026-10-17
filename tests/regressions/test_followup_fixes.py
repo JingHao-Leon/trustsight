@@ -219,6 +219,57 @@ def test_a_stable_version_with_a_checksum_change_is_still_c001():
     assert "C002" not in ids
 
 
+def test_a_checksum_change_inside_a_broader_revision_is_c002_not_c001():
+    """nuvio-desktop: sha256sums refreshed at a standing version in the
+    middle of a maintenance revision (pkgdesc and options rewritten in the
+    same diff).  C001's HIGH claim is the surgical shape - checksum arrays
+    are the only substantive change - so a broad revision files C002."""
+    from trustsight.analysis.pipeline import scan_diff
+    from tests.conftest import SHARED_CONFIG
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,7 @@\n"
+        " pkgname=pkt\n"
+        " pkgrel=1\n"
+        "-pkgdesc='Old description'\n"
+        "+pkgdesc='New description'\n"
+        "+options=('!strip' '!debug')\n"
+        "-sha256sums=('" + "a" * 64 + "')\n"
+        "+sha256sums=('" + "b" * 64 + "')\n"
+    )
+    fact = scan_diff(diff, rules=[], config=SHARED_CONFIG, package_name="pkt")
+    ids = {e.rule_id for e in fact.score_breakdown}
+    assert fact.version_moved is False
+    assert "C001" not in ids
+    assert "C002" in ids
+
+
+def test_substantive_change_outside_checksums_shapes():
+    from trustsight.analysis.structural._checksums import (
+        substantive_change_outside_checksums,
+    )
+
+    head = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,5 @@\n"
+    sums_only = (
+        head + "-sha256sums=('" + "a" * 64 + "')\n"
+        "+sha256sums=('" + "b" * 64 + "')\n"
+    )
+    assert substantive_change_outside_checksums(sums_only) is False
+    multiline = (
+        head + " sha256sums=(\n"
+        "-  '" + "a" * 64 + "'\n"
+        "+  '" + "b" * 64 + "'\n"
+        " )\n"
+    )
+    assert substantive_change_outside_checksums(multiline) is False
+    with_pkgdesc = sums_only + "+pkgdesc='x'\n"
+    assert substantive_change_outside_checksums(with_pkgdesc) is True
+    with_function = sums_only + "+build() {\n+  true\n+}\n"
+    assert substantive_change_outside_checksums(with_function) is True
+    comment_only = sums_only + "+# a harmless comment\n"
+    assert substantive_change_outside_checksums(comment_only) is False
+
+
 def test_the_verdict_says_version_bump_on_a_pkgrel_move():
     from trustsight.verdict import _version_prefix
 

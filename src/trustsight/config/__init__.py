@@ -62,6 +62,7 @@ from ._defaults_executor import (
     DEFAULT_UPLOAD_FLAGS,
     DEFAULT_VARIANT_SUFFIXES,
     EXEC_WRAPPER,
+    GETENT_ENUMERATION_FRAGMENT,
     NETWORK_CLIENT,
     NETWORK_CLIENT_ALTERNATIVES,
     OTHER_FETCH_CLIENT,
@@ -166,6 +167,32 @@ def _refresh_legacy_review_limit() -> bool:
     _log.info("repaired the legacy default_review_limit to 0 (read everything)")
     return True
 
+_LEGACY_GETENT_FRAGMENT = r"(?:\A\s*|[;&|]\s*)getent\b"
+
+def _refresh_legacy_recon_commands() -> bool:
+    """Repair the stale shipped H040 ``getent`` fragment in patterns.toml.
+
+    The fragment used to fire on targeted lookups (``getent passwd <name>``
+    - the standard provisioning step before ``useradd``) as well as keyless
+    enumeration.  patterns.toml is written once at install and never
+    synced, so existing installs keep the old fragment; when the file still
+    carries it, the one line is swapped in place (the surrounding list, and
+    any user customisation of it, is preserved).  True when rewritten.
+    """
+    path = CONFIG_DIR / "patterns.toml"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    old_line = "    " + _toml_value(_LEGACY_GETENT_FRAGMENT) + ",\n"
+    new_line = "    " + _toml_value(GETENT_ENUMERATION_FRAGMENT) + ",\n"
+    if text.count(old_line) != 1:
+        return False
+    path.write_text(text.replace(old_line, new_line, 1), encoding="utf-8")
+    _toml_cache.pop("patterns.toml", None)
+    _log.info("repaired the legacy H040 getent fragment in patterns.toml")
+    return True
+
 def ensure_default_configs():
     """Write default config files if they do not exist, and add missing shipped rules."""
     ensure_dirs()
@@ -178,6 +205,7 @@ def ensure_default_configs():
     write_default_file(CONFIG_DIR / "thresholds.toml", DEFAULT_THRESHOLDS)
     write_default_file(CONFIG_DIR / "iocs.toml", DEFAULT_IOCS)
     _refresh_legacy_iocs()
+    _refresh_legacy_recon_commands()
     _refresh_legacy_review_limit()
     # Append any shipped rules the user's file is missing.  The file is
     # written once at install time, so an older install can lack rules
@@ -314,7 +342,14 @@ LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
     # Pre-2026-08-03: one phrasing of one injection family, and comments -
     # where the payload always lives - were filtered out before matching.
     # It caught 3 of 22 injection fixtures.
-    "R012": {r"ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)"},
+    "R012": {
+        r"ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)",
+        # Pre-2026-10-16: alternative 8 fired on any model name within 60
+        # chars of ignore/approve/skip, so a pkgdesc describing an LLM
+        # tool ("local LLM watches sessions and decides what to approve")
+        # scored FATAL.  The verb must now take an object.
+        r"""\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\b|^[^\S\n]*(?:#[^\S\n]*)?(?:system|assistant)[^\S\n]*:[^\S\n]*\S|</?(?:system|instructions?|admin|prompt|assistant)\s*>|\byou\s+are\s+(?:an?|the)\s+[^.\n]{0,48}?(?:model|assistant|ai\b)|\bnew\s+instructions?\s*:|\bdo(?:\s+not|n['’]t)\s+(?:flag|warn|analy[sz]e|review|scan)\b|\bdo(?:\s+not|n['’]t)\s+report\s+(?:any\s+|the\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\b|\b(?:mark|classify|report|treat|label|approve)\b[^.\n]{0,24}?\bas\s+(?:safe|benign|clean|harmless|trusted|ok)\b|\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\s+assistant)\b[^.\n]{0,60}?\b(?:ignore|approve|skip|overlook|flag)\b""",
+    },
     # Pre-0.13.2: quadratic, and therefore refused by the compile-time
     # safety check once the probe alphabet could see a punctuation-only
     # literal.  A refused pattern does not raise - the rule silently stops
@@ -330,7 +365,10 @@ LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
     "R002": {
         r"wget.*\|\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\s+sh|source\s+/dev/stdin)"
     },
-    "R003": {r"base64.*(?:\-d|\-\-decode).*\|"},
+    "R003": {
+        r"base64.*(?:\-d|\-\-decode).*\|",
+        r"base64.*(?:\-d|\-\-decode).*(?<!\\)\|",
+    },
     "R045": {r"\b(?:xxd|uudecode)\s+[^|]*\|"},
     # The client list R051 names grew (rclone moveto/move/bisync/copyurl,
     # npx), then again in 0.18.0 (git's global options before the verb, for
@@ -344,6 +382,12 @@ LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
         r"\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|openssl\s+s_client|dig|host|nslookup|drill|kdig|git\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd\s+(?:get|sync|cp)|aws\s+s3\s+(?:cp|sync|mv)|gsutil\s+(?:cp|rsync)|az(?:copy)?\s+(?:storage\s+blob\s+download|copy)|rclone\s+(?:copy|sync|cat|copyto|copyurl|moveto|move|bisync)|ipfs\s+(?:get|cat|dag\s+get)|swift\s+download|rados\s+get|git\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|restic\s+restore|borg\s+extract|lwp-request|lwp-download|npx|git\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b",
     },
     "R057": {r"(?:curl\s+(?:[^;&|]*\s)?(?:--insecure|-k)\b|wget\s+(?:[^;&|]*\s)?--no-check-certificate\b)"},
+    # R054 was narrowed to writes *outside* the package root.  A `$pkgdir`
+    # staged unit is the package's own content (every daemon ships its
+    # systemd unit that way); firing HIGH on it flagged ordinary packages.
+    # The legacy pattern matched `$pkgdir` too, so it is listed here and
+    # `config sync-rules --update` repairs an install that still carries it.
+    "R054": {r'(?:\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\b|>)[^;&|\n]*?(?:[\s"\x27]|\$\{?pkgdir\}?)(?:(?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/(?:system|user)|profile\.d|bash\.bashrc\.d|zsh(?:/zshrc\.d|rc\.d)|X11/(?:Xsession|xinit/xinitrc)\.d|xdg/autostart|dbus-1/(?:system|session)\.d|sudoers\.d|ld\.so\.conf\.d|pam\.d|security/pam_\w+\.conf|NetworkManager/dispatcher\.d|xinetd\.d|(?:init|rc)\.d|logrotate\.d|tmpfiles\.d|sysusers\.d|binfmt\.d|sysctl\.d|environment\.d|polkit-1/(?:rules|actions)\.d|polkit-1/(?:rules|actions)|skel|update-motd\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\.local|profile|bash\.bashrc|ld\.so\.preload|environment|csh\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\w./-]))'},
 }
 
 def outdated_shipped_rules() -> list[str]:
@@ -709,6 +753,30 @@ def load_structural_rules(on_skip=None) -> list[dict]:
         rules.append(rule)
     return rules
 
+#: IPv4 literals that name a non-routable address: loopback, the RFC1918
+#: blocks, the link-local block and the unspecified address.  Such a host
+#: resolves only on the machine reading the recipe, so it can never be a
+#: distribution source; R046/R047 must not read a URL a recipe merely
+#: *printed* (a local admin console) as a source.  Kept in step with
+#: ``buckets.host_is_non_routable``, which the code paths call.
+_NON_ROUTABLE_IPV4 = (
+    r"127\.", r"10\.", r"192\.168\.",
+    r"172\.(?:1[6-9]|2\d|3[01])\.", r"169\.254\.", r"0\.0\.0\.0",
+)
+
+
+def _non_routable_lookahead() -> str:
+    return "(?!(?:" + "|".join(_NON_ROUTABLE_IPV4) + "))"
+
+
+def _ip_url_pattern() -> str:
+    """Generate the R046 raw-IP pattern, non-routable hosts excluded."""
+    return (
+        "https?://" + _non_routable_lookahead()
+        + r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    )
+
+
 def _standard_port_pattern() -> str:
     """Generate the R047 non-standard-port exclusion pattern from config."""
     hosts = load_hosts().get("hosts", {})
@@ -722,7 +790,10 @@ def _standard_port_pattern() -> str:
     # pattern language.  An unescaped entry silently becomes regex - at
     # best a broken rule, at worst one that matches everything or nothing.
     joined = "|".join(re.escape(str(p)) for p in ports)
-    return f'https?://[^/\\s:]+:(?!(?:{joined})(?:[/\\s"\\x27]|$))\\d{{2,5}}'
+    return (
+        "https?://" + _non_routable_lookahead()
+        + f'[^/\\s:]+:(?!(?:{joined})(?:[/\\s"\\x27]|$))\\d{{2,5}}'
+    )
 
 def _free_registrar_tld_pattern() -> str:
     """Generate the R048 free-registrar-TLD pattern from config."""
@@ -874,4 +945,4 @@ def _review_policy_material(config: dict) -> dict:
     return {"name": policy.name, "threshold": policy.threshold}
 
 
-__all__ = ['ANY_EXECUTOR', 'CACHE_DIR', 'CATALOGUED_FETCH_ALTERNATIVES', 'CONFIG_DIR', 'DATA_DIR', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_DOMAINS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NAMING', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_PATTERNS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_RULES', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_THRESHOLDS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'EXEC_WRAPPER', 'INT_WEIGHT_GROUPS', 'KNOWN_BOOL_KEYS', 'LEGACY_DEFAULT_REVIEW_LIMIT', 'LEGACY_IOCS_STUBS', 'LEGACY_RULE_PATTERNS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'Path', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'SHIPPED_RULESET_VERSION', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', 'STRUCTURED_EXTRACTOR', '_LEGACY_REVIEW_LIMIT_RE', '_RULESET_VERSION_RE', '_SEMANTIC_FIELDS', '_STRUCTURAL_CLAMPED', '_SUBCOMMAND_OPTS', '_free_hosting_pattern', '_free_registrar_tld_pattern', '_log', '_refresh_legacy_iocs', '_refresh_legacy_review_limit', '_replace_rule_block', '_review_policy_material', '_rule_blocks', '_shipped_rule_fields', '_shipped_rules_cache', '_standard_port_pattern', '_toml_cache', '_toml_escape_str', '_toml_str_list', '_toml_value', 'clamp_structural_severity', 'config_fingerprint', 'configured_baseline_tag', 'copy', 'drifted_shipped_rules', 'enforce_fatal_rules', 'ensure_default_configs', 'ensure_dirs', 'load_config', 'load_domains', 'load_hosts', 'load_ioc_sources', 'load_iocs', 'load_naming', 'load_patterns', 'load_rules', 'load_structural_rules', 'load_thresholds', 'load_toml', 'local_ruleset_version', 'logging', 'missing_shipped_rules', 'os', 'outdated_shipped_rules', 're', 'ruleset_age_drift', 'set_config', 'shipped_fatal_rule_ids', 'shipped_rules', 'sync_rules', 'tomllib', 'write_default_file']
+__all__ = ['ANY_EXECUTOR', 'CACHE_DIR', 'CATALOGUED_FETCH_ALTERNATIVES', 'CONFIG_DIR', 'DATA_DIR', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_DOMAINS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NAMING', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_PATTERNS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_RULES', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_THRESHOLDS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'EXEC_WRAPPER', 'GETENT_ENUMERATION_FRAGMENT', 'INT_WEIGHT_GROUPS', 'KNOWN_BOOL_KEYS', 'LEGACY_DEFAULT_REVIEW_LIMIT', 'LEGACY_IOCS_STUBS', 'LEGACY_RULE_PATTERNS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'Path', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'SHIPPED_RULESET_VERSION', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', 'STRUCTURED_EXTRACTOR', '_LEGACY_REVIEW_LIMIT_RE', '_RULESET_VERSION_RE', '_SEMANTIC_FIELDS', '_STRUCTURAL_CLAMPED', '_SUBCOMMAND_OPTS', '_free_hosting_pattern', '_free_registrar_tld_pattern', '_log', '_refresh_legacy_iocs', '_refresh_legacy_recon_commands', '_refresh_legacy_review_limit', '_replace_rule_block', '_review_policy_material', '_rule_blocks', '_shipped_rule_fields', '_shipped_rules_cache', '_standard_port_pattern', '_toml_cache', '_toml_escape_str', '_toml_str_list', '_toml_value', 'clamp_structural_severity', 'config_fingerprint', 'configured_baseline_tag', 'copy', 'drifted_shipped_rules', 'enforce_fatal_rules', 'ensure_default_configs', 'ensure_dirs', 'load_config', 'load_domains', 'load_hosts', 'load_ioc_sources', 'load_iocs', 'load_naming', 'load_patterns', 'load_rules', 'load_structural_rules', 'load_thresholds', 'load_toml', 'local_ruleset_version', 'logging', 'missing_shipped_rules', 'os', 'outdated_shipped_rules', 're', 'ruleset_age_drift', 'set_config', 'shipped_fatal_rule_ids', 'shipped_rules', 'sync_rules', 'tomllib', 'write_default_file']

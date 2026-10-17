@@ -105,6 +105,39 @@ def _unresolved_names(recipe) -> list[str]:
     return names
 
 
+#: A function-local declaration.  ``local kernver="$(make kernelrelease)"``
+#: is build machinery, not a coverage boundary: X026/X027 still rate the
+#: name (a malicious local inside ``build()`` fires there), but the W008
+#: boundary list excludes it.
+_FUNCTION_LOCAL_DECL_RE = re.compile(r"^(?:local|declare)\s")
+
+
+def _reportable_unresolved_names(recipe) -> list[str]:
+    """The W008-facing unresolved names: function locals excluded.
+
+    A ``local``/``declare`` refusal inside a function body is ordinary
+    build machinery; the name is still "not seen" to every rule, but naming
+    it to the reader as a boundary trained them to skim the list.
+    """
+    from ..recipedoc import _ASSIGNMENT_SHAPE_RE
+    from ..tokenizer import split_lines
+
+    function_lines = {
+        raw.strip()
+        for body in recipe.functions.values()
+        for raw in split_lines(body)
+    }
+    names: list[str] = []
+    for line in recipe.unresolved:
+        match = _ASSIGNMENT_SHAPE_RE.match(line)
+        if not match or match.group(1) in names:
+            continue
+        if _FUNCTION_LOCAL_DECL_RE.match(line) and line in function_lines:
+            continue
+        names.append(match.group(1))
+    return names
+
+
 def _added_stream(diff_text: str) -> str:
     """Only the added content lines of a diff, as a headerless stream."""
     from ..diffdoc import parse_diff_lines
@@ -149,6 +182,33 @@ def pattern_across_commits(previous_diff: str, diff_text: str, add,
             previous_commit=previous_commit, current_commit=current_commit)
 
 
+def _recipe_post_doc(doc):
+    """The post-state recipe of the PKGBUILD file only.
+
+    ``recipe_states`` concatenates every file's post lines into one text,
+    so a ``build() {`` whose closing brace sits outside the hunk leaves the
+    function segment open and swallows whatever file section follows it:
+    linux-mnt-reform-bin's hook locals (``DTB_TARGET=$(readlink …)`` in the
+    ``.install`` hunk) were reported as referenced from ``build()``.  The
+    refusal family reads the recipe, not the hook, so the projection is
+    restricted to the PKGBUILD file.  A headerless fragment names no file;
+    there the old whole-diff projection is kept.
+    """
+    from ..recipedoc import parse_recipe, recipe_from_post_state
+
+    post_lines = [
+        line for line in doc.lines
+        if line.side in ("add", "context") and line.file == "PKGBUILD"
+    ]
+    if not post_lines:
+        return recipe_from_post_state(doc)
+    origins = [
+        (line.file, line.new_lineno or 0, line.side) for line in post_lines
+    ]
+    return parse_recipe(
+        "\n".join(line.content for line in post_lines), origins=origins)
+
+
 def refusal_findings(diff_text: str, config, add, current_text=None,
                      previous_diff: str = "", previous_commit: str = "",
                      current_commit: str = "") -> None:
@@ -159,11 +219,10 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
     caller holds it; the diff's own post projection is the fallback.
     """
     from ..diffdoc import parse_diff
-    from ..recipedoc import recipe_states
 
     try:
         doc = parse_diff(diff_text)
-        _pre, post = recipe_states(doc)
+        post = _recipe_post_doc(doc)
     except Exception:
         return
     if current_text:
@@ -218,12 +277,16 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
     # An unresolved construct is not only a suspicion (X) but a boundary
     # (W): the reader is told what the analysis could not resolve.  This is
     # the W-series cross-reference the spec requires; weight-0, so it never
-    # moves a score.
-    if names:
+    # moves a score.  Function-local declarations are excluded: ordinary
+    # build machinery, not a boundary the reader can act on (X026 still
+    # rates the name above).
+    reportable = _reportable_unresolved_names(post)
+    if reportable:
         add("W008", "Unresolved Construct In A Recipe", "INFO", "unverifiable",
-            f"{len(names)} unresolved assignment(s) this analysis could not "
-            "resolve: " + ", ".join(names[:5]),
-            line=None, count=len(names), names=", ".join(names[:5]))
+            f"{len(reportable)} unresolved assignment(s) this analysis could "
+            "not resolve: " + ", ".join(reportable[:5]),
+            line=None, count=len(reportable),
+            names=", ".join(reportable[:5]))
 
     # --- X030: ANSI-C quoted content in commands -------------------------
     for fn in _EXECUTABLE_FUNCTIONS:

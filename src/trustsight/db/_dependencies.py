@@ -9,7 +9,7 @@ from ._connection import get_connection
 from ._metadata import seed_observation_count
 from ._packages import count_observations
 
-__all__ = ['_ESTABLISHED_OBSERVATIONS', '_official_names', '_official_names_lock', 'dependency_observation_count', 'dependency_observation_counts', 'dependency_table_populated', 'effective_observation_count', 'is_established_package', 'official_package_names', 'record_dependency_names', 'top_dependency_names', 'top_dependency_pairs']
+__all__ = ['_ESTABLISHED_MIN_NAME_LENGTH', '_ESTABLISHED_OBSERVATIONS', '_official_names', '_official_names_lock', 'dependency_observation_count', 'dependency_observation_counts', 'dependency_table_populated', 'effective_observation_count', 'is_established_package', 'official_package_names', 'record_dependency_names', 'top_dependency_names', 'top_dependency_pairs']
 
 def dependency_observation_count(name: str) -> int:
     """How many times *name* has been seen as a dependency, package, or alias."""
@@ -78,6 +78,20 @@ def top_dependency_pairs(limit: int = 5000) -> list[tuple[str, int]]:
 
 _ESTABLISHED_OBSERVATIONS = 10
 
+#: Floor on the observation fallback: below this length a name cannot read
+#: as "established" no matter its count.  The corpus records every name seen
+#: in depends/provides/pkgname fields, and short strings accumulate
+#: observations as abbreviation collisions rather than as packages - on the
+#: seeded corpus 1,228 of the 61k names at >= 10 observations are <= 3
+#: chars, and roughly 960 of those are not official-repo names (single
+#: letters like 'c', 'k', 'q' at a dozen observations each are noise, and
+#: 'ax' at 24 is archix' own abbreviation, not a package).  A
+#: ``conflicts=('ax')`` against such a phantom blocks nothing: pacman has no
+#: ``ax`` to refuse.  Short names that ARE real (go, xz, git, r) are still
+#: certified by the exact official-repo branch wherever pacman data exists;
+#: this floor only binds the noisy count fallback used on hosts without it.
+_ESTABLISHED_MIN_NAME_LENGTH = 4
+
 _official_names: Optional[frozenset] = None
 
 _official_names_lock = threading.Lock()
@@ -113,7 +127,9 @@ def is_established_package(name: str) -> bool:
     Prefers the official repositories, which is an exact answer.  Falls back
     to how many packages depend on the name: a poor proxy for repo
     membership (at 10 observations it covers 30% of official packages) but
-    the best available signal when pacman cannot be reached.
+    the best available signal when pacman cannot be reached.  That fallback
+    additionally demands a minimum name length - see
+    ``_ESTABLISHED_MIN_NAME_LENGTH`` for the measurement behind it.
     """
     if not name:
         return False
@@ -126,7 +142,10 @@ def is_established_package(name: str) -> bool:
     official = official_package_names()
     if official:
         return name in official
-    return dependency_observation_count(name) >= _ESTABLISHED_OBSERVATIONS
+    return (
+        len(name) >= _ESTABLISHED_MIN_NAME_LENGTH
+        and dependency_observation_count(name) >= _ESTABLISHED_OBSERVATIONS
+    )
 
 def dependency_table_populated() -> bool:
     """True when the dependency corpus is loaded.

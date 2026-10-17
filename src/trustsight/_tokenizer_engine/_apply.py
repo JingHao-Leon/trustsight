@@ -6,7 +6,7 @@ from ._common import _ASSIGNMENT_RE, _VAR_REF_RE, _memoised, _split_top_level, _
 from ._quotes import split_lines
 from ._variables import _assignments_are_shell, _substitute_with_resolve, _variable_table, join_line_continuations
 
-__all__ = ['_TRAVERSAL_RE', '_joined_indexed', '_resolve_added_lines', 'collapse_traversal', 'resolve_added_lines', 'strip_leading_bom', 'tokenize_and_resolve', 'tokenize_and_resolve_indexed']
+__all__ = ['_TRAVERSAL_RE', '_joined_indexed', '_resolve_added_lines', '_resolve_removed_lines', 'collapse_traversal', 'resolve_added_lines', 'resolve_removed_lines', 'strip_leading_bom', 'tokenize_and_resolve', 'tokenize_and_resolve_indexed']
 
 _TRAVERSAL_RE = re.compile(r"/(?!\.\./)[^/\s;&|\"']+/\.\.(?=/|$)")
 
@@ -41,20 +41,55 @@ def resolve_added_lines(diff_text: str) -> list[str]:
     """
     return _memoised("resolved", diff_text, lambda: _resolve_added_lines(diff_text))
 
-def _resolve_added_lines(diff_text: str) -> list[str]:
+
+def resolve_removed_lines(diff_text: str) -> list[str]:
+    """Diff lines with each removed line replaced by its resolved form.
+
+    The twin of :func:`resolve_added_lines`: the ``-`` side of a hunk is
+    rebuilt with its own variable table, so ``provides=('${pkgbase%-bin}')``
+    re-emitted identically resolves to the same names on both sides instead
+    of the raw literal failing the package-name filter and dropping out.
+    """
+    return _memoised(
+        "resolved_removed", diff_text,
+        lambda: _resolve_removed_lines(diff_text),
+    )
+
+def _resolve_side_lines(diff_text: str, marker: str) -> list[str]:
+    """Diff lines with each *marker*-prefixed line replaced by its resolved
+    form (``+`` for additions, ``-`` for removals).
+
+    Order and count are preserved, so callers can still map a line back to
+    its enclosing function via
+    :func:`~trustsight.rules._classify_enclosing_function`.  Rules scoped to
+    ``build()`` or ``pkgver()`` need that positional information.
+
+    Substitution is applied per line rather than by zipping against
+    :func:`tokenize_and_resolve`, whose output omits assignment lines: any
+    added assignment made the two sequences different lengths and shifted
+    every following line onto the wrong position.
+    """
     lines = join_line_continuations(split_lines(diff_text))
-    additions = [ln[1:] for ln in lines if ln.startswith("+") and ln[1:].strip()]
-    var_table, array_table = _variable_table(additions)
-    alias_table = _alias_table(additions)
+    side_lines = [ln[1:] for ln in lines if ln.startswith(marker) and ln[1:].strip()]
+    var_table, array_table = _variable_table(side_lines)
+    alias_table = _alias_table(side_lines)
     resolved_lines = []
     for line in lines:
-        if line.startswith("+"):
+        if line.startswith(marker):
             r, _ok = _substitute_with_resolve(line[1:], var_table, array_table)
             r = collapse_traversal(_expand_aliases(r, alias_table))
-            resolved_lines.append("+" + r)
+            resolved_lines.append(marker + r)
         else:
             resolved_lines.append(line)
     return resolved_lines
+
+
+def _resolve_added_lines(diff_text: str) -> list[str]:
+    return _resolve_side_lines(diff_text, "+")
+
+
+def _resolve_removed_lines(diff_text: str) -> list[str]:
+    return _resolve_side_lines(diff_text, "-")
 
 def _joined_indexed(lines: list[str]) -> list[tuple[int, str]]:
     """Like :func:`join_line_continuations`, but each logical line is

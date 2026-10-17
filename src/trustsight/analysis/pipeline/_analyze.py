@@ -27,6 +27,7 @@ from ...differ import (
     detect_verification_evidence,
     extract_urls_from_diff,
     map_diff_lines,
+    resolved_source_urls,
     truncate_diff,
 )
 from ...fetcher import (
@@ -361,7 +362,7 @@ def analyze_package(
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, head_pkgbuild
     )
-    version_moved = any_version_scalar_moved(diff_text)
+    version_moved = any_version_scalar_moved(diff_text, head_pkgbuild)
 
     old_maintainer = get_maintainer_from_commit(project, old_commit) or ""
     new_maintainer = get_maintainer_from_commit(project, head_commit) or ""
@@ -633,7 +634,8 @@ def analyze_package(
             note_stage_failure("commit-burst")
 
     aggregate_pinning = _aggregate_pinning(
-        diff_text, source_changes.added_urls, source_changes.checksum_behavior
+        diff_text, source_changes.added_urls, source_changes.checksum_behavior,
+        declared_urls=resolved_source_urls(head_pkgbuild),
     )
     verification_evidence = detect_verification_evidence(
         diff_text, source_changes.checksum_behavior

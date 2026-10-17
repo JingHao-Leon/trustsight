@@ -504,16 +504,23 @@ def gate_declared_findings_fire_under_shipped_config() -> Gate:
 def gate_positive_evidence_cannot_lower_a_fatal() -> Gate:
     """B10 + B4, stated as the attack: sign the package, then steal.
 
-    Redundant given the gate above, and kept anyway: a refactor that
-    reintroduces credit should fail on the case that matters rather than
-    on an abstract one.
+    A FATAL finding contributes weight 0, so maximal declared evidence can
+    no longer be accused of "lowering" a FATAL-capped 100 — the invariant
+    that remains: positive evidence must not change the score, the band, or
+    the presence of the FATAL entry in the breakdown, whatever the declared
+    verification practices say.
     """
     from trustsight.schema import NoveltyContext
     from trustsight.scoring import calculate_score
 
     triggered = [{"rule_id": "R012", "severity": "FATAL", "name": "injection",
-                  "match": ""}]
-    score, _, level = calculate_score(
+                  "match": ""},
+                 {"rule_id": "R001", "severity": "HIGH", "name": "fetch",
+                  "match": "curl | bash"}]
+    plain_score, plain_breakdown, plain_level = calculate_score(
+        triggered, {"https://github.com/a/b.tar.gz": "trusted_forge"},
+        NoveltyContext())
+    score, breakdown, level = calculate_score(
         triggered, {"https://github.com/a/b.tar.gz": "trusted_forge"},
         NoveltyContext(),
         verification_evidence=["checksum_present", "validpgpkeys_declared",
@@ -521,10 +528,13 @@ def gate_positive_evidence_cannot_lower_a_fatal() -> Gate:
         pinning_level="checksum_pinned",
     )
     problems = []
-    if score != 100:
-        problems.append(f"maximal declared evidence pulled a FATAL to {score}")
-    if level != "Critical":
-        problems.append(f"band was {level!r}")
+    if score != plain_score:
+        problems.append(f"declared evidence moved the score to {score}")
+    if level != plain_level:
+        problems.append(f"band moved from {plain_level!r} to {level!r}")
+    fatal = [e for e in breakdown if e.rule_id == "R012"]
+    if not fatal or fatal[0].severity != "FATAL":
+        problems.append("the FATAL entry did not survive the declared evidence")
     return Gate("positive evidence cannot lower a FATAL", not problems,
                 problems or score)
 

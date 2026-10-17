@@ -299,6 +299,106 @@ class ChangeDelta:
         )
 
 
+def _array_closes(text: str, start: int) -> bool:
+    """True when the ``(`` at *start* is balanced by a later ``)``.
+
+    Depth-aware, quote-aware, and comment-aware: ``source=(`` followed by
+    ``_makeopts=(CC=gcc-15 CXX=g++-15)`` never reaches depth 0 - the nested
+    array's own paren only balances itself - so the declaration is read as
+    unterminated, exactly as the tokenizer's collector reads it.
+    """
+    depth = 0
+    quote = ""
+    comment = False
+    boundary = True
+    for ch in text[start:]:
+        if comment:
+            if ch == "\n":
+                comment = False
+                boundary = True
+            continue
+        if quote:
+            if ch == quote:
+                quote = ""
+            continue
+        if ch in "'\"":
+            quote = ch
+        elif ch == "#" and boundary:
+            comment = True
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return True
+        boundary = ch.isspace() or ch in ";|&("
+    return False
+
+
+def _drop_unclosed_arrays(
+    arrays: dict[str, tuple[str, ...]], text: str
+) -> dict[str, tuple[str, ...]]:
+    """Arrays whose closing paren never appears in *text*.
+
+    A hunk can show ``source=(`` without its ``)``: the tokenizer then reads
+    every following line - another array's opener, hex-looking words - as
+    entries of the still-open array, and the array delta leaks them.
+    Fail-closed, mirroring ``_added_array_items``: a declaration that does
+    not close inside this side's projection is not a value this side knows,
+    so it is dropped before diffing.
+    """
+    import re
+
+    kept: dict[str, tuple[str, ...]] = {}
+    for name, entries in arrays.items():
+        opener = re.compile(
+            r"^\s*" + re.escape(name) + r"\s*\+?=\s*\(", re.MULTILINE
+        )
+        last_open: int | None = None
+        for match in opener.finditer(text):
+            last_open = text.index("(", match.start())
+        if last_open is not None and not _array_closes(text, last_open):
+            continue
+        kept[name] = entries
+    return kept
+
+
+def _resolve_relational(
+    entries: tuple[str, ...], scalars: dict[str, str]
+) -> tuple[str, ...]:
+    """Relational-array entries with the recipe's scalars folded in.
+
+    The array table keeps entries literal (``${pkgbase%-bin}``), so two
+    semantically identical ``provides`` arrays diff as a gain and a loss.
+    makepkg's implicit ``pkgbase=$pkgname`` default is applied when no
+    explicit ``pkgbase`` is declared.  An entry that still holds an
+    unexpanded ``${``/``$(`` after substitution is dropped rather than
+    diffed raw, following the fold model of ``deps.declared_package_names``.
+    """
+    import re
+
+    from .expansion import resolve_expansions
+
+    table = dict(scalars)
+    table.setdefault("pkgbase", (table.get("pkgname") or "").strip())
+    resolved_entries: list[str] = []
+    for entry in entries:
+        # Braced forms first: resolve_expansions handles ${pkgbase%-bin}
+        # against the table; a naive $name replace would shred the `${`.
+        value, _ok = resolve_expansions(entry, table)
+        if "${" in value or "$(" in value:
+            continue
+        value = re.sub(
+            r"\$([A-Za-z_][A-Za-z0-9_]*)",
+            lambda m: table.get(m.group(1), m.group(0)),
+            value,
+        )
+        if "${" in value or "$(" in value:
+            continue
+        resolved_entries.append(value)
+    return tuple(resolved_entries)
+
+
 def _family(arrays: dict, base_names) -> tuple[str, ...]:
     """The occurrences of every ``name``/``name_<arch>`` array, in key order."""
     out: list[str] = []
@@ -359,21 +459,25 @@ def change_delta(diff_text: str, pkgbase: str = "") -> ChangeDelta:
 
     doc = parse_diff(diff_text)
     pre, post = recipe_states(doc)
+    pre_arrays = _drop_unclosed_arrays(pre.arrays, "\n".join(doc.pre_lines()))
+    post_arrays = _drop_unclosed_arrays(post.arrays, "\n".join(doc.post_lines()))
 
-    sources = array_diff(_family(pre.arrays, {"source"}),
-                         _family(post.arrays, {"source"}))
-    checksums = array_diff(_family(pre.arrays, _CHECKSUM_NAMES),
-                           _family(post.arrays, _CHECKSUM_NAMES))
-    pgp_keys = array_diff(pre.arrays.get("validpgpkeys", ()),
-                          post.arrays.get("validpgpkeys", ()))
+    sources = array_diff(_family(pre_arrays, {"source"}),
+                         _family(post_arrays, {"source"}))
+    checksums = array_diff(_family(pre_arrays, _CHECKSUM_NAMES),
+                           _family(post_arrays, _CHECKSUM_NAMES))
+    pgp_keys = array_diff(pre_arrays.get("validpgpkeys", ()),
+                          post_arrays.get("validpgpkeys", ()))
     dep_deltas = {
-        name: array_diff(_family(pre.arrays, {name}),
-                         _family(post.arrays, {name}))
+        name: array_diff(_family(pre_arrays, {name}),
+                         _family(post_arrays, {name}))
         for name in _DEP_FAMILIES
     }
     relational = {
-        name: array_diff(_family(pre.arrays, {name}),
-                         _family(post.arrays, {name}))
+        name: array_diff(
+            _resolve_relational(_family(pre_arrays, {name}), pre.scalars),
+            _resolve_relational(_family(post_arrays, {name}), post.scalars),
+        )
         for name in ("provides", "replaces", "conflicts")
     }
     from .deps import extract_dependency_changes

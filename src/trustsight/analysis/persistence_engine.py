@@ -122,10 +122,11 @@ def emit_pacman_hook(ctx: GraphContext, add: Callable) -> None:
 
 def emit_home_rc(ctx: GraphContext, add: Callable) -> None:
     """H032: a write into a user's home or shell rc file."""
+    context = ctx.line_context
     for i, line in enumerate(ctx.lines):
         if not line.startswith("+") or not ctx.scopes.within(i, _SCOPE_FUNCTIONS):
             continue
-        if i in ctx.heredoc_body:
+        if i in ctx.heredoc_body or context.get(i) == "message":
             continue
         for t in _raw_targets(_strip_comment(line[1:])):
             t_clean = t.strip().strip("\"'")
@@ -243,10 +244,16 @@ def emit_install_hook(ctx: GraphContext, add: Callable) -> None:
     """H017: an install hook fetches or executes."""
     context = ctx.line_context
     printed_heredoc = ctx.printed_heredoc
+    dead = ctx.dead_hook_files
     for i, line in enumerate(ctx.lines):
         if not line.startswith("+") or not ctx.scopes.within(i, _INSTALL_HOOKS):
             continue
         if context.get(i) == "message" or i in printed_heredoc:
+            continue
+        if dead and ctx.line_files.get(i) in dead:
+            # The recipe ships this hook but install= does not name it, so
+            # pacman never runs it (C024 names that nit); privileged setup
+            # in a dead hook does nothing (mercure's useradd).
             continue
         body = _strip_comment(line)
         label = ctx.scopes.label(i, _INSTALL_HOOKS)
@@ -341,6 +348,8 @@ def emit_path_injection(ctx: GraphContext, add: Callable) -> None:
                 if not subdir or "/" in subdir:
                     continue
                 if subdir in source_basenames:
+                    continue
+                if subdir in ctx.extraction_dirs:
                     continue
                 if manifest_basenames is not None and subdir in manifest_basenames:
                     continue

@@ -163,7 +163,7 @@ def find_line_in_diff(
             return index + 1
     return None
 
-GENERATED_PATTERN_RULES = ("R013", "R047", "R048", "R152")
+GENERATED_PATTERN_RULES = ("R013", "R046", "R047", "R048", "R152")
 
 def resolve_generated_patterns(rules: list[dict]) -> list[dict]:
     """Fill in the patterns that are generated rather than declared.
@@ -187,6 +187,9 @@ def resolve_generated_patterns(rules: list[dict]) -> list[dict]:
                 R013_UNCONDITIONAL_PATTERN
                 + r"|(?<![^\x00-\x7F])[\u200B-\u200F\uFEFF](?![^\x00-\x7F])"
             )
+        elif rule.get("id") == "R046":
+            from ..config import _ip_url_pattern
+            rule["pattern"] = _ip_url_pattern()
         elif rule.get("id") == "R047":
             from ..config import _standard_port_pattern
             rule["pattern"] = _standard_port_pattern()

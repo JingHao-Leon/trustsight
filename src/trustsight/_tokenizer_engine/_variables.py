@@ -259,6 +259,10 @@ def _collect_array_entries(
                 entries.append(token)
                 entry_lines.append(start_idx + offsets[index])
         except ValueError:
+            # A mid-array shlex failure leaves the contents statically
+            # unknown: reportable as a refusal, exactly like a substitution
+            # refusal, never an invisible empty array.
+            refused = True
             entries, entry_lines = [], []
     return i, entries, entry_lines, refused
 
@@ -379,7 +383,13 @@ def _variable_table_with_spans(
             )
             if entries:
                 ever_kept.add(name)
-            if refused or not entries:
+            # Only refused arrays are reportable.  An empty array is a
+            # KNOWN value (``depends=()`` declares nothing), not a boundary;
+            # reporting it trained the reader to skim the unresolved list.
+            # A collection failure (a shlex error mid-array) still is one:
+            # the contents are not statically known there, so the path is
+            # marked refused to stay reportable.
+            if refused:
                 reportable.setdefault(name, i)
             if refused:
                 # The assignment executes a substitution, so the array's

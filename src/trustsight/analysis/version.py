@@ -22,6 +22,7 @@ reports ``no AUR change`` rather than a change.
 import re
 
 from ..diffdoc import parse_diff_lines
+from ..expansion import resolve_text, text_variable_table, variable_table
 from ..tokenizer import resolve_added_lines
 from ..tokenizer import split_lines
 
@@ -85,9 +86,11 @@ def parse_version(text: str | None) -> Version | None:
 
 
 # The three scalars that make up a pacman version, read off the PKGBUILD
-# rather than off ``pkgver=`` alone.  Each value must be literal and must
-# end the line: ``pkgver=$_commit`` names a value this tool cannot know, and
-# a version it cannot know must not be assembled into one it presents.
+# rather than off ``pkgver=`` alone.  ``epoch=``/``pkgrel=`` must be literal
+# and end the line.  ``pkgver=`` may be a reference to a variable the file
+# assigns (``pkgver=${_pkgver//-/_}``); that is resolved.  A variable the
+# file never assigns names a value this tool cannot know, and a version it
+# cannot know must not be assembled into one it presents.
 _PKGVER_ASSIGN_RE = re.compile(
     r"^\s*pkgver\s*=\s*[\"']?([A-Za-z0-9._+~]+)[\"']?\s*(?:#.*)?$", re.MULTILINE
 )
@@ -113,20 +116,37 @@ def full_version_from_pkgbuild(text: str) -> str:
     against a declared ``epoch=1 pkgver=2.1`` used to come out as
     *installed ahead*: a real update, reported as a backwards move.
 
-    Returns ``""`` when there is no literal ``pkgver=`` to build on, which
-    leaves the caller's existing fallbacks in charge rather than inventing
-    a version.  ``epoch=0`` is omitted, as pacman itself renders it.
+    Returns ``""`` when ``pkgver`` is missing or is a reference the file
+    never assigns, which leaves the caller's existing fallbacks in charge
+    rather than inventing a version.  ``epoch=0`` is omitted, as pacman
+    itself renders it.
     """
     if not text:
         return ""
     pkgver = _PKGVER_ASSIGN_RE.search(text)
-    if not pkgver:
-        return ""
+    if pkgver:
+        pkgver_value = pkgver.group(1)
+    else:
+        # ``pkgver=${_pkgver//-/_}``: the literal regex refuses a value with
+        # ``$``/``{``, but the recipe assigns the variable it names, so the
+        # value is knowable without executing anything.  Returning ``""``
+        # here made a variable-driven bump read as "no version declared",
+        # which fired C001 instead of C002.
+        raw = re.search(r"^\s*pkgver\s*=\s*(.+?)\s*(?:#.*)?$", text, re.MULTILINE)
+        if not raw:
+            return ""
+        resolved = resolve_text(
+            _strip_value(raw.group(1)), text_variable_table(text)
+        )
+        match = _FULL_VERSION_RE.match(resolved)
+        if not match:
+            return ""
+        pkgver_value = match.group("pkgver")
     epoch = _EPOCH_ASSIGN_RE.search(text)
     pkgrel = _PKGREL_ASSIGN_RE.search(text)
     prefix = f"{epoch.group(1)}:" if epoch and epoch.group(1) != "0" else ""
     suffix = f"-{pkgrel.group(1)}" if pkgrel else ""
-    return f"{prefix}{pkgver.group(1)}{suffix}"
+    return f"{prefix}{pkgver_value}{suffix}"
 
 
 def vercmp(a: str, b: str) -> int:
@@ -213,40 +233,10 @@ def compare_installed_to_aur(
 # variable assigned a few lines above, so ``pkgver=${_gtkver}`` itself does
 # not appear on a ``+`` or ``-`` line at all.
 _PKGVER_LINE_RE = re.compile(r"^([+\- ])\s*pkgver\s*=\s*(.+?)\s*$")
-_ASSIGN_LINE_RE = re.compile(
-    r"^([+\- ])\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+?)\s*$"
-)
-_VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
-
-# Bounded because a crafted recipe can chain substitutions; eight links is
-# far past anything makepkg packaging does in practice.
-_RESOLVE_MAX_DEPTH = 8
 
 
 def _strip_value(value: str) -> str:
     return value.strip().strip("'\"")
-
-
-def _variable_table(lines: list[str], prefixes: frozenset[str]) -> dict[str, str]:
-    """Assignments visible in the diff, from the lines carrying *prefixes*."""
-    table: dict[str, str] = {}
-    for line in lines:
-        match = _ASSIGN_LINE_RE.match(line)
-        if match and match.group(1) in prefixes:
-            table[match.group(2)] = _strip_value(match.group(3))
-    return table
-
-
-def _resolve_value(value: str, table: dict[str, str], depth: int = 0) -> str:
-    """Substitute the diff's own variables into *value*, bounded."""
-    if "$" not in value or depth >= _RESOLVE_MAX_DEPTH:
-        return value
-    replaced = _VAR_REF_RE.sub(
-        lambda m: table.get(m.group(1), m.group(0)), value
-    )
-    if replaced == value:
-        return value
-    return _resolve_value(replaced, table, depth + 1)
 
 
 _SCALAR_LINE_RE = re.compile(
@@ -254,7 +244,9 @@ _SCALAR_LINE_RE = re.compile(
 )
 
 
-def any_version_scalar_moved(diff_text: str) -> bool:
+def any_version_scalar_moved(
+    diff_text: str, current_text: str | None = None
+) -> bool:
     """True when ``pkgver``, ``pkgrel`` or ``epoch`` genuinely changed value.
 
     H033 asks "did the maintainer declare a new version?", and a ``pkgrel``
@@ -263,13 +255,18 @@ def any_version_scalar_moved(diff_text: str) -> bool:
     check is by *resolved value*, not by token presence: an added no-op
     ``+epoch=0`` (the value was already 0) must not suppress the finding,
     which a lexical token match would allow.
+
+    A variable-driven bump can leave the ``pkgver=`` line outside every hunk
+    - the edit is in the variable it references - so when no scalar line
+    moved and *current_text* is available the post-diff recipe supplies the
+    ``pkgver`` reference to resolve.
     """
     doc = parse_diff_lines(split_lines(diff_text or ""))
     # _variable_table's signature takes the raw lines; the typed document
     # hands them over unchanged (``raw`` is the line as it appeared).
     lines = [line.raw for line in doc.lines]
-    old_table = _variable_table(lines, frozenset({"-", " "}))
-    new_table = _variable_table(lines, frozenset({"+", " "}))
+    old_table = variable_table(lines, frozenset({"-", " "}))
+    new_table = variable_table(lines, frozenset({"+", " "}))
     old_prefixes = frozenset({"-", " "})
     new_prefixes = frozenset({"+", " "})
 
@@ -277,7 +274,7 @@ def any_version_scalar_moved(diff_text: str) -> bool:
         for line in doc.lines:
             match = _SCALAR_LINE_RE.match(line.raw)
             if match and match.group(1) in prefixes and match.group(2).lower() == scalar:
-                return _resolve_value(_strip_value(match.group(3)), table)
+                return resolve_text(_strip_value(match.group(3)), table)
         return None
 
     for scalar in ("pkgver", "pkgrel", "epoch"):
@@ -285,6 +282,8 @@ def any_version_scalar_moved(diff_text: str) -> bool:
         new_val = resolved(scalar, new_table, new_prefixes)
         if old_val is not None and new_val is not None and old_val != new_val:
             return True
+    if current_text:
+        return pkgver_move_in_diff(diff_text, current_text)[0]
     return False
 
 
@@ -333,10 +332,10 @@ def pkgver_move_in_diff(
         if new_ref is None:
             new_ref = context_ref
 
-    old_table = _variable_table(lines, frozenset({"-", " "}))
-    new_table = _variable_table(lines, frozenset({"+", " "}))
-    resolved_old = _resolve_value(old_ref, old_table) if old_ref is not None else None
-    resolved_new = _resolve_value(new_ref, new_table) if new_ref is not None else None
+    old_table = variable_table(lines, frozenset({"-", " "}))
+    new_table = variable_table(lines, frozenset({"+", " "}))
+    resolved_old = resolve_text(old_ref, old_table) if old_ref is not None else None
+    resolved_new = resolve_text(new_ref, new_table) if new_ref is not None else None
     moved = (
         resolved_old is not None
         and resolved_new is not None
@@ -400,8 +399,8 @@ def _epoch_removed_unchanged(diff_text: str) -> tuple[bool, str | None]:
     if added_epoch:
         return False, None
 
-    old_table = _variable_table(lines, frozenset({"-", " "}))
-    new_table = _variable_table(lines, frozenset({"+", " "}))
+    old_table = variable_table(lines, frozenset({"-", " "}))
+    new_table = variable_table(lines, frozenset({"+", " "}))
 
     def resolved(scalar: str, table: dict[str, str],
                  prefixes: frozenset[str]) -> str | None:
@@ -409,7 +408,7 @@ def _epoch_removed_unchanged(diff_text: str) -> tuple[bool, str | None]:
             match = _SCALAR_LINE_RE.match(line.raw)
             if match and match.group(1) in prefixes \
                     and match.group(2).lower() == scalar:
-                return _resolve_value(_strip_value(match.group(3)), table)
+                return resolve_text(_strip_value(match.group(3)), table)
         return None
 
     for scalar in ("pkgver", "pkgrel"):

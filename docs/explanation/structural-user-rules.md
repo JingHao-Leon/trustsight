@@ -129,7 +129,7 @@ one pattern about structure may claim without corpus evidence.
   `lint-rules` warns when it does not follow `R###` and errors when it names a
   programmatic rule, because one id would then mean two different things. An
   `R###` id in the line-rule range is the convention for the same reason.
-- No score above `HIGH`, and no FATAL short-circuit.
+- No score above `HIGH`, and no FATAL findings: user rules cannot reach the FATAL severity, whose signal rides the verdict label and `score_breakdown` rather than the number.
 
 ## See also
 

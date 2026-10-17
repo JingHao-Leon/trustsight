@@ -3,16 +3,24 @@
 import os
 import re
 import shlex
-from functools import lru_cache
 from ...config import (
-    ANY_EXECUTOR as _ANY_EXECUTOR,
     EXEC_WRAPPER as _EXEC_WRAPPER,
     PAYLOAD_PRODUCER as _PAYLOAD_PRODUCER,
     _SUBCOMMAND_OPTS as _SUBCOMMAND_OPTS,
 )
 from ...coverage import note_stage_failure
 from ...diffdoc import parse_diff_lines
-from ...line_lex import lex_lines
+from ...line_lex import (
+    _HEREDOC_OPEN_RE,
+    _HEREDOC_PIPED_RE,
+    _HEREDOC_TO_EXECUTING_CONFIG_RE,
+    _HEREDOC_TO_INTERPRETER_RE,
+    _PRINTED_HEREDOC_OPENER_RE,
+    _heredoc_body_indices,
+    _heredoc_body_indices_cached,
+    _printed_heredoc_body_indices,
+    _printed_heredoc_body_indices_cached,
+)
 from ...tokenizer import split_lines
 from ..build import (
     _CRITICAL_FUNCTIONS,
@@ -20,7 +28,7 @@ from ..build import (
 )
 from ...rules import find_line_in_diff
 
-__all__ = ['_BUILD_FUNCTIONS', '_BUILD_ONLY_PATH_RE', '_BUILD_ROOT_RE', '_CMD_START', '_COPY_WRITE_RE', '_DECODER_WRITE_RE', '_DESCRIPTIVE_FIELD_RE', '_ELF_MAGIC', '_EXECUTION_RE', '_EXEC_PREFIX', '_GENERATION_WRITE_RE', '_H072_BENIGN_EXEC', '_HEREDOC_OPEN_RE', '_HEREDOC_PATH_BEFORE_RE', '_HEREDOC_PIPED_RE', '_HEREDOC_TO_EXECUTING_CONFIG_RE', '_HEREDOC_TO_INTERPRETER_RE', '_IMPLICIT_BUILD_INPUTS', '_INTERPRETER_WRITE_RE', '_MACHO_MAGICS', '_NOT_A_PATH_RE', '_PATCH_APPLY_RE', '_PE_MAGIC', '_PRINTED_HEREDOC_OPENER_RE', '_PRODUCER_REDIRECT_RE', '_SCOPE_FUNCTIONS', '_SHEBANG_MAGIC', '_SRCINFO_SOURCE_RE', '_VCS_SOURCE_RE', '_collect_writes', '_declared_source_basenames', '_declared_source_basenames_cached', '_find_line', '_heredoc_body_indices', '_heredoc_body_indices_cached', '_is_directory_path', '_norm_path', '_not_a_path', '_printed_heredoc_body_indices', '_printed_heredoc_body_indices_cached', '_source_basename']
+__all__ = ['_BUILD_FUNCTIONS', '_BUILD_ONLY_PATH_RE', '_BUILD_ROOT_RE', '_CMD_START', '_COPY_WRITE_RE', '_DECODER_WRITE_RE', '_DESCRIPTIVE_FIELD_RE', '_ELF_MAGIC', '_EXECUTION_RE', '_EXEC_PREFIX', '_GENERATION_WRITE_RE', '_H072_BENIGN_EXEC', '_HEREDOC_OPEN_RE', '_HEREDOC_PATH_BEFORE_RE', '_HEREDOC_PIPED_RE', '_HEREDOC_TO_EXECUTING_CONFIG_RE', '_HEREDOC_TO_INTERPRETER_RE', '_IMPLICIT_BUILD_INPUTS', '_INTERPRETER_WRITE_RE', '_MACHO_MAGICS', '_NOT_A_PATH_RE', '_PATCH_APPLY_RE', '_PE_MAGIC', '_PRINTED_HEREDOC_OPENER_RE', '_PRODUCER_REDIRECT_RE', '_SCOPE_FUNCTIONS', '_SHEBANG_MAGIC', '_SRCINFO_SOURCE_RE', '_VCS_SOURCE_RE', '_collect_writes', '_declared_extraction_dirs', '_declared_extraction_dirs_cached', '_declared_source_basenames', '_declared_source_basenames_cached', '_declared_source_entries_cached', '_find_line', '_heredoc_body_indices', '_heredoc_body_indices_cached', '_is_directory_path', '_norm_path', '_not_a_path', '_printed_heredoc_body_indices', '_printed_heredoc_body_indices_cached', '_source_basename']
 
 _SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
 
@@ -97,136 +105,6 @@ _HEREDOC_PATH_BEFORE_RE = re.compile(
     r"\b(?:cat|tee)\b\s+[^;&|<]*?>\s*(\S+)\s*<<",
     re.IGNORECASE,
 )
-
-_HEREDOC_OPEN_RE = re.compile(r"(?<!<)<<(?!<)(-)?\s*['\"]?(\w+)['\"]?")
-
-_HEREDOC_TO_INTERPRETER_RE = re.compile(
-    r"(?:\A\s*|[;&|]\s*|\b(?:env|exec|command|sudo|nohup)\s+)"
-    r"(?:/(?:usr/)?bin/)?"
-    r"(?:ba|z|da|k|a|mk|pdk|ya|po)?sh\b(?!\s*>)"
-    r"|\|\s*(?:/(?:usr/)?bin/)?(?:ba|z|da|k|a|mk|pdk|ya|po)?sh\b"
-    r"|(?:\A\s*|[;&|]\s*)(?:python[23]?|perl|ruby|node)\b(?!\s*>)",
-    re.IGNORECASE,
-)
-
-_HEREDOC_TO_EXECUTING_CONFIG_RE = re.compile(
-    r">\s*+[\"']?"
-    r"(?=[^\"'\s;&|<>]*(?:"
-    r"/(?:cron\.[a-z]+|cron\.d|systemd/(?:system|user)|xdg/autostart"
-    r"|pam\.d|profile\.d|init\.d|rc\.d|xinetd\.d|logrotate\.d"
-    r"|dispatcher\.d|udev/rules\.d|conf\.d|sudoers\.d)/"
-    r"|\.(?:service|socket|timer|path|desktop|rules|conf)\b))",
-    re.IGNORECASE,
-)
-
-_HEREDOC_PIPED_RE = re.compile(
-    r"(?<!\\)\|\s*(?:" + _ANY_EXECUTOR + r")", re.IGNORECASE
-)
-
-def _heredoc_body_indices(lines: list[str]) -> set[int]:
-    """Twenty rule families ask this of the same lines; the scan is cached
-    on them.  A fresh ``set`` is returned so no caller can reach another's.
-    """
-    return set(_heredoc_body_indices_cached(tuple(lines)))
-
-@lru_cache(maxsize=8)
-def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
-    """Indices of lines that are literal heredoc content, not commands.
-
-    A heredoc's body is data being written to a file; treating it as build
-    commands would let the payload's own lines fire the very rules the
-    generate-then-execute rule is meant to catch once.  The opener line
-    itself is a command and stays eligible.
-
-    That reasoning holds only for a heredoc that reaches a *file*.  When the
-    destination is a shell - ``bash <<'EOF'`` - the body is not data, it is
-    the script being executed, and exempting it turned four rules off for
-    every line inside::
-
-        build() {
-          bash <<'EOF'
-          _fetch
-          bash "$srcdir/x.sh"
-        EOF
-        }
-
-    The exemption is therefore decided per heredoc, by where it goes.
-    """
-    body: set[int] = set()
-    delims: list[tuple[str, bool]] = []
-    # The lexer owns opener detection: a `<<` inside a comment or a quoted
-    # string is prose.  Scanning the raw line here disagreed with
-    # line_lex._scan and turned `# upstream uses the <<EOF form` above a
-    # fetch into a fake delimiter that blanked every following line - and
-    # with it H069/H072/H082/H083 for the whole function.
-    lexed = lex_lines(list(lines))
-    for i, line in enumerate(lines):
-        content = line[1:] if line[:1] in ("+", "-") else line
-        stripped = content.strip()
-        if delims and stripped == delims[-1][0]:
-            delims.pop()
-            continue
-        if delims:
-            if delims[-1][1]:
-                body.add(i)
-            continue
-        opener = lexed[i].heredoc_opener
-        if opener is not None:
-            # The destination may be named on either side of the
-            # delimiter: `bash <<EOF` puts it before, and
-            # `cat <<'EOF' | sh` puts it after the redirect.  Reading
-            # only the left half meant the piped form - which is how
-            # the shape is usually written - stayed classified as data.
-            is_data = not (
-                _HEREDOC_TO_INTERPRETER_RE.search(content)
-                or _HEREDOC_PIPED_RE.search(content)
-                or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(content)
-            )
-            delims.append((opener[0], is_data))
-    return frozenset(body)
-
-_PRINTED_HEREDOC_OPENER_RE = re.compile(
-    r"^\s*(?:cat|echo|printf)\b(?![^\n]*>)"
-)
-
-def _printed_heredoc_body_indices(lines: list[str]) -> set[int]:
-    """Indices of lines inside a heredoc that only prints its body.
-
-    H017/H035/X015 read commands in install hooks; a ``cat <<'MESSAGE'``
-    body that *advises* the user to run ``sudo pacman -S`` is
-    documentation, and the opener is the only line that says so.  A
-    redirect (``cat > out <<EOF``), a pipe into an executor
-    (``cat <<EOF | sh``), or any opener that is not cat/echo/printf stays
-    eligible: the body may be a script some later line runs.
-    """
-    return set(_printed_heredoc_body_indices_cached(tuple(lines)))
-
-@lru_cache(maxsize=8)
-def _printed_heredoc_body_indices_cached(
-    lines: tuple[str, ...],
-) -> frozenset[int]:
-    body: set[int] = set()
-    delims: list[tuple[str, bool]] = []
-    for i, line in enumerate(lines):
-        content = line[1:] if line[:1] in ("+", "-") else line
-        stripped = content.strip()
-        if delims and stripped == delims[-1][0]:
-            delims.pop()
-            continue
-        if delims:
-            if delims[-1][1]:
-                body.add(i)
-            continue
-        for m in _HEREDOC_OPEN_RE.finditer(content):
-            if not m.group(2):
-                continue
-            printed = bool(
-                _PRINTED_HEREDOC_OPENER_RE.match(content)
-                and not _HEREDOC_PIPED_RE.search(content[m.end():])
-            )
-            delims.append((m.group(2), printed))
-            break
-    return frozenset(body)
 
 _EXEC_PREFIX = r"(?:" + _EXEC_WRAPPER + r")*"
 
@@ -400,6 +278,134 @@ _VCS_SOURCE_RE = re.compile(
 
 _SRCINFO_SOURCE_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S.*)$")
 
+_CHECKSUM_GROUP_RE = re.compile(
+    r"^\s*(b2sums|sha512sums|sha384sums|sha256sums|sha1sums|md5sums|cksums)"
+    r"(_[A-Za-z0-9]+)?\s*=\s*\(",
+    re.IGNORECASE,
+)
+
+#: makepkg's checksum precedence: the first type that is declared wins.
+_CHECKSUM_TYPE_ORDER = (
+    "b2sums", "sha512sums", "sha384sums", "sha256sums",
+    "sha1sums", "md5sums", "cksums",
+)
+
+
+def _unpinned_source_basenames(
+    diff_text: str, current_text: str | None = None
+) -> frozenset:
+    """Declared sources whose checksum is ``SKIP`` (or absent).
+
+    A checksummed download is exactly the bytes the packager pinned, so
+    executing it is vetted packaging; the residual risk H083 names is the
+    source whose content is unpinned - ``SKIP`` or no checksum array at
+    all - where the host decides at fetch time what runs.  pkl-lsp pinned
+    ``merge-lsp4j-metadata.py`` with a sha512 and still scored H083.
+    """
+    from ...differ import _SOURCE_ARRAY_START_RE
+    from ...differ._checksums import _checksum_items
+    from ...file_kinds import files_at_line, is_srcinfo_file
+    from ...tokenizer import variable_table as _variable_table
+
+    text = current_text if current_text is not None else diff_text
+    whole_file = current_text is not None
+    lines = split_lines(text)
+    if whole_file:
+        lines = [" " + ln for ln in lines]
+    _vars, _arrs = _variable_table(
+        [ln[1:] if ln[:1] in ("+", " ") else ln for ln in lines])
+
+    def _subst(ent: str) -> str:
+        for key in sorted(_vars, key=len, reverse=True):
+            value = _vars[key]
+            ent = ent.replace("${" + key + "}", value).replace("$" + key, value)
+        return ent
+
+    files = files_at_line(lines)
+    # suffix -> {"sources": [basename|None], "checksums": {type: [item]}}
+    groups: dict[str, dict] = {}
+    in_array = False
+    kind = ""
+    suffix = ""
+    ctype = ""
+
+    def _group() -> dict:
+        return groups.setdefault(suffix, {"sources": [], "checksums": {}})
+
+    for line in parse_diff_lines(lines).lines:
+        if line.raw.startswith(("+++", "---", "@@")):
+            continue
+        if line.side == "remove":
+            continue
+        body = line.content if line.side == "add" else line.raw
+        if not in_array:
+            if not whole_file and is_srcinfo_file(files.get(line.index, "")):
+                continue  # the PKGBUILD is authoritative for checksums too
+            src = _SOURCE_ARRAY_START_RE.match(body)
+            chk = _CHECKSUM_GROUP_RE.match(body)
+            if not src and not chk:
+                continue
+            in_array = True
+            if src:
+                kind = "source"
+                suffix = ""
+                ctype = ""
+                idx = body.find("(")
+                body = body[idx + 1:] if idx != -1 else ""
+            else:
+                m = _CHECKSUM_GROUP_RE.match(body)
+                kind = "checksum"
+                ctype = m.group(1).lower()
+                suffix = (m.group(2) or "").lower()
+                idx = body.find("(")
+                body = body[idx + 1:] if idx != -1 else ""
+        body = body.rstrip()
+        if body.lstrip().startswith("#"):
+            continue
+        if body.endswith("\\") and not body.endswith("\\\\"):
+            body = body[:-1]
+        if kind == "source":
+            try:
+                entries = shlex.split(body)
+            except ValueError:
+                note_stage_failure("source-parse")
+                entries = []
+            for ent in entries:
+                ent = ent.strip().rstrip(")")
+                if not ent or ent in ("(", ")"):
+                    continue
+                if _VCS_SOURCE_RE.search(ent):
+                    # VCS sources consume a checksum slot; keep the slot.
+                    _group()["sources"].append(None)
+                    continue
+                ent = _subst(ent)
+                base = (ent.split("::", 1)[0] if "::" in ent
+                        else _source_basename(ent))
+                _group()["sources"].append(base or None)
+        else:
+            for item in _checksum_items(body):
+                item = item.strip().strip("'\"").strip()
+                if item:
+                    _group()["checksums"].setdefault(ctype, []).append(item)
+        if ")" in body:
+            in_array = False
+
+    unpinned: set[str] = set()
+    for group in groups.values():
+        sources = group["sources"]
+        chosen = None
+        for ctype in _CHECKSUM_TYPE_ORDER:
+            if ctype in group["checksums"]:
+                chosen = group["checksums"][ctype]
+                break
+        for index, base in enumerate(sources):
+            if base is None:
+                continue
+            item = chosen[index] if chosen and index < len(chosen) else ""
+            if not item or item.upper() in ("SKIP", "NONE"):
+                unpinned.add(base)
+    return frozenset(unpinned)
+
 def _declared_source_basenames(
     diff_text: str, current_text: str | None = None
 ) -> set[str]:
@@ -433,7 +439,75 @@ def _declared_source_basenames(
         _declared_source_basenames_cached(diff_text, False)
     )
 
+#: Archive suffixes whose extraction yields a directory under ``$srcdir``.
+#: One suffix is stripped, longest-first, case-insensitively.  Single-file
+#: compressions (``.gz``/``.xz``/...) and non-extracting formats (``.deb``,
+#: ``.AppImage``...) are deliberately absent: mapping them to a directory
+#: would suppress H085 on a crafted filename.  Kept consistent with the
+#: multi-file subset of ``_ARCHIVE_SUFFIXES`` in longitudinal.py.
+_ARCHIVE_EXTRACT_SUFFIXES = (
+    ".tar.lz4", ".tar.zstd",
+    ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar.lz",
+    ".tbz2", ".tgz", ".tbz", ".txz",
+    ".tar", ".zip", ".7z",
+)
+
+def _archive_extract_dir(basename: str) -> str | None:
+    """Directory *basename* extracts to under ``$srcdir``, or ``None``."""
+    lower = basename.lower()
+    for suffix in _ARCHIVE_EXTRACT_SUFFIXES:
+        if lower.endswith(suffix) and len(basename) > len(suffix):
+            return basename[: -len(suffix)]
+    return None
+
+def _declared_extraction_dirs(
+    diff_text: str, current_text: str | None = None
+) -> set[str]:
+    """Directories the declared sources extract to under ``$srcdir``.
+
+    A declared archive (``zig-x86_64-linux-0.17.0.tar.xz``) legitimately
+    contributes its extraction directory to the build tree, so H085 must
+    not fire when build() prepends ``$srcdir/<that dir>`` to PATH.  Takes
+    the same two-text shape as ``_declared_source_basenames``.
+
+    VCS sources contribute the repository basename minus ``.git``: the
+    clone directory is genuinely declared even though VCS entries are
+    excluded from ``source_basenames``.  ``noextract=()`` is not consulted
+    (the array walk here doesn't parse it); a source listed in both
+    ``noextract`` and PATH would still be treated as extracted.
+    """
+    if current_text is None:
+        return set(_declared_extraction_dirs_cached(diff_text, False))
+    return set(_declared_extraction_dirs_cached(current_text, True)) | set(
+        _declared_extraction_dirs_cached(diff_text, False)
+    )
+
 def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[str]:
+    return frozenset(
+        base for base, is_vcs in _declared_source_entries_cached(text, whole_file)
+        if not is_vcs
+    )
+
+def _declared_extraction_dirs_cached(text: str, whole_file: bool) -> frozenset[str]:
+    dirs: set[str] = set()
+    for base, is_vcs in _declared_source_entries_cached(text, whole_file):
+        if is_vcs:
+            # The clone lands in a directory named after the repository.
+            dirs.add(base[:-4] if base.lower().endswith(".git") else base)
+            continue
+        extracted = _archive_extract_dir(base)
+        if extracted:
+            dirs.add(extracted)
+    return frozenset(dirs)
+
+def _declared_source_entries_cached(text: str, whole_file: bool) -> frozenset[tuple[str, bool]]:
+    """Walk the declared ``source=()`` entries once; ``(local name, is_vcs)``.
+
+    The single parse behind both ``_declared_source_basenames_cached`` and
+    ``_declared_extraction_dirs_cached``.  Each entry yields the local
+    filename (``name::url`` renames honoured) and whether it is a VCS
+    source.
+    """
     from ...differ import _SOURCE_ARRAY_START_RE
 
     lines = split_lines(text)
@@ -456,7 +530,7 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
         return ent
 
     files = files_at_line(lines)
-    basenames: set[str] = set()
+    entries_out: set[tuple[str, bool]] = set()
     in_array = False
     for line in parse_diff_lines(lines).lines:
         if line.raw.startswith(("+++", "---", "@@")):
@@ -475,7 +549,7 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
                         base = (value.split("::", 1)[0] if "::" in value
                                 else _source_basename(value))
                         if base and base != ")":
-                            basenames.add(base)
+                            entries_out.add((base, False))
                     continue
             if not _SOURCE_ARRAY_START_RE.match(body):
                 continue
@@ -513,15 +587,14 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
             ent = ent.rstrip(")")
             if not ent:
                 continue
-            if _VCS_SOURCE_RE.search(ent):
-                continue
+            is_vcs = bool(_VCS_SOURCE_RE.search(ent))
             ent = _subst(ent)
             base = ent.split("::", 1)[0] if "::" in ent else _source_basename(ent)
             if base:
-                basenames.add(base)
+                entries_out.add((base, is_vcs))
         if ")" in body:
             in_array = False
-    return frozenset(basenames)
+    return frozenset(entries_out)
 
 def _collect_writes(body: str, fn: str) -> list[tuple[str, str]]:
     """Return ``(kind, path)`` pairs for write commands on *body*.

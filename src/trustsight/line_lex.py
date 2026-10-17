@@ -16,6 +16,8 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 
+from .config import ANY_EXECUTOR as _ANY_EXECUTOR
+
 _HEREDOC_SHAPE_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 
 
@@ -259,3 +261,148 @@ def _scan(line, in_single, in_double, in_backtick, sub_depth):
         out.append(ch)
         i += 1
     return "".join(out), in_single, in_double, in_backtick, sub_depth, opener
+
+
+# ---------------------------------------------------------------------------
+# Heredoc-body classification (destination decides whether the body is data)
+#
+# Moved here from ``analysis.delivery``: the source-URL reader needs the same
+# "is this line heredoc data" answer, and importing it from ``delivery`` would
+# invert the diff -> analysis dependency.  ``line_lex`` is the one leaf both
+# sides already build on.
+# ---------------------------------------------------------------------------
+
+_HEREDOC_OPEN_RE = re.compile(r"(?<!<)<<(?!<)(-)?\s*['\"]?(\w+)['\"]?")
+
+_HEREDOC_TO_INTERPRETER_RE = re.compile(
+    r"(?:\A\s*|[;&|]\s*|\b(?:env|exec|command|sudo|nohup)\s+)"
+    r"(?:/(?:usr/)?bin/)?"
+    r"(?:ba|z|da|k|a|mk|pdk|ya|po)?sh\b(?!\s*>)"
+    r"|\|\s*(?:/(?:usr/)?bin/)?(?:ba|z|da|k|a|mk|pdk|ya|po)?sh\b"
+    r"|(?:\A\s*|[;&|]\s*)(?:python[23]?|perl|ruby|node)\b(?!\s*>)",
+    re.IGNORECASE,
+)
+
+_HEREDOC_TO_EXECUTING_CONFIG_RE = re.compile(
+    r">\s*+[\"']?"
+    r"(?=[^\"'\s;&|<>]*(?:"
+    r"/(?:cron\.[a-z]+|cron\.d|systemd/(?:system|user)|xdg/autostart"
+    r"|pam\.d|profile\.d|init\.d|rc\.d|xinetd\.d|logrotate\.d"
+    r"|dispatcher\.d|udev/rules\.d|conf\.d|sudoers\.d)/"
+    r"|\.(?:service|socket|timer|path|desktop|rules|conf)\b))",
+    re.IGNORECASE,
+)
+
+_HEREDOC_PIPED_RE = re.compile(
+    r"(?<!\\)\|\s*(?:" + _ANY_EXECUTOR + r")", re.IGNORECASE
+)
+
+
+def _heredoc_body_indices(lines: list[str]) -> set[int]:
+    """Twenty rule families ask this of the same lines; the scan is cached
+    on them.  A fresh ``set`` is returned so no caller can reach another's.
+    """
+    return set(_heredoc_body_indices_cached(tuple(lines)))
+
+
+@lru_cache(maxsize=8)
+def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
+    """Indices of lines that are literal heredoc content, not commands.
+
+    A heredoc's body is data being written to a file; treating it as build
+    commands would let the payload's own lines fire the very rules the
+    generate-then-execute rule is meant to catch once.  The opener line
+    itself is a command and stays eligible.
+
+    That reasoning holds only for a heredoc that reaches a *file*.  When the
+    destination is a shell - ``bash <<'EOF'`` - the body is not data, it is
+    the script being executed, and exempting it turned four rules off for
+    every line inside::
+
+        build() {
+          bash <<'EOF'
+          _fetch
+          bash "$srcdir/x.sh"
+        EOF
+        }
+
+    The exemption is therefore decided per heredoc, by where it goes.
+    """
+    body: set[int] = set()
+    delims: list[tuple[str, bool]] = []
+    # The lexer owns opener detection: a `<<` inside a comment or a quoted
+    # string is prose.  Scanning the raw line here disagreed with
+    # line_lex._scan and turned `# upstream uses the <<EOF form` above a
+    # fetch into a fake delimiter that blanked every following line - and
+    # with it H069/H072/H082/H083 for the whole function.
+    lexed = lex_lines(list(lines))
+    for i, line in enumerate(lines):
+        content = line[1:] if line[:1] in ("+", "-") else line
+        stripped = content.strip()
+        if delims and stripped == delims[-1][0]:
+            delims.pop()
+            continue
+        if delims:
+            if delims[-1][1]:
+                body.add(i)
+            continue
+        opener = lexed[i].heredoc_opener
+        if opener is not None:
+            # The destination may be named on either side of the
+            # delimiter: `bash <<EOF` puts it before, and
+            # `cat <<'EOF' | sh` puts it after the redirect.  Reading
+            # only the left half meant the piped form - which is how
+            # the shape is usually written - stayed classified as data.
+            is_data = not (
+                _HEREDOC_TO_INTERPRETER_RE.search(content)
+                or _HEREDOC_PIPED_RE.search(content)
+                or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(content)
+            )
+            delims.append((opener[0], is_data))
+    return frozenset(body)
+
+
+_PRINTED_HEREDOC_OPENER_RE = re.compile(
+    r"^\s*(?:cat|echo|printf)\b(?![^\n]*>)"
+)
+
+
+def _printed_heredoc_body_indices(lines: list[str]) -> set[int]:
+    """Indices of lines inside a heredoc that only prints its body.
+
+    H017/H035/X015 read commands in install hooks; a ``cat <<'MESSAGE'``
+    body that *advises* the user to run ``sudo pacman -S`` is
+    documentation, and the opener is the only line that says so.  A
+    redirect (``cat > out <<EOF``), a pipe into an executor
+    (``cat <<EOF | sh``), or any opener that is not cat/echo/printf stays
+    eligible: the body may be a script some later line runs.
+    """
+    return set(_printed_heredoc_body_indices_cached(tuple(lines)))
+
+
+@lru_cache(maxsize=8)
+def _printed_heredoc_body_indices_cached(
+    lines: tuple[str, ...],
+) -> frozenset[int]:
+    body: set[int] = set()
+    delims: list[tuple[str, bool]] = []
+    for i, line in enumerate(lines):
+        content = line[1:] if line[:1] in ("+", "-") else line
+        stripped = content.strip()
+        if delims and stripped == delims[-1][0]:
+            delims.pop()
+            continue
+        if delims:
+            if delims[-1][1]:
+                body.add(i)
+            continue
+        for m in _HEREDOC_OPEN_RE.finditer(content):
+            if not m.group(2):
+                continue
+            printed = bool(
+                _PRINTED_HEREDOC_OPENER_RE.match(content)
+                and not _HEREDOC_PIPED_RE.search(content[m.end():])
+            )
+            delims.append((m.group(2), printed))
+            break
+    return frozenset(body)

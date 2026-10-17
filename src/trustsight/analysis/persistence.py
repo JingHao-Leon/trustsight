@@ -261,6 +261,34 @@ _BUILD_TIME_FUNCTIONS = frozenset({"prepare", "build", "check", "package"})
 #: match on those is never stood down.
 _R054_STAGING_VERBS = frozenset({"install", "cp", "mv", "ln", "rsync"})
 
+#: Absolute paths on R054's autostart surface, loose enough for a stand-down
+#: tokeniser (it only has to re-find what the rule already matched).
+_R054_SURFACE_TOKEN_RE = re.compile(
+    r"/(?:etc|usr/lib/systemd|usr/share/dbus-1|var/spool/cron)"
+    r"/[^\s\"'<>|;&]+"
+)
+
+
+def _is_in_place_filter_rewrite(match: str) -> bool:
+    """True when the matched line rewrites a surface file in place.
+
+    ``awk -v mark=... '...' /etc/pam.d/greetd > "$tmp" && cat "$tmp" >
+    /etc/pam.d/greetd`` reads the very file it writes back, keeping every
+    line except the ones the program drops.  Removal hooks use this idiom to
+    undo an earlier insertion under a marker; planting new persistence never
+    reads the target first.  The signal is lexical and cheap: one surface
+    path occurring twice on the line, once as an input and once behind a
+    redirect.  Copying between two different surface files (source operand
+    != write target) keeps the finding.
+    """
+    body = match.lstrip("+-").lstrip()
+    if ">" not in body or "cat" not in body:
+        return False
+    counts: dict[str, int] = {}
+    for token in _R054_SURFACE_TOKEN_RE.findall(body):
+        counts[token.rstrip("/")] = counts.get(token.rstrip("/"), 0) + 1
+    return any(count >= 2 for count in counts.values())
+
 
 def _stages_only_committed(match: str, committed: frozenset[str]) -> bool:
     """True when every source operand is a file committed in the tree.
@@ -309,14 +337,22 @@ def stand_down_committed_staging(
     tree (an incomplete read, the corpus path with no snapshot) leaves
     every finding in place: an unread tree cannot stand a rule down.
     """
-    if not triggered or not tree_manifest:
+    if not triggered:
         return triggered
+    without_in_place = [
+        finding
+        for finding in triggered
+        if finding.get("rule_id") != "R054"
+        or not _is_in_place_filter_rewrite(finding.get("match") or "")
+    ]
+    if not tree_manifest:
+        return without_in_place
     committed = frozenset(
         path.lstrip("./") for path, _head in tree_manifest
     )
     return [
         finding
-        for finding in triggered
+        for finding in without_in_place
         if finding.get("rule_id") != "R054"
         or not _stages_only_committed(finding.get("match") or "", committed)
     ]

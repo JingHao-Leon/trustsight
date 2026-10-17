@@ -49,6 +49,7 @@ from ..differ import (
     detect_verification_evidence,
     extract_urls_from_diff,
     map_diff_lines,
+    resolved_source_urls,
     truncate_diff,
 )
 from ..findings import stamp
@@ -125,7 +126,7 @@ def _make_diff_text(old_text: str, new_text: str, context_lines: int = 3) -> str
     return "\n".join(diff_lines) + ("\n" if diff_lines else "")
 
 
-def _install_diff_text(install_text: str, name: str) -> str:
+def _install_diff_text(install_text: str, filename: str) -> str:
     """An added-file hunk for the ``.install`` scriptlet, for the corpus diff.
 
     The corpus diff holds only the PKGBUILD, so an install scriptlet is
@@ -133,6 +134,10 @@ def _install_diff_text(install_text: str, name: str) -> str:
     as an added file - the way the git path presents a committed ``.install``
     - lets every content rule read it, including the unconditional
     root-fetch/write shapes a trojanised repackage hides there.
+
+    ``filename`` is the hunk's path verbatim and must be the scriptlet's real
+    committed name: structural rules (C024) compare it against ``install=``,
+    and an invented name (e.g. the package name) reads as a dead hook.
     """
     if not isinstance(install_text, str) or not install_text:
         return ""
@@ -141,7 +146,7 @@ def _install_diff_text(install_text: str, name: str) -> str:
         return ""
     body = "\n".join("+" + line for line in lines)
     return (
-        f"--- /dev/null\n+++ b/{name}.install\n"
+        f"--- /dev/null\n+++ b/{filename}\n"
         f"@@ -0,0 +1,{len(lines)} @@\n{body}\n"
     )
 
@@ -299,6 +304,8 @@ def analyze_package_text(
     popular_candidates: Optional[list[tuple[str, int]]] = None,
     package_popularity: int | None = None,
     install_text: Optional[str] = None,
+    install_name: Optional[str] = None,
+    old_install_text: Optional[str] = None,
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -521,11 +528,18 @@ def analyze_package_text(
         return fact
 
     diff_text = _make_diff_text(old_pkgbuild, new_pkgbuild)
-    if install_text:
+    if install_text and install_text != old_install_text:
         # The install scriptlet the snapshot carried: scanned here so the
         # corpus path reaches the root-fetch/write shapes only the git path
-        # saw before.
-        diff_text += _install_diff_text(install_text, pkg_name)
+        # saw before.  The hunk carries the scriptlet's REAL basename (the
+        # snapshot knows it); naming it after the package invents a file
+        # the recipe never ships and sends C024 after a phantom mismatch.
+        # Only a scriptlet whose text CHANGED is presented: re-adding an
+        # unchanged hook to every diff made R007 (and the hook-content
+        # rules) fire on every update of any package that merely HAS an
+        # install file - the git path only ever shows real modifications.
+        diff_text += _install_diff_text(
+            install_text, install_name or f"{pkg_name}.install")
 
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
     diff_text, diff_truncated = truncate_diff(diff_text, max_bytes)
@@ -546,7 +560,7 @@ def analyze_package_text(
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, new_pkgbuild
     )
-    version_moved = any_version_scalar_moved(diff_text)
+    version_moved = any_version_scalar_moved(diff_text, new_pkgbuild)
 
     pkg_row = get_package(pkg_name)
     if pkg_row and pkg_row.get("current_maintainer"):
@@ -670,7 +684,8 @@ def analyze_package_text(
     rule_ids = [r["rule_id"] for r in triggered_rules]
 
     aggregate_pinning = _aggregate_pinning(
-        diff_text, source_changes.added_urls, source_changes.checksum_behavior
+        diff_text, source_changes.added_urls, source_changes.checksum_behavior,
+        declared_urls=resolved_source_urls(new_pkgbuild),
     )
     verification_evidence = detect_verification_evidence(
         diff_text, source_changes.checksum_behavior

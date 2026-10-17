@@ -65,6 +65,24 @@ def test_r003_no_false_positive():
     assert not any(r["rule_id"] == "R003" for r in triggered)
 
 
+def test_r003_ignores_a_decode_flag_on_a_later_command():
+    """The -d must belong to base64 itself: `base64 | tr -d ...` is the
+    random-key idiom (`head -c 48 /dev/urandom | base64 | tr -d '\\n'`
+    in 9router-bin), not a decode-and-execute."""
+    triggered = apply_rules(
+        ["head -c 48 /dev/urandom | base64 | tr -d '\\n'"], [], SHARED_RULES)
+    assert not any(r["rule_id"] == "R003" for r in triggered)
+    triggered = apply_rules(
+        ["openssl rand -base64 48 | tr -d '=+/'"], [], SHARED_RULES)
+    assert not any(r["rule_id"] == "R003" for r in triggered)
+
+
+def test_r003_still_fires_with_flags_between_verb_and_decode():
+    triggered = apply_rules(
+        ["base64 -i blob.txt --decode | bash"], [], SHARED_RULES)
+    assert any(r["rule_id"] == "R003" for r in triggered)
+
+
 # --- H001: Checksum Disabled ---
 
 def test_h001_sha256_skip():
@@ -106,13 +124,46 @@ def test_h002_no_false_positive():
 
 # --- R007: Install File Modification ---
 
-def test_r007_install_file():
+def test_r007_ignores_a_bare_filename_reference():
+    # A `.install` name in source=() (or any bare line) is a file reference,
+    # not a modification of the hook (bettbox).
     triggered = apply_rules([], ["+  'spotify.install'"], SHARED_RULES)
+    assert not any(r["rule_id"] == "R007" for r in triggered)
+
+
+def test_r007_ignores_a_header_for_an_unchanged_hook():
+    # A fully-added scriptlet header stays claimed: whether the file is
+    # genuinely new is the watcher's baseline knowledge, and the full-aur
+    # path already withholds unchanged scriptlets (see test_full_aur).
+    # Suppressing headers here broke the pinned new-scriptlet shape.
+    lines = [
+        "--- a/pkg.install",
+        "+++ b/pkg.install",
+        "@@ -0,0 +1,3 @@",
+        "+post_install() {",
+        "+  true",
+        "+}",
+    ]
+    triggered = apply_rules([], lines, SHARED_RULES)
     assert any(r["rule_id"] == "R007" for r in triggered)
 
 
-def test_r007_install_modified():
-    triggered = apply_rules([], ["+  'firefox.install'"], SHARED_RULES)
+def test_r007_fires_when_the_hook_body_changed():
+    lines = [
+        "--- a/pkg.install",
+        "+++ b/pkg.install",
+        "@@ -1,3 +1,3 @@",
+        " post_install() {",
+        "-echo old",
+        "+echo new",
+        " }",
+    ]
+    triggered = apply_rules([], lines, SHARED_RULES)
+    assert any(r["rule_id"] == "R007" for r in triggered)
+
+
+def test_r007_fires_when_the_install_wiring_changed():
+    triggered = apply_rules([], ["+install=pkg.install"], SHARED_RULES)
     assert any(r["rule_id"] == "R007" for r in triggered)
 
 
@@ -392,6 +443,22 @@ def test_r013_bom():
 
     inline = apply_rules([], ["+make\uFEFFinstall"], SHARED_RULES)
     assert any(r["rule_id"] == "R013" for r in inline)
+
+
+def test_r013_ignores_a_zero_width_char_in_display_metadata():
+    """pkgdesc/url values are rendered by the AUR as display text, never
+    read as code: a zero-width character in marketing copy (ddnsto-bin's
+    pkgdesc) is cosmetic, not a FATAL bidi override.  Comments and code
+    keep firing."""
+    pkgdesc = apply_rules([], ["+pkgdesc='marketing\u200bcopy'"], SHARED_RULES)
+    assert not any(r["rule_id"] == "R013" for r in pkgdesc)
+    url = apply_rules([], ["+url='https://exa\u200bmple.com'"], SHARED_RULES)
+    assert not any(r["rule_id"] == "R013" for r in url)
+
+    comment = apply_rules([], ["+# sneaky\u200bnote"], SHARED_RULES)
+    assert any(r["rule_id"] == "R013" for r in comment)
+    code = apply_rules([], ["+echo safe\u200bfile.sh"], SHARED_RULES)
+    assert any(r["rule_id"] == "R013" for r in code)
 
 
 def test_r013_no_false_positive():

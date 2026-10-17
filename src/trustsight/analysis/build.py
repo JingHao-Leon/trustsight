@@ -84,7 +84,7 @@ _INTERPRETER_FETCH = (
 )
 
 _FETCH_CLIENT_ONLY_RE = re.compile(
-    r"(?:" + _NETWORK_CLIENT + r")\b|(?:" + _INTERPRETER_FETCH + r")",
+    r"\b(?:" + _NETWORK_CLIENT + r")\b|(?:" + _INTERPRETER_FETCH + r")",
     re.IGNORECASE,
 )
 

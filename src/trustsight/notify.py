@@ -120,7 +120,7 @@ def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
 
     if campaign_cluster:
         top = max(campaign_cluster, key=lambda c: (c["count"], c["rule_id"]))
-        return f"campaign across {top['count']} packages ({top['rule_id']})"
+        return f"Campaign across {top['count']} packages ({top['rule_id']})"
 
     refusals = getattr(cycle, "refusals", None) or []
     if refusals:
@@ -285,6 +285,7 @@ def alert_payload(cycle) -> dict:
     payload = {
         "event": "trustsight.alerts",
         "tool": "trustsight",
+        "tool_version": _tool_version(),
         "title": title,
         "priority": "default",
         "cycle": {
@@ -368,6 +369,17 @@ def _fit_payload(payload: dict) -> dict:
     return out
 
 
+def _tool_version() -> str:
+    """The running TrustSight version, for the feed's pinned-version display.
+
+    Resolved lazily: ``importlib.metadata`` costs ~46ms and ``notify`` is
+    imported by callers that never build a payload.
+    """
+    from . import __version__
+
+    return __version__
+
+
 def heartbeat_payload(cycle) -> dict:
     """The low-priority daily "still watching" document.
 
@@ -381,6 +393,7 @@ def heartbeat_payload(cycle) -> dict:
     payload = {
         "event": "trustsight.heartbeat",
         "tool": "trustsight",
+        "tool_version": _tool_version(),
         "title": title,
         "priority": "low",
         "cycle": {

@@ -161,3 +161,14 @@ def test_r012_ignores_prose_that_merely_mentions_ignoring():
     assert "R012" not in fired(
         '+pkgdesc="Linter that lets you ignore warnings from previous runs"\n'
     )
+
+
+def test_r012_ignores_a_pkgdesc_describing_what_an_llm_tool_does():
+    """claudectl-bin: the pkgdesc narrates the tool ("local LLM watches
+    sessions and decides what to approve").  Describing an approval flow is
+    not instructing the reader; alternative 8 requires the verb to take an
+    object."""
+    assert "R012" not in fired(
+        '+pkgdesc="Auto-pilot for Claude Code — local LLM watches sessions '
+        'and decides what to approve"\n'
+    )

@@ -423,7 +423,7 @@ def test_context_cluster_findings_are_not_campaigns():
     assert payload["campaign_cluster"] == [
         {"rule_id": "G002", "members": ["a", "b"], "count": 2},
     ]
-    assert "campaign across 2 packages (G002)" in payload["title"]
+    assert "Campaign across 2 packages (G002)" in payload["title"]
 
 
 def test_burst_clusters_are_not_campaigns():

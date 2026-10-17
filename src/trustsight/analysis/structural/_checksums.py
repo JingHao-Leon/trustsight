@@ -14,7 +14,7 @@ from ...rules import find_line_in_diff
 from ...diffdoc import parse_diff_lines
 from ...tokenizer import split_lines
 
-__all__ = ['_CHECKSUM_ADDED_RE', '_CHECKSUM_ARRAY_NAMES', '_CHECKSUM_EMPTIED_RE', '_CHECKSUM_REMOVED_LINE_RE', '_CHECKSUM_SKIP_RE', '_CHECKSUM_STRENGTH', '_FETCH_IN_PACKAGE_RE', '_HARDENING_OPTIONS', '_INTERPRETER_FETCH_RE', '_SCHEME_MARKERS', '_family_values', '_first_insertion_index', '_ip_literal_hosts', '_is_checksum_array', '_is_subsequence', '_line_has_scheme', '_package_fetch_client', '_removed_declarations', '_require_content_change', '_skip_positions', '_url_host', '_userinfo_urls', 'addendum4_findings', 'array_order_changes', 'isolated_checksum_insertion', 'recipe_checksum_parity_finding']
+__all__ = ['_CHECKSUM_ADDED_RE', '_CHECKSUM_ARRAY_NAMES', '_CHECKSUM_EMPTIED_RE', '_CHECKSUM_REMOVED_LINE_RE', '_CHECKSUM_SKIP_RE', '_CHECKSUM_STRENGTH', '_FETCH_IN_PACKAGE_RE', '_HARDENING_OPTIONS', '_INTERPRETER_FETCH_RE', '_SCHEME_MARKERS', '_family_values', '_first_insertion_index', '_ip_literal_hosts', '_is_checksum_array', '_is_subsequence', '_line_has_scheme', '_package_fetch_client', '_removed_declarations', '_require_content_change', '_skip_positions', '_url_host', '_userinfo_urls', 'addendum4_findings', 'array_order_changes', 'isolated_checksum_insertion', 'recipe_checksum_parity_finding', 'substantive_change_outside_checksums']
 
 _CHECKSUM_SKIP_RE = re.compile(
     r"sha256sums\s*=\s*\(?\s*[\'\"]?(?:SKIP|NONE)"
@@ -193,6 +193,73 @@ def _removed_declarations(doc) -> set[str]:
         elif line.side == "add":
             added.add(match.group(1))
     return removed - added
+
+def _array_opener_name(content: str) -> str | None:
+    """The array name when *content* opens a ``name=(`` assignment.
+
+    Hand-rolled (not a module-level regex) because a leading-``\\s*``
+    assignment pattern trips the adversarial regex audit while buying
+    nothing here: the caller only needs the name at the line's first
+    non-blank character.
+    """
+    s = content.lstrip()
+    i = 0
+    n = len(s)
+    if i < n and (s[i].isalpha() or s[i] == "_"):
+        i += 1
+        while i < n and (s[i].isalnum() or s[i] == "_"):
+            i += 1
+    else:
+        return None
+    name = s[:i]
+    while i < n and s[i].isspace():
+        i += 1
+    if i < n and s[i] == "+":
+        i += 1
+    if i < n and s[i] == "=":
+        i += 1
+    else:
+        return None
+    while i < n and s[i].isspace():
+        i += 1
+    return name if i < n and s[i] == "(" else None
+
+def substantive_change_outside_checksums(diff_text: str) -> bool:
+    """True when the diff changes recipe content beyond the checksum arrays.
+
+    C001's HIGH claim is the *surgical* shape: sha256sums move while the
+    recipe otherwise stands still, which is how a swapped artifact is
+    blessed without a version bump.  A checksum refresh in the middle of a
+    broader maintenance revision (pkgdesc, options, build() rewritten at a
+    standing version - the nuvio-desktop shape) is routine packaging; the
+    HIGH fire there is a false positive, so the engine demotes it to C002.
+    Statement membership is tracked by paren depth: a ``*sums*=(`` opener
+    starts a checksum statement that ends when the depth returns to zero,
+    and any other added/removed content line counts as substantive.
+    """
+    try:
+        doc = parse_diff_lines(split_lines(diff_text))
+    except Exception:
+        return True
+    in_checksum = False
+    depth = 0
+    for line in doc.lines:
+        content = line.content
+        opener_name = _array_opener_name(content)
+        starts_checksum = opener_name is not None and _is_checksum_array(opener_name)
+        if not in_checksum and not starts_checksum:
+            if line.side in ("add", "remove"):
+                stripped = content.strip()
+                if stripped and not stripped.startswith("#"):
+                    return True
+            continue
+        if starts_checksum and not in_checksum:
+            in_checksum = True
+            depth = 0
+        depth += content.count("(") - content.count(")")
+        if in_checksum and depth <= 0:
+            in_checksum = False
+    return False
 
 def _url_host(url: str) -> str:
     from ...buckets import canonical_host

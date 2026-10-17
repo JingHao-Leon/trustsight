@@ -1,6 +1,7 @@
 """Extracted from crossfire.py: _engine."""
 
 from __future__ import annotations
+from ...buckets import url_host_is_non_routable, url_line_is_inert
 from ...coverage import note_stage_failure
 from ...deps import _strip_comment
 from ...file_kinds import files_at_line, is_shell_file
@@ -13,7 +14,7 @@ from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WR
 
 __all__ = ['crossfire_techniques']
 
-def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]]:
+def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dict[str, list[tuple[int, str, str]]]:
     """``{rule_id: [(line, shape, quoted), ...]}`` for every technique found.
 
     Returned as data rather than findings so X007 can count techniques
@@ -91,6 +92,12 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
     #: because `delivery` imports this module's neighbours.
     from ..delivery import _printed_heredoc_body_indices
     printed_heredoc = _printed_heredoc_body_indices(lines)
+    #: X015 also stands down in a hook the recipe does not wire up: work
+    #: scheduled inside a `.install` file that `install=` never names never
+    #: runs (notebook; C024 already names that nit).  Certainty needs the
+    #: declared file, from the complete recipe when the caller has it.
+    from ..edges import _dead_hook_files, _declared_install_basename
+    dead_hooks = _dead_hook_files(files, _declared_install_basename(diff_text, current_text))
     found: dict[str, list[tuple[int, str, str]]] = {}
     #: X012 is the one rule here that spans two lines: an override is inert
     #: until a build step reads it.
@@ -174,8 +181,19 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # the same fact as one in the source array. This was written as an
         # if/else whose branches were identical, so the source-field test
         # decided nothing; it is stated once instead.
-        for shape, pattern in X006_SHAPES:
-            if pattern.search(body):
+        #
+        # A raw-IP host that is loopback or private is the one exception: it
+        # distributes nothing, so a `http://127.0.0.1:…` printed as local
+        # documentation is not a "source pointing somewhere unexpected".  A
+        # public raw IP stays HIGH.  A line that only *prints* a URL (an
+        # `echo` in `.install`, or a heredoc body) names no source either.
+        if not url_line_is_inert(body) and index not in printed_heredoc:
+            for shape, pattern in X006_SHAPES:
+                match = pattern.search(body)
+                if match is None:
+                    continue
+                if shape == "raw-ip-source" and url_host_is_non_routable(match.group(0)):
+                    continue
                 record("X006", line_no, shape, body.strip())
 
         if not executing:
@@ -314,7 +332,9 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         if X010_RE.search(body):
             record("X010", line_no, "interpreter reaches the network", body.strip())
 
-        if index not in printed_heredoc and X015_RE.search(body):
+        if (index not in printed_heredoc
+                and files.get(index) not in dead_hooks
+                and X015_RE.search(body)):
             record("X015", line_no, "work scheduled to run after the build",
                    body.strip())
 
@@ -340,7 +360,13 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # ./evil.pkg.tar.zst` installs a local package as root, scriptlets
         # and all, and the leading `./` is not a mitigation.
         distro = _DISTRO_INSTALL_RE.search(body)
+        # In an install scriptlet the manager installs the distribution's
+        # own signed packages at install time (tape16-bin: `pacman -S
+        # xorg-xwayland` in post_install) - not fetched code running at
+        # build time, which is what this technique claims.
+        in_hook = bool(path) and path.endswith(".install")
         if (index not in dependency_data
+                and not in_hook
                 and X011_RE.search(body)
                 and (distro or not X011_STANDDOWN_RE.search(body))):
             record("X011", line_no, "package manager runs fetched code",

@@ -468,6 +468,25 @@ def test_d004_silent_for_a_soname(all_enabled, rules):
     assert "D004" not in fired(diff, all_enabled, rules)
 
 
+def test_d004_silent_for_a_short_phantom_via_the_fallback(seeded_db, all_enabled,
+                                                          rules, monkeypatch):
+    """archix-git: ``conflicts=('ax')`` fired D004/H064/H098 on a host
+    without pacman data because the observation fallback certified 'ax'
+    (24 corpus observations) as an established package - but no package
+    named 'ax' exists in the repos or the AUR; the name is an abbreviation
+    collision in the corpus.  The fallback now demands a minimum name
+    length, and the >= 4-char control at the same count still fires."""
+    from trustsight.db import record_dependency_names
+    monkeypatch.setattr(
+        "trustsight.db.official_package_names", lambda: frozenset())
+    record_dependency_names(["ax"] * 24)
+    record_dependency_names(["somehelper"] * 10)
+    assert "D004" not in fired(
+        HEADER + "+conflicts=('ax')\n", all_enabled, rules)
+    assert "D004" in fired(
+        HEADER + "+provides=('somehelper')\n", all_enabled, rules)
+
+
 # --- H017: install hooks run as root ---
 
 @pytest.mark.parametrize("body", [

@@ -57,15 +57,23 @@ def test_scheduling_work_during_a_build_is_claimed(scheduled):
     assert "X015" in _x([f"  {scheduled}"]), scheduled
 
 
+def test_reloading_udev_rules_is_not_scheduled_work():
+    """logibar/linux-g13-driver-git: `udevadm control --reload-rules` in a
+    hook applies the rules the package just installed; it schedules no work
+    on any machine."""
+    assert "X015" not in _x(["  udevadm control --reload-rules 2>/dev/null || true"])
+    assert "X015" not in _x(["  udevadm control --reload"])
+
+
 def test_declaring_a_unit_file_is_not_scheduling():
     """`systemctl enable` from an .install scriptlet is ordinary packaging,
-    and R054 already reads the unit file itself."""
+    and a unit staged inside the package root is the package's own content."""
     fired = _shipped_ids(
         ['  install -Dm644 p.service "$pkgdir/usr/lib/systemd/system/p.service"'],
         declared=False, fn="package",
     )
     assert "X015" not in fired
-    assert "R054" in fired
+    assert "R054" not in fired
 
 
 @pytest.mark.parametrize("clone,execute", [
@@ -238,7 +246,7 @@ def test_authentication_and_session_hooks_are_persistence(path):
     needs one ships it as a declared source file, which R054 reads either
     way.
     """
-    assert "R054" in _shipped_ids([f'  install -Dm644 e "$pkgdir/{path}"'],
+    assert "R054" in _shipped_ids([f'  install -Dm644 e "/{path}"'],
                                   declared=False, fn="package"), path
 
 
