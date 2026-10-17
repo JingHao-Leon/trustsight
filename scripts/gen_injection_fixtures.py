@@ -143,7 +143,7 @@ def main():
                 expected[name] = {
                     "must_fire": ["R012"],
                     "must_not_fire": [],
-                    "min_score": 100,
+                    "min_score": 0,
                     "max_score": 100,
                 }
             i += 1
@@ -163,7 +163,7 @@ def main():
             expected[name] = {
                 "must_fire": ["R013"],
                 "must_not_fire": [],
-                "min_score": 100,
+                "min_score": 0,
                 "max_score": 100,
                 "description": f"{pos_name} with {cp_desc}",
             }

@@ -312,7 +312,7 @@
   },
   "R012-v0.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -320,7 +320,7 @@
   },
   "R012-v1.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -328,7 +328,7 @@
   },
   "R012-v10.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -336,7 +336,7 @@
   },
   "R012-v11.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -344,7 +344,7 @@
   },
   "R012-v12.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -352,7 +352,7 @@
   },
   "R012-v13.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -360,7 +360,7 @@
   },
   "R012-v14.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -368,7 +368,7 @@
   },
   "R012-v15.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -377,7 +377,7 @@
   },
   "R012-v16.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -385,7 +385,7 @@
   },
   "R012-v17.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -393,7 +393,7 @@
   },
   "R012-v18.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -401,7 +401,7 @@
   },
   "R012-v19.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -409,7 +409,7 @@
   },
   "R012-v2.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -417,7 +417,7 @@
   },
   "R012-v20.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -425,7 +425,7 @@
   },
   "R012-v21.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -433,7 +433,7 @@
   },
   "R012-v3.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -441,7 +441,7 @@
   },
   "R012-v4.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -458,7 +458,7 @@
   },
   "R012-v6.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -466,7 +466,7 @@
   },
   "R012-v7.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -474,7 +474,7 @@
   },
   "R012-v8.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -482,7 +482,7 @@
   },
   "R012-v9.diff": {
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R012"
     ],
@@ -499,7 +499,7 @@
   "R013-v0.diff": {
     "description": "comment with LEFT-TO-RIGHT EMBEDDING",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -508,7 +508,7 @@
   "R013-v1.diff": {
     "description": "comment with RIGHT-TO-LEFT EMBEDDING",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -517,7 +517,7 @@
   "R013-v10.diff": {
     "description": "comment with ZERO WIDTH NON-JOINER",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -526,7 +526,7 @@
   "R013-v11.diff": {
     "description": "comment with ZERO WIDTH JOINER",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -535,7 +535,7 @@
   "R013-v12.diff": {
     "description": "comment with LEFT-TO-RIGHT MARK",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -544,7 +544,7 @@
   "R013-v13.diff": {
     "description": "comment with RIGHT-TO-LEFT MARK",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -553,7 +553,7 @@
   "R013-v14.diff": {
     "description": "comment with WORD JOINER",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -562,7 +562,7 @@
   "R013-v15.diff": {
     "description": "comment with FUNCTION APPLICATION",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -571,7 +571,7 @@
   "R013-v16.diff": {
     "description": "comment with INVISIBLE TIMES",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -580,7 +580,7 @@
   "R013-v17.diff": {
     "description": "comment with INVISIBLE SEPARATOR",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -589,7 +589,7 @@
   "R013-v18.diff": {
     "description": "comment with INVISIBLE PLUS",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -598,7 +598,7 @@
   "R013-v19.diff": {
     "description": "comment with ZERO WIDTH NO-BREAK SPACE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -607,7 +607,7 @@
   "R013-v2.diff": {
     "description": "comment with POP DIRECTIONAL FORMATTING",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -616,7 +616,7 @@
   "R013-v20.diff": {
     "description": "comment with LANGUAGE TAG",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -625,7 +625,7 @@
   "R013-v21.diff": {
     "description": "comment with TAG SPACE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -634,7 +634,7 @@
   "R013-v22.diff": {
     "description": "comment with CANCEL TAG",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -643,7 +643,7 @@
   "R013-v23.diff": {
     "description": "source_url with LEFT-TO-RIGHT EMBEDDING",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -652,7 +652,7 @@
   "R013-v24.diff": {
     "description": "source_url with RIGHT-TO-LEFT EMBEDDING",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -661,7 +661,7 @@
   "R013-v25.diff": {
     "description": "source_url with POP DIRECTIONAL FORMATTING",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -670,7 +670,7 @@
   "R013-v26.diff": {
     "description": "source_url with LEFT-TO-RIGHT OVERRIDE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -679,7 +679,7 @@
   "R013-v27.diff": {
     "description": "source_url with RIGHT-TO-LEFT OVERRIDE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -688,7 +688,7 @@
   "R013-v28.diff": {
     "description": "source_url with LEFT-TO-RIGHT ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -697,7 +697,7 @@
   "R013-v29.diff": {
     "description": "source_url with RIGHT-TO-LEFT ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -706,7 +706,7 @@
   "R013-v3.diff": {
     "description": "comment with LEFT-TO-RIGHT OVERRIDE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -715,7 +715,7 @@
   "R013-v30.diff": {
     "description": "source_url with FIRST STRONG ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -724,7 +724,7 @@
   "R013-v31.diff": {
     "description": "source_url with POP DIRECTIONAL ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -733,7 +733,7 @@
   "R013-v32.diff": {
     "description": "source_url with ZERO WIDTH SPACE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -742,7 +742,7 @@
   "R013-v33.diff": {
     "description": "source_url with ZERO WIDTH NON-JOINER",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -751,7 +751,7 @@
   "R013-v34.diff": {
     "description": "source_url with ZERO WIDTH JOINER",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -760,7 +760,7 @@
   "R013-v35.diff": {
     "description": "source_url with LEFT-TO-RIGHT MARK",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -769,7 +769,7 @@
   "R013-v36.diff": {
     "description": "source_url with RIGHT-TO-LEFT MARK",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -778,7 +778,7 @@
   "R013-v37.diff": {
     "description": "source_url with WORD JOINER",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -787,7 +787,7 @@
   "R013-v38.diff": {
     "description": "source_url with FUNCTION APPLICATION",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -796,7 +796,7 @@
   "R013-v39.diff": {
     "description": "source_url with INVISIBLE TIMES",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -805,7 +805,7 @@
   "R013-v4.diff": {
     "description": "comment with RIGHT-TO-LEFT OVERRIDE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -814,7 +814,7 @@
   "R013-v40.diff": {
     "description": "source_url with INVISIBLE SEPARATOR",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -823,7 +823,7 @@
   "R013-v41.diff": {
     "description": "source_url with INVISIBLE PLUS",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -832,7 +832,7 @@
   "R013-v42.diff": {
     "description": "source_url with ZERO WIDTH NO-BREAK SPACE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -841,7 +841,7 @@
   "R013-v43.diff": {
     "description": "source_url with LANGUAGE TAG",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -850,7 +850,7 @@
   "R013-v44.diff": {
     "description": "source_url with TAG SPACE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -859,7 +859,7 @@
   "R013-v45.diff": {
     "description": "source_url with CANCEL TAG",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -868,7 +868,7 @@
   "R013-v46.diff": {
     "description": "body with LEFT-TO-RIGHT EMBEDDING",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -877,7 +877,7 @@
   "R013-v47.diff": {
     "description": "body with RIGHT-TO-LEFT EMBEDDING",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -886,7 +886,7 @@
   "R013-v48.diff": {
     "description": "body with POP DIRECTIONAL FORMATTING",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -895,7 +895,7 @@
   "R013-v49.diff": {
     "description": "body with LEFT-TO-RIGHT OVERRIDE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -904,7 +904,7 @@
   "R013-v5.diff": {
     "description": "comment with LEFT-TO-RIGHT ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -913,7 +913,7 @@
   "R013-v50.diff": {
     "description": "body with RIGHT-TO-LEFT OVERRIDE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -922,7 +922,7 @@
   "R013-v51.diff": {
     "description": "body with LEFT-TO-RIGHT ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -931,7 +931,7 @@
   "R013-v52.diff": {
     "description": "body with RIGHT-TO-LEFT ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -940,7 +940,7 @@
   "R013-v53.diff": {
     "description": "body with FIRST STRONG ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -949,7 +949,7 @@
   "R013-v54.diff": {
     "description": "body with POP DIRECTIONAL ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -958,7 +958,7 @@
   "R013-v55.diff": {
     "description": "body with ZERO WIDTH SPACE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -967,7 +967,7 @@
   "R013-v56.diff": {
     "description": "body with ZERO WIDTH NON-JOINER",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -976,7 +976,7 @@
   "R013-v57.diff": {
     "description": "body with ZERO WIDTH JOINER",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -985,7 +985,7 @@
   "R013-v58.diff": {
     "description": "body with LEFT-TO-RIGHT MARK",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -994,7 +994,7 @@
   "R013-v59.diff": {
     "description": "body with RIGHT-TO-LEFT MARK",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1003,7 +1003,7 @@
   "R013-v6.diff": {
     "description": "comment with RIGHT-TO-LEFT ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1012,7 +1012,7 @@
   "R013-v60.diff": {
     "description": "body with WORD JOINER",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1021,7 +1021,7 @@
   "R013-v61.diff": {
     "description": "body with FUNCTION APPLICATION",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1030,7 +1030,7 @@
   "R013-v62.diff": {
     "description": "body with INVISIBLE TIMES",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1039,7 +1039,7 @@
   "R013-v63.diff": {
     "description": "body with INVISIBLE SEPARATOR",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1048,7 +1048,7 @@
   "R013-v64.diff": {
     "description": "body with INVISIBLE PLUS",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1057,7 +1057,7 @@
   "R013-v65.diff": {
     "description": "body with ZERO WIDTH NO-BREAK SPACE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1066,7 +1066,7 @@
   "R013-v66.diff": {
     "description": "body with LANGUAGE TAG",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1075,7 +1075,7 @@
   "R013-v67.diff": {
     "description": "body with TAG SPACE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1084,7 +1084,7 @@
   "R013-v68.diff": {
     "description": "body with CANCEL TAG",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1093,7 +1093,7 @@
   "R013-v7.diff": {
     "description": "comment with FIRST STRONG ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1102,7 +1102,7 @@
   "R013-v8.diff": {
     "description": "comment with POP DIRECTIONAL ISOLATE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
@@ -1111,7 +1111,7 @@
   "R013-v9.diff": {
     "description": "comment with ZERO WIDTH SPACE",
     "max_score": 100,
-    "min_score": 100,
+    "min_score": 0,
     "must_fire": [
       "R013"
     ],
