@@ -462,7 +462,7 @@ def asset_url(asset_name: str, tag: str | None = None,
         raise ReleaseFetchError(
             f"no {asset_name} is reachable: the release API is unavailable "
             "and no fallback baseline tag is configured; pass --tag "
-            "(e.g. --tag baseline-2026-09-24) or set [seed] baseline_tag"
+            "(e.g. --tag baseline-2026-10-18) or set [seed] baseline_tag"
         )
     return f"{channel.base_url}/latest/download/{asset_name}"
 
