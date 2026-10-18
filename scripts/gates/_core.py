@@ -7,7 +7,7 @@ import json
 import re
 from pathlib import Path
 
-__all__ = ['Gate', 'HOSTILE', 'H_SERIES_REDUCTION_TARGET', 'ROOT', 'SRC', '_ANALYSIS_FETCH_ALLOWED', '_ARTIFACT_MODULES', '_ARTIFACT_READ_EXEMPT', '_ATX_PUNCT_RE', '_BOUNDED_IO_MODULE', '_BOUND_CONSTANTS', '_DYNAMIC_SQL_NODES', '_ENDPOINT_HOST', '_FORBIDDEN_CALLS', '_GIT_ALLOWED_IMPORTS', '_INLINE_CODE_RE', '_MD_LINK_RE', '_NETWORK_CALLS', '_NETWORK_MODULES', '_PERMISSION_PHRASES', '_PERMISSION_REGEXES', '_RELEASE_HOSTS', '_RELEASE_MODULES', '_SHARED_ANALYSIS', '_URL_LITERAL_RE', '_anchor', '_call_name', '_demo_fact', '_enclosing_functions', '_h_series_live_ceiling', '_hostile_fact', '_hostile_result', '_parity_fact', '_python_files', '_rel', '_render_forget_list', '_render_inspect_text', '_render_list_rows', '_seed_ioc_baseline']
+__all__ = ['Gate', 'HOSTILE', 'H_SERIES_REDUCTION_TARGET', 'ROOT', 'SRC', '_ANALYSIS_FETCH_ALLOWED', '_ARTIFACT_MODULES', '_ARTIFACT_READ_EXEMPT', '_ATX_PUNCT_RE', '_BOUNDED_IO_MODULE', '_BOUND_CONSTANTS', '_DYNAMIC_SQL_NODES', '_ENDPOINT_HOST', '_FORBIDDEN_CALLS', '_GIT_ALLOWED_IMPORTS', '_INLINE_CODE_RE', '_MD_LINK_RE', '_MIRROR_HOSTS', '_MIRROR_MODULES', '_NETWORK_CALLS', '_NETWORK_MODULES', '_PERMISSION_PHRASES', '_PERMISSION_REGEXES', '_RELEASE_HOSTS', '_RELEASE_MODULES', '_SHARED_ANALYSIS', '_URL_LITERAL_RE', '_anchor', '_call_name', '_demo_fact', '_enclosing_functions', '_h_series_live_ceiling', '_hostile_fact', '_hostile_result', '_parity_fact', '_python_files', '_rel', '_render_forget_list', '_render_inspect_text', '_render_list_rows', '_seed_ioc_baseline']
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -69,6 +69,13 @@ _NETWORK_CALLS = ("urlopen", "urlretrieve", "clone_repository", "create_connecti
 _URL_LITERAL_RE = re.compile(r"https?://([A-Za-z0-9.-]+\.[A-Za-z]{2,})")
 
 _ENDPOINT_HOST = "aur.archlinux.org"
+
+#: The read-only GitHub AUR mirror the corpus fetcher falls back to when the
+#: AUR's cgit snapshot endpoint is rate-limiting.  A declared, literal host,
+#: reachable only from the fetch modules - never from analysis.
+_MIRROR_HOSTS = frozenset({"codeload.github.com"})
+
+_MIRROR_MODULES = {"full_aur/fetch.py"}
 
 _RELEASE_HOSTS = frozenset({"github.com", "api.github.com"})
 

@@ -125,9 +125,10 @@ score is **strictly above** it.
 }
 ```
 
-The corpus path fetches recipes over cgit rather than cloning, so there is
-no commit id to report; the AUR `LastModified` and the version transition
-are the anchors that carry the same information. `title` lands in the notification header on ntfy, with a tag for the
+The corpus path downloads each recipe's snapshot tarball (the GitHub AUR
+mirror first, the AUR's cgit second) rather than cloning, so there is no
+commit id to report; the AUR `LastModified` and the version transition are
+the anchors that carry the same information. `title` lands in the notification header on ntfy, with a tag for the
 level. Alerts never carry a priority: an over-threshold package is worth a
 quiet read in the morning, not a page at night; only the daily heartbeat
 sets one (Priority 2, low).

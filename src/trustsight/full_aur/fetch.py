@@ -9,7 +9,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -21,6 +21,17 @@ log = logging.getLogger(__name__)
 _CGIT_URL = "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD"
 _CGIT_SRCINFO_URL = "https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO"
 _SNAPSHOT_URL = "https://aur.archlinux.org/cgit/aur.git/snapshot"
+
+# The read-only GitHub AUR mirror carries one branch per package and serves
+# the same tip tree through its CDN (the layout is a single leading
+# ``<dir>/``, which the parsers below already accept).  It is tried first:
+# the AUR's own cgit snapshot endpoint rate-limits and, in practice,
+# returned empty bodies under a full bootstrap, holding the drain to about
+# one package per second, while codeload answered in ~0.3s.  cgit is kept
+# as the fallback, so a package the mirror no longer carries (a deleted
+# branch answers 404 here) still resolves.
+_GITHUB_SNAPSHOT_URL = "https://codeload.github.com/archlinux/aur/tar.gz/refs/heads"
+
 _RESUME_FILE = "full-aur-resume.json"
 
 _HTTP_TIMEOUT = 60
@@ -42,23 +53,36 @@ _DOWNLOAD_DEADLINE_SECONDS = 120
 #    (429, 500/502/503/504, connection reset), honouring a ``Retry-After``
 #    header when the server sends one.
 _MIN_REQUEST_INTERVAL = 0.2  # seconds; ~5 requests/second aggregate
+
+#: Per-host overrides of the minimum start spacing.  The GitHub mirror is a
+#: CDN, not the rate-limited cgit, so a much smaller interval lets the worker
+#: pool set the real concurrency; the aggregate cap still applies to the AUR.
+_MIN_REQUEST_INTERVAL_BY_HOST = {
+    "codeload.github.com": 0.02,
+}
 _MAX_RETRIES = 5
 _BACKOFF_BASE = 1.0
 _BACKOFF_MAX = 60.0
 _RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
 _rate_lock = threading.Lock()
-_last_request_at = [0.0]
+_last_request_at: dict[str, float] = {}
 
 
-def _throttle() -> None:
-    """Block until the global minimum inter-request interval has elapsed."""
+def _throttle(url: str) -> None:
+    """Block until the host's minimum inter-request interval has elapsed.
+
+    Spacing is per host and shared across worker threads: the AUR keeps its
+    polite aggregate cap, while the GitHub mirror is not throttled to it.
+    """
+    host = urlsplit(url).hostname or ""
+    interval = _MIN_REQUEST_INTERVAL_BY_HOST.get(host, _MIN_REQUEST_INTERVAL)
     with _rate_lock:
         now = time.monotonic()
-        wait = _last_request_at[0] + _MIN_REQUEST_INTERVAL - now
+        wait = _last_request_at.get(host, 0.0) + interval - now
         if wait > 0:
             time.sleep(wait)
-        _last_request_at[0] = time.monotonic()
+        _last_request_at[host] = time.monotonic()
 
 
 def _backoff_delay(attempt: int) -> float:
@@ -107,7 +131,7 @@ def _http_get(url: str) -> Optional[bytes]:
     The body is read in chunks and abandoned past ``MAX_RESPONSE_BYTES``.
     """
     for attempt in range(_MAX_RETRIES + 1):
-        _throttle()
+        _throttle(url)
         resp = None
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
@@ -315,6 +339,27 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
     return manifest
 
 
+def _fetch_snapshot_tarball(name: str) -> Optional[bytes]:
+    """The package's snapshot tarball, from the GitHub mirror or the AUR.
+
+    The GitHub AUR mirror (one branch per package) is tried first, then the
+    AUR's cgit snapshot endpoint as the fallback.  Returns None when neither
+    answers; a body that is not a usable tarball is handled by the caller,
+    exactly as before.
+    """
+    quoted = quote(name, safe="")
+    for url in (
+        # codeload already names the format (``tar.gz``) before the ref, so
+        # the branch is appended bare, with no further suffix.
+        f"{_GITHUB_SNAPSHOT_URL}/{quoted}",
+        f"{_SNAPSHOT_URL}/{quoted}.tar.gz",
+    ):
+        body = _http_get(url)
+        if body is not None:
+            return body
+    return None
+
+
 def fetch_pkgbuild_with_tree(
     name: str,
 ) -> tuple[
@@ -325,11 +370,12 @@ def fetch_pkgbuild_with_tree(
     the ``.install`` scriptlet text (or None), and that scriptlet's real
     basename (or None).
 
-    Downloads the AUR snapshot tarball directly so the corpus path sees the
-    same committed file tree the git path does (H066-tree).  The tarball is
-    fetched from the AUR mirror - never from a PKGBUILD-declared URL - so
-    this is consistent with the "static, offline" review claim.  Falls back
-    to the cgit text-only fetch when the tarball cannot be read.
+    Downloads the snapshot tarball directly (GitHub's AUR mirror first, the
+    AUR's own cgit second) so the corpus path sees the same committed file
+    tree the git path does (H066-tree).  The tarball is fetched from an AUR
+    mirror - never from a PKGBUILD-declared URL - so this is consistent with
+    the "static, offline" review claim.  Falls back to the cgit text-only
+    fetch when the tarball cannot be read.
 
     The full tarball bytes are handed to ``check_archive_trailer`` (H070):
     the corpus side is the one place AUR content is downloaded, so it is
@@ -345,8 +391,7 @@ def fetch_pkgbuild_with_tree(
     """
     from ..analysis.archives import check_archive_trailer
 
-    url = f"{_SNAPSHOT_URL}/{quote(name, safe='')}.tar.gz"
-    body = _http_get(url)
+    body = _fetch_snapshot_tarball(name)
     refused = False
     if body is not None:
         try:

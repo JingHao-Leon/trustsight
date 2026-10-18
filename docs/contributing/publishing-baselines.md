@@ -140,9 +140,13 @@ and resumes, so you run the command repeatedly to finish it in chunks:
 trustsight full-aur --bootstrap      # run again to continue each capped chunk
 ```
 
-The fetcher enforces a global rate cap (~5 requests/second) and backs off on
-`429`/`5xx`/connection resets, but a full bootstrap is still hours of
-rate-limited fetching. Prefer growing incrementally.
+Each package's snapshot is fetched from the read-only GitHub AUR mirror first
+(`codeload.github.com`, one branch per package), with the AUR's own cgit
+snapshot endpoint as the fallback; the cgit endpoint keeps a global rate cap
+(~5 requests/second) and both back off on `429`/`5xx`/connection resets. The
+mirror is a CDN and is not throttled to the cgit cap, so fetching is no longer
+the bottleneck of a full bootstrap (the serial analysis is). It still leans on
+a shared service, so prefer growing incrementally.
 
 ### Export, sign, attach to the release
 

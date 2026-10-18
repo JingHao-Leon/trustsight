@@ -99,16 +99,42 @@ def test_fetch_pkgbuild_with_tree_extracts_manifest():
 
 
 def test_fetch_pkgbuild_with_tree_falls_back_to_cgit():
-    """Without a usable snapshot tarball, the cgit text-only path is used."""
+    """Without a usable snapshot tarball, the cgit text-only path is used.
+
+    Both snapshot sources (the GitHub mirror, then the AUR cgit) fail before
+    the text-only cgit fetch answers.
+    """
     from trustsight.full_aur import fetch as F
 
-    with patch.object(F, "_http_get", side_effect=[None, b"pkgname=demo\n"]):
+    with patch.object(F, "_http_get", side_effect=[None, None, b"pkgname=demo\n"]):
         text, manifest, trailer_finding, refused, install_text, install_name = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\n"
     assert manifest is None
     assert trailer_finding is None
     assert refused is False  # absent, not refused
+
+
+def test_fetch_pkgbuild_with_tree_prefers_the_github_mirror():
+    """The read-only GitHub AUR mirror is tried before the AUR's own cgit.
+
+    The cgit snapshot endpoint rate-limits (and returned empty bodies under a
+    full bootstrap); the mirror is a CDN, so it comes first.
+    """
+    from trustsight.full_aur import fetch as F
+
+    body = _snapshot_tarball("demo", "pkgname=demo\npkgver=1.0\n")
+    seen: list[str] = []
+
+    def fake_get(url):
+        seen.append(url)
+        return body
+
+    with patch.object(F, "_http_get", fake_get):
+        text, *_ = F.fetch_pkgbuild_with_tree("demo")
+
+    assert text == "pkgname=demo\npkgver=1.0\n"
+    assert seen == [f"{F._GITHUB_SNAPSHOT_URL}/demo"]
 
 
 def test_fetch_pkgbuild_with_tree_flags_trailing_archive_bytes():

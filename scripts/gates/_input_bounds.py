@@ -5,7 +5,7 @@ import contextlib
 import io
 import re
 import time
-from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _NETWORK_CALLS, _NETWORK_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
+from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
 __all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
 
@@ -71,8 +71,9 @@ def gate_network_is_confined() -> Gate:
     return Gate("network confined to the fetch modules", not hits, hits)
 
 def gate_single_network_host() -> Gate:
-    """Every endpoint constant names a declared host: the AUR, or the
-    release channel from the release module and nothing else."""
+    """Every endpoint constant names a declared host: the AUR, the declared
+    AUR mirror from the fetch modules, or the release channel from the
+    release module and nothing else."""
     hits: list[str] = []
     found = set()
     for path in _python_files():
@@ -89,6 +90,8 @@ def gate_single_network_host() -> Gate:
             for host in _URL_LITERAL_RE.findall(node.value.value):
                 found.add(host)
                 if host == _ENDPOINT_HOST:
+                    continue
+                if host in _MIRROR_HOSTS and rel in _MIRROR_MODULES:
                     continue
                 if host in _RELEASE_HOSTS and rel in _RELEASE_MODULES:
                     continue

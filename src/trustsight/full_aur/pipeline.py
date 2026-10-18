@@ -635,17 +635,17 @@ def _fetch_workers() -> int:
 
     The bootstrap's cost is dominated by one network fetch per package;
     fetching a window ahead in parallel is the biggest speedup.  It is bounded
-    twice over: this worker count, and a global aggregate rate cap in the
-    fetcher (``fetch._MIN_REQUEST_INTERVAL``).  The rate cap is the real limit,
-    because the AUR's cgit rate-limits per IP; more workers than the cap can
-    keep busy only idle, so the default is small.  Tunable via
-    ``limits.corpus_fetch_workers``.
+    twice over: this worker count, and a per-host rate cap in the fetcher
+    (``fetch._MIN_REQUEST_INTERVAL_BY_HOST``).  The GitHub AUR mirror is a CDN
+    with a much smaller cap than the AUR's cgit, so more workers there buy
+    throughput rather than idling; the cgit fallback stays capped and simply
+    idles the surplus.  Tunable via ``limits.corpus_fetch_workers``.
     """
     try:
         configured = int(load_config().get("limits", {}).get("corpus_fetch_workers", 0))
     except (TypeError, ValueError):
         configured = 0
-    return configured if configured > 0 else 5
+    return configured if configured > 0 else 16
 
 
 def _max_per_cycle() -> int:
