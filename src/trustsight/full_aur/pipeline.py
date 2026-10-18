@@ -42,6 +42,7 @@ from ..db import (
     save_package_profile,
     save_pkgbuild_snapshot,
     set_metadata,
+    write_batch,
 )
 from ..schema import TemporalContext
 from ..scoring import risk_level
@@ -439,7 +440,7 @@ def _correlation_records(
     have no corpus feed yet, so they are empty here (the G002 engine ships and
     is unit-tested; the literal hash view is the pending corpus work).
     """
-    from ..db import correlation_feed, record_property_transition
+    from ..db import correlation_feed, record_property_transition, write_batch
 
     repo_index = source_repos or {}
 
@@ -447,12 +448,14 @@ def _correlation_records(
     # adoption_events view serves G003.  H044 is an ownership transition
     # between two recorded maintainers; H086 is the orphan-to-maintained
     # shape (the prior snapshot held no maintainer).  H074 (mass adoption) is
-    # the cross-package aggregation G003 itself performs.
-    for name in processed:
-        current = (new_meta.get(name) or {}).get("Maintainer") or ""
-        previous = (old_meta or {}).get(name, {}).get("Maintainer") or ""
-        if current and current != previous:
-            record_property_transition(name, "maintainer", previous, current)
+    # the cross-package aggregation G003 itself performs.  Batched: one
+    # transaction for the whole cycle's transitions, not one per package.
+    with write_batch():
+        for name in processed:
+            current = (new_meta.get(name) or {}).get("Maintainer") or ""
+            previous = (old_meta or {}).get(name, {}).get("Maintainer") or ""
+            if current and current != previous:
+                record_property_transition(name, "maintainer", previous, current)
 
     feed = correlation_feed(processed)
     records: list[dict] = []
@@ -576,11 +579,12 @@ def _apply_cluster_weights(findings, new_meta, popular, scores) -> None:
         delta = int(weights.get(finding.get("severity", ""), 0))
         if delta <= 0:
             continue
-        for member in members:
-            if is_reserved_name(member):
-                continue
-            new_score = max(0, min(100, _profile_score(member, scores) + delta))
-            save_package_profile(member, new_score, risk_level(new_score))
+        with write_batch():
+            for member in members:
+                if is_reserved_name(member):
+                    continue
+                new_score = max(0, min(100, _profile_score(member, scores) + delta))
+                save_package_profile(member, new_score, risk_level(new_score))
 
 
 @dataclass
@@ -950,52 +954,53 @@ def _run_baseline_build(
             old_snapshot["last_modified"] if old_snapshot else None
         )
         try:
-            fact = analyze_package_text(
-                pkg_name=name,
-                old_pkgbuild=old_pkgbuild,
-                new_pkgbuild=new_pkgbuild,
-                maintainer=meta.get("Maintainer") or "",
-                temporal=TemporalContext(
-                    last_modified=meta.get("LastModified"),
-                    first_seen=meta.get("FirstSubmitted"),
-                    previous_modified=prev_last_modified,
-                    source="aur_metadata",
-                ),
-                tree_manifest=tree_manifest,
-                archive_trailer_finding=trailer_finding,
-                snapshot_refused=snapshot_refused,
-                depth=depth,
-                # The corpus builder is a writer by definition: it exists to
-                # accumulate the observations the read-only default consumes.
-                record=True,
-                popular_candidates=popular,
-                package_popularity=int((new_meta.get(name) or {}).get("NumVotes", 0) or 0),
-                install_text=install_text,
-                install_name=install_name,
-                old_install_text=(old_snapshot.get("install_text")
-                                  if old_snapshot else None),
-            )
+            with write_batch():
+                fact = analyze_package_text(
+                    pkg_name=name,
+                    old_pkgbuild=old_pkgbuild,
+                    new_pkgbuild=new_pkgbuild,
+                    maintainer=meta.get("Maintainer") or "",
+                    temporal=TemporalContext(
+                        last_modified=meta.get("LastModified"),
+                        first_seen=meta.get("FirstSubmitted"),
+                        previous_modified=prev_last_modified,
+                        source="aur_metadata",
+                    ),
+                    tree_manifest=tree_manifest,
+                    archive_trailer_finding=trailer_finding,
+                    snapshot_refused=snapshot_refused,
+                    depth=depth,
+                    # The corpus builder is a writer by definition: it exists to
+                    # accumulate the observations the read-only default consumes.
+                    record=True,
+                    popular_candidates=popular,
+                    package_popularity=int((new_meta.get(name) or {}).get("NumVotes", 0) or 0),
+                    install_text=install_text,
+                    install_name=install_name,
+                    old_install_text=(old_snapshot.get("install_text")
+                                      if old_snapshot else None),
+                )
+                save_pkgbuild_snapshot(
+                    package_name=name,
+                    pkgbuild_text=new_pkgbuild,
+                    version=fact.new_version or meta.get("Version", ""),
+                    last_modified=meta.get("LastModified", 0),
+                    install_text=install_text,
+                )
+                save_package_profile(
+                    package_name=name,
+                    last_score=fact.final_score,
+                    # score_breakdown is a list of ScoreEntry, not a dict: asking it
+                    # for "risk_label" raised AttributeError on the first package of
+                    # every bootstrap.  The label is derived from the score.
+                    last_risk=risk_level(fact.final_score),
+                )
         except TokenizerUnavailable as exc:
             # The sandboxed tokenizer could not answer (A6).  The package is
             # not analysed and nothing is persisted, so it cannot enter the
             # corpus as if it had been vetted; the cycle continues.
             log.warning("tokenizer unavailable for %s: %s; not vetted", name, exc)
             return "not_vetted"
-        save_pkgbuild_snapshot(
-            package_name=name,
-            pkgbuild_text=new_pkgbuild,
-            version=fact.new_version or meta.get("Version", ""),
-            last_modified=meta.get("LastModified", 0),
-            install_text=install_text,
-        )
-        save_package_profile(
-            package_name=name,
-            last_score=fact.final_score,
-            # score_breakdown is a list of ScoreEntry, not a dict: asking it
-            # for "risk_label" raised AttributeError on the first package of
-            # every bootstrap.  The label is derived from the score.
-            last_risk=risk_level(fact.final_score),
-        )
         scores[name] = fact.final_score
         if fact.ioc_matches:
             # A known-bad match pages at maximum priority whatever the score:

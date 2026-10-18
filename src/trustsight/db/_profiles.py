@@ -115,14 +115,18 @@ def maintainer_activity_history() -> list[dict]:
     return [dict(r) for r in rows]
 
 def checkpoint_wal() -> None:
-    """Truncate the write-ahead log after a write-heavy cycle.
+    """Fold the write-ahead log back into the database after a heavy cycle.
 
-    Best effort: a checkpoint is maintenance, and a reader holding the
-    database open must not turn a completed cycle into a failure.
+    Best effort, and deliberately ``PASSIVE``: a ``TRUNCATE`` checkpoint
+    needs an exclusive lock and waits out every concurrent reader, turning a
+    completed cycle into a stall; ``PASSIVE`` copies what it can without
+    blocking.  The file stays bounded by ``journal_size_limit`` and the
+    deferred ``wal_autocheckpoint`` the writer connection sets.  A reader
+    holding the database open must not turn a completed cycle into a failure.
     """
     try:
         with get_connection() as conn:
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
     except sqlite3.Error:
         log.debug("wal checkpoint failed", exc_info=True)
 

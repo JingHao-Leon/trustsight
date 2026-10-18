@@ -291,20 +291,23 @@ def record_observed_key(key: str, observed_at: Optional[str] = None) -> None:
     if not key:
         return
     with get_connection() as conn:
-        conn.execute(
+        cur = conn.execute(
             """INSERT OR IGNORE INTO observed_signing_keys(key, first_seen)
                VALUES (?, COALESCE(?, datetime('now')))""",
             (key, observed_at),
         )
-        # ponytail: the prune is O(n) per insert (a corpus-bootstrap path,
-        # not per-diff); switch to a periodic-trigger prune if a ledger at
-        # the cap makes bootstrap slow.
-        conn.execute(
-            """DELETE FROM observed_signing_keys WHERE key IN (
-                   SELECT key FROM observed_signing_keys
-                   ORDER BY first_seen DESC LIMIT -1 OFFSET ?)""",
-            (MAX_OBSERVED_KEYS,),
-        )
+        # The prune is O(n) over the ledger, and a corpus cycle observes the
+        # same keys over and over.  Only a genuine insert can push the row
+        # count past the cap, so a repeat costs no scan.
+        # ponytail: still O(n) whenever a new key does arrive; switch to a
+        # periodic-trigger prune if a ledger at the cap makes bootstrap slow.
+        if cur.rowcount:
+            conn.execute(
+                """DELETE FROM observed_signing_keys WHERE key IN (
+                       SELECT key FROM observed_signing_keys
+                       ORDER BY first_seen DESC LIMIT -1 OFFSET ?)""",
+                (MAX_OBSERVED_KEYS,),
+            )
         conn.commit()
 
 def key_observed_before(key: str) -> bool:
@@ -327,18 +330,21 @@ def record_observed_domain(domain: str, observed_at: Optional[str] = None) -> No
     if not domain:
         return
     with get_connection() as conn:
-        conn.execute(
+        cur = conn.execute(
             """INSERT OR IGNORE INTO observed_maintainer_domains(
                    domain, first_seen)
                VALUES (?, COALESCE(?, datetime('now')))""",
             (domain, observed_at),
         )
-        conn.execute(
-            """DELETE FROM observed_maintainer_domains WHERE domain IN (
-                   SELECT domain FROM observed_maintainer_domains
-                   ORDER BY first_seen DESC LIMIT -1 OFFSET ?)""",
-            (MAX_OBSERVED_DOMAINS,),
-        )
+        # As for observed_signing_keys: only an actual insert can exceed the
+        # cap, so a domain already in the ledger skips the O(n) prune.
+        if cur.rowcount:
+            conn.execute(
+                """DELETE FROM observed_maintainer_domains WHERE domain IN (
+                       SELECT domain FROM observed_maintainer_domains
+                       ORDER BY first_seen DESC LIMIT -1 OFFSET ?)""",
+                (MAX_OBSERVED_DOMAINS,),
+            )
         conn.commit()
 
 def domain_first_seen(domain: str) -> Optional[str]:

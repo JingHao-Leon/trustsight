@@ -1064,3 +1064,85 @@ def test_bump_observation_seq_advances_the_clock(db):
     assert observation_seq() == 0
     assert bump_observation_seq() == 1
     assert observation_seq() == 1
+
+
+def _committed_row(dbp, name):
+    """Read *name* through a fresh connection, so only committed rows show."""
+    import sqlite3
+
+    other = sqlite3.connect(str(dbp))
+    try:
+        return other.execute(
+            "SELECT 1 FROM packages WHERE name = ?", (name,)
+        ).fetchone()
+    finally:
+        other.close()
+
+
+def test_write_batch_defers_commit_until_exit(db, tmp_path):
+    from trustsight.db import upsert_package, write_batch
+
+    dbp = tmp_path / "trustsight.db"
+    with write_batch():
+        upsert_package("batched", "1.0")
+        # Inside the batch the write is uncommitted: another connection, the
+        # one a reader would use, cannot see it yet.
+        assert _committed_row(dbp, "batched") is None
+    assert _committed_row(dbp, "batched") is not None
+
+
+def test_write_batch_rolls_back_all_writers_on_error(db, tmp_path):
+    from trustsight.db import upsert_package, write_batch
+
+    dbp = tmp_path / "trustsight.db"
+    with pytest.raises(RuntimeError):
+        with write_batch():
+            upsert_package("doomed", "1.0")
+            raise RuntimeError("boom")
+    assert _committed_row(dbp, "doomed") is None
+
+
+def test_write_batch_nesting_commits_once_at_the_outer_block(db, tmp_path):
+    from trustsight.db import upsert_package, write_batch
+
+    dbp = tmp_path / "trustsight.db"
+    with write_batch():
+        upsert_package("outer", "1.0")
+        with write_batch():
+            upsert_package("inner", "1.0")
+        # The inner exit must not commit: both rows land together at the end.
+        assert _committed_row(dbp, "inner") is None
+    assert _committed_row(dbp, "inner") is not None
+
+
+def test_repeat_observed_domain_does_not_grow_past_the_cap(db, monkeypatch):
+    from trustsight.db import observed_domain_count, record_observed_domain
+    from trustsight.db import _history
+
+    monkeypatch.setattr(_history, "MAX_OBSERVED_DOMAINS", 2)
+    record_observed_domain("a.example")
+    record_observed_domain("b.example")
+    record_observed_domain("c.example")
+    assert observed_domain_count() == 2
+    # A repeat of an already-observed domain is an INSERT OR IGNORE no-op; it
+    # must leave the capped ledger unchanged.
+    record_observed_domain("b.example")
+    assert observed_domain_count() == 2
+
+
+def test_write_batch_inner_failure_does_not_discard_the_batch(db, tmp_path):
+    from trustsight.db import get_connection, upsert_package, write_batch
+
+    dbp = tmp_path / "trustsight.db"
+    with write_batch():
+        upsert_package("kept", "1.0")
+        # A best-effort inner writer that raises and is caught must not undo
+        # the batch's earlier deferred writes: the caller continues, and the
+        # batch commits what it has.
+        try:
+            with get_connection() as conn:
+                conn.execute("INSERT INTO packages (name) VALUES ('dup')")
+                conn.execute("INSERT INTO packages (name) VALUES ('dup')")
+        except Exception:
+            pass
+    assert _committed_row(dbp, "kept") is not None

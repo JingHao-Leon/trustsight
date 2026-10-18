@@ -10,8 +10,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 from ..rule_id_history import RENAMED_RULE_IDS
+from ._common import log
 
-__all__ = ['DEFAULT_HASH_ALGORITHM', 'MAX_SEED_BYTES', 'MAX_SEED_MEMBERS', 'MAX_SEED_MEMBER_BYTES', 'SEED_META_HASH_ALGORITHM_KEY', 'SEED_META_SALT_KEY', '_ADDED_COLUMNS', '_SCHEMA_VERSION', '_SYNC_MODES', '_SYNC_SQL', '_ensure_salt', '_generate_salt', '_get_salt', '_hash_maintainer_rows', '_hash_maintainer_value', '_local', '_migrate', '_migrate_plaintext_maintainers', '_migrate_rule_ids', '_new_connection', '_synchronous_mode', 'close_connections', 'get_connection', 'get_db_path', 'get_read_only_connection', 'init_db']
+__all__ = ['DEFAULT_HASH_ALGORITHM', 'MAX_SEED_BYTES', 'MAX_SEED_MEMBERS', 'MAX_SEED_MEMBER_BYTES', 'SEED_META_HASH_ALGORITHM_KEY', 'SEED_META_SALT_KEY', '_ADDED_COLUMNS', '_SCHEMA_VERSION', '_SYNC_MODES', '_SYNC_SQL', '_ensure_salt', '_generate_salt', '_get_salt', '_hash_maintainer_rows', '_hash_maintainer_value', '_local', '_migrate', '_migrate_plaintext_maintainers', '_migrate_rule_ids', '_new_connection', '_synchronous_mode', 'close_connections', 'get_connection', 'get_db_path', 'get_read_only_connection', 'init_db', 'write_batch']
 
 MAX_SEED_BYTES = 2 * 1024 * 1024 * 1024
 
@@ -29,6 +30,22 @@ def get_db_path() -> Path:
     return DATA_DIR / "trustsight.db"
 
 _local = threading.local()
+
+class _BatchConnection(sqlite3.Connection):
+    """A connection whose ``commit()`` is deferred inside :func:`write_batch`.
+
+    Every corpus writer commits itself, so persisting one package used to be
+    a dozen separate transactions - a WAL append each, and each one a
+    candidate for the autocheckpoint to copy pages back into the database.
+    While a batch is open ``commit()`` is a no-op; the outermost
+    :func:`write_batch` block commits the whole thing once (or rolls it back
+    as one unit on error).  A normal caller outside a batch is unaffected.
+    """
+
+    def commit(self) -> None:
+        if getattr(_local, "batch_depth", 0):
+            return
+        super().commit()
 
 _SYNC_MODES = frozenset({"OFF", "NORMAL", "FULL", "EXTRA"})
 
@@ -73,7 +90,10 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     # `timeout` is the busy handler: a writer waits this long for a lock
     # instead of raising "database is locked".  Set here rather than with
     # `PRAGMA busy_timeout` so no value ever reaches SQL text.
-    conn = sqlite3.connect(str(db_path), timeout=_busy_timeout_ms() / 1000)
+    conn = sqlite3.connect(
+        str(db_path), timeout=_busy_timeout_ms() / 1000,
+        factory=_BatchConnection,
+    )
     if not existed:
         # SQLite creates the file 0666 & ~umask; the database holds package
         # names, maintainers and analysis history, so pin it to the owner.
@@ -88,6 +108,15 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute(_SYNC_SQL[_synchronous_mode()])
     conn.execute("PRAGMA foreign_keys=ON")
+    # A corpus cycle writes thousands of rows.  The default autocheckpoint
+    # (1000 pages, ~4 MB) copies the WAL back into the database every few
+    # megabytes, and on an encrypted volume that copy dominated the run;
+    # defer it to 10000 pages (~40 MB) and cap the file so one burst cannot
+    # grow the WAL without bound.  cache_size is raised from the 2 MB default
+    # so a cycle's hot pages are not evicted between writes.
+    conn.execute("PRAGMA wal_autocheckpoint=10000")
+    conn.execute("PRAGMA journal_size_limit=67108864")
+    conn.execute("PRAGMA cache_size=-65536")
     return conn
 
 @contextmanager
@@ -135,8 +164,21 @@ def get_connection():
 
     A body that raises gets its transaction rolled back: a partial write
     left open on the cached connection would otherwise be persisted by the
-    next caller's ``commit()``.
+    next caller's ``commit()``.  Inside a :func:`write_batch` the rollback
+    is left to the batch: an inner block must not unilaterally discard the
+    writes the batch has already deferred, and a best-effort writer that
+    catches its own error is expected to continue in the same transaction.
     """
+    conn = _cached_connection()
+    try:
+        yield conn
+    except Exception:
+        if not getattr(_local, "batch_depth", 0):
+            conn.rollback()
+        raise
+
+def _cached_connection() -> sqlite3.Connection:
+    """The cached connection for the current path, opened on first use."""
     db_path = get_db_path()
     key = str(db_path)
     cached = getattr(_local, "cached", None)
@@ -147,11 +189,41 @@ def get_connection():
             except sqlite3.Error:
                 pass
         _local.cached = (key, _new_connection(db_path))
+    return _local.cached[1]
+
+@contextmanager
+def write_batch():
+    """Commit the writes inside as a single transaction.
+
+    The corpus writers each ``commit()`` on their own, so persisting one
+    package used to be a dozen separate transactions.  Inside this block
+    those commits are deferred and the whole block is committed once (and
+    rolled back together on error), so a package's writes cost one
+    transaction rather than twelve.  Nesting is safe: only the outermost
+    block commits, so a helper may open a batch of its own without leaking a
+    partial commit.
+    """
+    depth = getattr(_local, "batch_depth", 0)
+    conn: Optional[sqlite3.Connection] = None
+    if depth == 0:
+        conn = _cached_connection()
+    _local.batch_depth = depth + 1
     try:
-        yield _local.cached[1]
-    except Exception:
-        _local.cached[1].rollback()
+        yield
+    except BaseException:
+        _local.batch_depth = depth
+        if conn is not None:
+            try:
+                conn.rollback()
+            except sqlite3.Error:
+                log.debug("write batch rollback failed", exc_info=True)
         raise
+    else:
+        _local.batch_depth = depth
+        if conn is not None:
+            # A failed commit is the batch's write being lost; let it
+            # propagate rather than look like a clean cycle.
+            conn.commit()
 
 def init_db():
     """Create all tables and indexes if they do not exist."""
