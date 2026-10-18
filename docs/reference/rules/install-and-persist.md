@@ -25,6 +25,7 @@ severity weights and the reserved identifier ranges.
 | [C017](#c017) | Install Hook Writes To A User-Writable Location | HIGH |
 | [C029](#c029) | Backup Array Gains Entries | INFO |
 | [C031](#c031) | Boot Or System Image Tool Run During Build | HIGH |
+| [C032](#c032) | Scriptlet Executes Commands At Top Level | HIGH |
 | [H017](#h017) | Install Hook Fetches Or Executes | HIGH |
 | [H023](#h023) | Install Hook Present | INFO |
 | [H032](#h032) | Write To User Home Or RC | HIGH |

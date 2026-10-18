@@ -169,6 +169,7 @@ Explanation = [
   {"Cross-File Consistency" = "explanation/cross-file-consistency.md"},
   {"The Typed Core" = "explanation/the-typed-core.md"},
   {"Kinds of Alerts" = "explanation/kinds-of-alerts.md"},
+  {"In the Wild" = "explanation/in-the-wild.md"},
   {"Alert Budget" = "explanation/alert-budget.md"},
   {"Campaign Alert Mode" = "explanation/campaign-alert-mode.md"},
   {"Neighborhood Elevation" = "explanation/neighborhood-elevation.md"},

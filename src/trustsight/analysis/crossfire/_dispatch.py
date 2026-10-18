@@ -30,6 +30,7 @@ _NAMES = {
     "X023": ("Command Output Executed As A Script", "HIGH"),
     "X024": ("Indirect Sensitive Assignment", "HIGH"),
     "X025": ("Multi-Line Function Shadow", "HIGH"),
+    "X034": ("Fetch Laundered Through An Archival Service", "HIGH"),
 }
 
 X007_MIN_TECHNIQUES = 2
@@ -50,7 +51,7 @@ def _crossfire_findings(diff_text, config, add, previous_diff: str = "",
     for rule_id in ("X001", "X002", "X003", "X004", "X005", "X006", "X008",
                     "X009", "X010", "X011", "X012", "X013", "X014", "X015",
                     "X016", "X017", "X018", "X019", "X020", "X021", "X022",
-                    "X023", "X024", "X025"):
+                    "X023", "X024", "X025", "X034"):
         hits = techniques.get(rule_id)
         if not hits:
             continue

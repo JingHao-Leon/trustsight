@@ -138,6 +138,24 @@
   ],
   "min_score": 65
  },
+ "yay-typosquat-install-hook.diff": {
+  "description": "October 2026: one of fifteen `yay` name-clones (maintainer impersonating Jguer). The upstream recipe is byte-intact and the payload rides in a committed `ay.install`, fetched through web.archive.org to launder the gitflic.ru origin.",
+  "campaign": "yay-typosquat-2026-10",
+  "fidelity": "verified",
+  "must_fire": [
+   "H075"
+  ],
+  "min_score": 60
+ },
+ "brave-typosquat-install-hook.diff": {
+  "description": "October 2026: one of fifteen `brave-beta-bin` name-clones. Same delivery as the yay wave - intact upstream recipe plus an appended archive-laundered fetch in a committed .install.",
+  "campaign": "brave-typosquat-2026-10",
+  "fidelity": "verified",
+  "must_fire": [
+   "H075"
+  ],
+  "min_score": 60
+ },
  "control-arch-check-and-generated-desktop.diff": {
   "description": "Architecture detection and a generated .desktop consumed by a declared install step",
   "campaign": "control",

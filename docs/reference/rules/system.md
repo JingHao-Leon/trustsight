@@ -98,7 +98,7 @@ be a script the recipe executes.
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X033, C001-C032, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X034, C001-C032, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -1153,7 +1153,7 @@ See [H074: Adopt-then-Modify](maintainer-and-metadata.md#h074).
 ## Additional Per-Package Rules {#additional-per-package-rules}
 
 H086-H088 are per-package findings, not Class D corpus findings. S001-S008
-and X001-X033 are the sabotage and crossfire families; their category pages
+and X001-X034 are the sabotage and crossfire families; their category pages
 are authoritative for their conditions and severities.
 
 ### H086 {#h086}
@@ -1595,6 +1595,10 @@ See [X032: Command Name Assembled By Splicing](crossfire.md#x032).
 ### X033 {#x033}
 
 See [X033: File With No Provenance Executed](crossfire.md#x033).
+
+### X034 {#x034}
+
+See [X034: Fetch Laundered Through An Archival Service](crossfire.md#x034).
 
 ### X031 {#x031}
 
