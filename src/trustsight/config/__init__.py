@@ -575,6 +575,24 @@ def load_config() -> dict:
     """Load the user config.toml"""
     return load_toml("config.toml")
 
+_PARSE_WARNED: set[str] = set()
+
+def _warn_unparsable_config(exc: Exception) -> None:
+    """Warn once when config.toml cannot be parsed.
+
+    These accessors deliberately do not raise: they run while a URL is built
+    or a command starts, and a broken file must not take the whole tool down.
+    But swallowing the error silently would drop an operator's pinned
+    ``[release] key`` and fall back to the official channel without a word, so
+    say so - once per process.
+    """
+    if str(CONFIG_DIR) in _PARSE_WARNED:
+        return
+    _PARSE_WARNED.add(str(CONFIG_DIR))
+    _log.warning(
+        "config.toml could not be parsed (%s); using shipped defaults, so any "
+        "release channel or key set there is being ignored", exc)
+
 def configured_baseline_tag() -> str | None:
     """The fallback baseline tag for the release channel, or ``None``.
 
@@ -587,7 +605,8 @@ def configured_baseline_tag() -> str | None:
     try:
         with open(path, "rb") as f:
             section = tomllib.load(f).get("seed") or {}
-    except (OSError, tomllib.TOMLDecodeError):
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        _warn_unparsable_config(exc)
         section = {}
     # An explicit key wins, including an empty one: setting ``baseline_tag =
     # ""`` turns the fallback off and makes a discovery failure fail closed.
@@ -609,7 +628,8 @@ def configured_ioc_tag() -> str | None:
     try:
         with open(path, "rb") as f:
             section = tomllib.load(f).get("baselines", {}).get("ioc") or {}
-    except (OSError, tomllib.TOMLDecodeError):
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        _warn_unparsable_config(exc)
         section = {}
     if "tag" in section:
         value = str(section["tag"] or "").strip()
@@ -623,7 +643,8 @@ def _release_section() -> dict:
     try:
         with open(path, "rb") as f:
             return tomllib.load(f).get("release") or {}
-    except (OSError, tomllib.TOMLDecodeError):
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        _warn_unparsable_config(exc)
         return {}
 
 def configured_release_channel() -> str | None:

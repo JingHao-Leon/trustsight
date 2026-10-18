@@ -179,6 +179,26 @@ def test_a_declared_makefile_is_not_an_undeclared_execution():
     assert "H081" not in _ids(diff, tree_manifest=manifest)
 
 
+def test_an_arch_parameterised_source_name_is_declared():
+    """mautrix-signal-bin declares its binary with a literal arch
+    (``"${pkgname}-x86_64"``) but executes the parameterised form
+    (``./${pkgname}-${CARCH}``).  Both name the same file: a variable
+    stands for an unknown run of characters, exactly as ``*`` does, so the
+    declared-source check must wildcard it rather than compare two strings.
+    """
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,20 +1,60 @@\n"
+        '+source_x86_64=("${pkgname}-x86_64"::"${url}/mautrix-signal-amd64")\n'
+        '+source=("sysusers-${pkgname/-bin}.conf")\n'
+        "+prepare() {\n"
+        '+  local _binary="${pkgname}-${CARCH}"\n'
+        '+  ./"${_binary}" --generate-example-config\n'
+        "+}\n"
+    )
+    manifest = [("PKGBUILD", b"x"), ("sysusers-mautrix-signal.conf", b"x")]
+    assert "H081" not in _ids(diff, tree_manifest=manifest)
+
+
 def test_the_new_scope_patterns_stay_linear():
     """`_NETWORK_FETCH_RE` became `fetch_addresses`: the single regex paired
     a client with an address across a lazy span, which is a quadratic search

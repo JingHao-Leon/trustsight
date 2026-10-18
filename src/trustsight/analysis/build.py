@@ -792,12 +792,17 @@ _REVEALED_RUN_RE = re.compile(r"[!-~]{3,}")
 # Ordinary quoted data (``depends=('glibc' 'foo')``) is not obfuscation, but
 # quote stripping would make it look as if something was hidden.  Only report
 # H065 when the original line carried one of the reconstruction targets.
+#
+# The partial-quoting arms require an alphanumeric in the quoted interior.
+# A revealed literal is *content* (``b"u"n`` hides ``bun``); the ``::`` that
+# separates the two halves of a makepkg array element is punctuation, so
+# ``"${pkgname}-x86_64"::"${url}/..."`` must not read as a hidden word.
 _OBFUSCATION_MARKER_RE = re.compile(
     r"(?<=\w)(?:''|\"\")(?=\w)"          # empty-quote concat: b''u''n
     r"|\$\(\s*printf\s+['\"]"           # $(printf 'literal')
     r"|\$'"                                # ANSI-C quote (also: fully=False)
-    r"|\w['\"][^'\"\s]*['\"]"          # partial quoting, left-glued
-    r"|['\"][^'\"\s]*['\"]\w",        # partial quoting, right-glued
+    r"|\w['\"][^'\"\s]*[A-Za-z0-9][^'\"\s]*['\"]"   # partial quoting, left-glued
+    r"|['\"][^'\"\s]*[A-Za-z0-9][^'\"\s]*['\"]\w",  # partial quoting, right-glued
     re.IGNORECASE,
 )
 

@@ -127,6 +127,11 @@ def pull_baseline_seed(
     from .db import import_seed
 
     channel = channel or release.active_baseline_channel()
+    # Refuse a channel with no usable pinned key *before* any network I/O, so
+    # an operator pointing at a channel without its key hears "pin the key",
+    # not a confusing "no asset is reachable".  This is the same check the
+    # signature step would run, only early.
+    release._channel_pubkey(channel, pubkey_path)
     _emit_warning(channel)
     data = _verified_download(
         SEED_ASSET_NAME, tag=tag, channel=channel, progress=progress,
@@ -140,10 +145,10 @@ def pull_baseline_seed(
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
     url = release.asset_url(SEED_ASSET_NAME, tag, channel)
-    channel_state.record_pull(
-        channel_state.BASELINE, release.tag_from_asset_url(url), channel.repo
-    )
-    return {"tag": tag or "latest", "url": url, "channel": channel.repo, **stats}
+    resolved = release.tag_from_asset_url(url)
+    channel_state.record_pull(channel_state.BASELINE, resolved, channel.repo)
+    return {"tag": resolved or tag or "latest", "url": url,
+            "channel": channel.repo, **stats}
 
 
 def _release_channel_feed(feed: dict, prefix: str,
@@ -158,6 +163,9 @@ def _release_channel_feed(feed: dict, prefix: str,
 
     channel = release.channel_for_url(feed.get("url") or "")
     assert channel is not None  # caller checked
+    # Refuse a channel with no usable pinned key before any download; see
+    # pull_baseline_seed for the reasoning.
+    release._channel_pubkey(channel, None)
     # Every import from a non-official channel says so, before anything is
     # downloaded or imported.
     _emit_warning(channel)
@@ -212,7 +220,9 @@ def _federation_feed(feed: dict, url: str,
                 "`key` to the publisher's ed25519 public key"
             ),
         }
-    key_path = Path(key_value)
+    # A feed `key` is 64 hex characters or a path to a raw key file, the same
+    # as a channel `[release] key`; `_parse_pinned_key` tells the two apart.
+    key_path, key_bytes = release._parse_pinned_key(key_value)
     label = url.rstrip("/")
     print(publisher_warning(label), file=sys.stderr)
     tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-ioc-federation-"))
@@ -221,7 +231,8 @@ def _federation_feed(feed: dict, url: str,
         # small (a manifest plus an indicator list), so a bar is not missed.
         for asset in ("manifest.json", "iocs.jsonl"):
             (tmp_dir / asset).write_bytes(
-                release.fetch_verified_url(url, asset, pubkey_path=key_path)
+                release.fetch_verified_url(url, asset, pubkey_path=key_path,
+                                           pubkey=key_bytes)
             )
         result = import_baseline(tmp_dir, source_name=label,
                                  trust_manifest_key=True)

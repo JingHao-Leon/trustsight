@@ -110,3 +110,27 @@ def test_a_tmp_write_in_a_hook_fires():
         "  echo payload > /tmp/.stage2\n"
         "}\n"
     ))
+
+
+def test_an_advisory_command_inside_a_printed_heredoc_does_not_fire():
+    # install hooks routinely print setup instructions, and those
+    # instructions quote commands the user is meant to run later.  The
+    # quoted line never executes here, so R054 must not read it as a
+    # persistence write (infopanel-bin printed a `sudo tee` sysctl line).
+    text = _install_diff(
+        "post_install() {\n"
+        "  cat <<'EOF'\n"
+        "To enable IP forwarding, run:\n"
+        "  echo 'net.ipv4.ip_forward=1' | sudo tee /etc/sysctl.d/99-infopanel.conf\n"
+        "EOF\n"
+        "}\n"
+    )
+    assert "R054" not in _rule_ids(text)
+
+
+def test_a_genuine_sysctl_write_in_a_hook_still_fires():
+    assert "R054" in _rule_ids(_install_diff(
+        "post_install() {\n"
+        "  echo 'net.ipv4.ip_forward=1' | sudo tee /etc/sysctl.d/99-x.conf\n"
+        "}\n"
+    ))

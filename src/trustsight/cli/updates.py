@@ -204,7 +204,11 @@ def pending_channels() -> list[tuple[str, str, str]]:
                         str(tags.get("baseline_channel") or "official")))
     ioc_tag = tags.get("ioc")
     if ioc_tag and ioc_tag != channel_state.pulled_tag(channel_state.IOC):
-        pending.append(("ioc", str(ioc_tag), "official"))
+        from .. import release
+
+        # IOC discovery always resolves the official ``ioc-*`` channel, so the
+        # notice names it by slug rather than the vague word "official".
+        pending.append(("ioc", str(ioc_tag), release.OFFICIAL_REPO))
     return pending
 
 

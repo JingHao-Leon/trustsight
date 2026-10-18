@@ -685,25 +685,32 @@ def _download_url(url: str, max_bytes: int = _MAX_RELEASE_BYTES) -> bytes:
 
 
 def fetch_verified_url(
-    base_url: str, asset_name: str, *, pubkey_path: Path,
+    base_url: str, asset_name: str, *, pubkey_path: Path | None = None,
+    pubkey: bytes | None = None,
 ) -> bytes:
     """Fetch *asset_name* from an arbitrary *base_url*, signature-verified.
 
-     (federation sketch): the same detached-Ed25519 path the
-    release channel uses, against a publisher key the operator pins.  The
-    sibling ``<asset_name>.sig`` must verify over the exact bytes before the
-    payload is returned; an unsigned or mismatched asset is refused.
+    The federation counterpart of :func:`fetch_verified_asset`: the same
+    detached-Ed25519 path, against a publisher key the operator pins.  The key
+    is either raw *pubkey* bytes or a *pubkey_path* to a file holding them (a
+    feed ``key`` may be given as 64 hex characters or a path).  The sibling
+    ``<asset_name>.sig`` must verify over the exact bytes before the payload is
+    returned; an unsigned or mismatched asset is refused.
     """
     if offline():
         raise ReleaseFetchError(
             "federation fetches are disabled (TRUSTSIGHT_OFFLINE is set)")
+    if pubkey is None and pubkey_path is None:
+        raise ReleaseSignatureError(
+            "no publisher key given to verify the federation asset against")
     base = base_url.rstrip("/")
     data = _download_url(f"{base}/{asset_name}")
     signature = _download_url(f"{base}/{asset_name}.sig", max_bytes=64 * 1024)
-    try:
-        pubkey = _load_trusted_pubkey(pubkey_path)
-    except Exception as exc:
-        raise ReleaseSignatureError(str(exc)) from exc
+    if pubkey is None:
+        try:
+            pubkey = _load_trusted_pubkey(pubkey_path)
+        except Exception as exc:
+            raise ReleaseSignatureError(str(exc)) from exc
     if not verify_artifact(data, signature, pubkey):
         raise ReleaseSignatureError(
             f"{asset_name} failed Ed25519 verification against the publisher "

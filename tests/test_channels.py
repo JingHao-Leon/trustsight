@@ -108,6 +108,74 @@ def test_a_federation_feed_without_a_key_is_refused():
     assert "pinned publisher key" in result["error"]
 
 
+HEX_KEY = "3bc5a24d09072c4aed2165f29d5a8fd42aeacb9f96962c12eccde64c79786210"
+
+
+@pytest.mark.parametrize("key_value", [HEX_KEY, "/tmp/some-pubkey.raw"])
+def test_a_federation_feed_key_is_hex_or_a_path(monkeypatch, key_value):
+    """A feed `key` is documented as 64 hex characters *or* a path.
+
+    Reading a hex key as a path (the pre-fix behaviour) fails with ENOENT on a
+    file named like the digest, so the two shapes must route to the same
+    verifier the way a channel `[release] key` does.
+    """
+    seen = {}
+
+    def _fetch(url, asset, *, pubkey_path=None, pubkey=None):
+        seen.setdefault("calls", []).append((asset, pubkey_path, pubkey))
+        return b"data"
+
+    monkeypatch.setattr(release, "fetch_verified_url", _fetch)
+    monkeypatch.setattr("trustsight.ioc_baseline.import_baseline",
+                        lambda *a, **k: {"entries_imported": 1, "verified": True})
+
+    result = channels.pull_ioc_feed(
+        {"name": "x", "url": "https://example.test/iocs", "key": key_value})
+
+    assert result["status"] == "ok", result
+    assert [asset for asset, _, _ in seen["calls"]] == ["manifest.json", "iocs.jsonl"]
+    for _, pubkey_path, pubkey in seen["calls"]:
+        if key_value == HEX_KEY:
+            assert pubkey is not None and len(pubkey) == 32
+            assert pubkey_path is None
+        else:
+            assert pubkey is None
+            assert str(pubkey_path) == key_value
+
+
+def test_fetch_verified_url_requires_a_key(monkeypatch):
+    monkeypatch.setattr(release, "offline", lambda: False)
+    monkeypatch.setattr(release, "_download_url", lambda *a, **k: b"x")
+    with pytest.raises(release.ReleaseSignatureError):
+        release.fetch_verified_url("https://example.test/iocs", "manifest.json")
+
+
+def test_fetch_verified_url_verifies_raw_key_bytes(monkeypatch):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+        Ed25519PrivateKey,
+    )
+
+    monkeypatch.setattr(release, "offline", lambda: False)
+    key = Ed25519PrivateKey.generate()
+    payload = b'{"version": 1}'
+    signature = key.sign(payload)
+
+    def _download(url, *a, **k):
+        return signature if url.endswith(".sig") else payload
+
+    monkeypatch.setattr(release, "_download_url", _download)
+    raw = key.public_key().public_bytes_raw()
+
+    assert release.fetch_verified_url(
+        "https://example.test/iocs", "manifest.json", pubkey=raw) == payload
+
+    bad = Ed25519PrivateKey.generate().public_key().public_bytes_raw()
+    with pytest.raises(release.ReleaseSignatureError):
+        release.fetch_verified_url(
+            "https://example.test/iocs", "manifest.json", pubkey=bad)
+
+
+
 def test_a_bad_asset_prefix_on_a_channel_url_is_refused():
     result = channels.pull_ioc_feed({
         "name": "Bad Name",
@@ -202,6 +270,21 @@ def test_pending_channels_reports_an_unpulled_release(monkeypatch):
 
     assert updates.pending_channels() == [
         ("baseline", "baseline-2026-03-03", release.OFFICIAL_REPO)]
+
+
+def test_pending_channels_names_the_official_repo_for_iocs(monkeypatch):
+    from trustsight.cli import updates
+
+    monkeypatch.setattr(updates, "_channel_tags", lambda: {
+        "baseline": None,
+        "baseline_channel": release.OFFICIAL_REPO,
+        "ioc": "ioc-2026-03-03",
+    })
+    monkeypatch.delenv("TRUSTSIGHT_NO_UPDATE_CHECK", raising=False)
+    monkeypatch.delenv("TRUSTSIGHT_NO_PENDING_CHECK", raising=False)
+
+    assert updates.pending_channels() == [
+        ("ioc", "ioc-2026-03-03", release.OFFICIAL_REPO)]
 
 
 def test_pending_channels_is_silent_once_pulled(monkeypatch):

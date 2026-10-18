@@ -439,10 +439,11 @@ _HOOK_SCRIPTLET_EXCLUDED_RULES = frozenset({"R053", "R058", "R059"})
 #: Rules that must not match the body of a *printed* heredoc.  A printed
 #: heredoc body is literal output text, not executed shell: `cat <<MSG` with
 #: no redirect and no pipe into an executor.  Write patterns (R052 matched
-#: the openxlr .install script's advisory text as if it ran) must not fire
-#: on it.  Reader-facing rules (R012/R013) deliberately keep seeing heredoc
-#: bodies - their payload is aimed at whoever reads the file.
-_PRINTED_HEREDOC_EXCLUDED_RULES = frozenset({"R052"})
+#: the openxlr .install script's advisory text as if it ran; R054 matched
+#: infopanel's `echo … | sudo tee /etc/sysctl.d/…` setup instructions) must
+#: not fire on it.  Reader-facing rules (R012/R013) deliberately keep seeing
+#: heredoc bodies - their payload is aimed at whoever reads the file.
+_PRINTED_HEREDOC_EXCLUDED_RULES = frozenset({"R052", "R054"})
 
 #: Rules that must not match ANY literal heredoc body.  A body is data at
 #: this position: text a later reader (or the installed artifact) consumes,

