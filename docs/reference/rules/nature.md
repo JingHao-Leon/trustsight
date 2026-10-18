@@ -2,7 +2,7 @@
 
 # Rule Nature
 
-Every rule in TrustSight belongs to a **series** (R, H, C, D, S, X, T, G, E, I, M, A, P, or W) that determines *how* it detects, not *what* it detects. The series is the mechanism; the [category](index.md) is the subject. A rule can be `category = "integrity"` and still be an R-series regex, an H-series heuristic, or a C-series structural check.
+Every rule in TrustSight belongs to a **series** (R, H, C, D, S, X, T, G, E, I, M, A, U, P, or W) that determines *how* it detects, not *what* it detects. The series is the mechanism; the [category](index.md) is the subject. A rule can be `category = "integrity"` and still be an R-series regex, an H-series heuristic, or a C-series structural check.
 
 Understanding the nature of a rule tells you what you can tune, what you cannot, and what the finding means.
 
@@ -328,7 +328,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## U-series: **Manifest** Committed Dependency Surfaces
 
-**Count:** 5 rules (U001-U005)
+**Count:** 6 rules (U001-U006)
 
 **Mechanism:** Parses the dependency manifests committed beside a recipe - `Cargo.toml`, `package.json`, `requirements.txt`, `go.mod`, `Gemfile`, `composer.json` and peers - with the existing tree walk and diff. No fetch and no extraction (A2, A8): these are repository bytes the analysis already reads.
 
