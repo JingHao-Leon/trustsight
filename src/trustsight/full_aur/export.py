@@ -149,7 +149,11 @@ def _canonical_observations(
         (
             {
                 "url": str(row.get("url", "")),
-                "first_seen_package_id": row.get("first_seen_package_id") or 0,
+                # The id is a rowid in the builder's own database and the
+                # artifact does not carry the packages table, so an importer
+                # can only violate the FK or mis-attribute the URL to a
+                # colliding local id.  Ship the sentinel instead.
+                "first_seen_package_id": 0,
                 "first_seen_globally_timestamp": row.get("first_seen_globally_timestamp"),
                 "total_uses": row.get("total_uses", 1),
                 "last_seen_timestamp": row.get("last_seen_timestamp"),
@@ -622,7 +626,10 @@ def _import_observations(observations_in: dict) -> dict:
         url_rows = [
             (
                 row.get("url"),
-                row.get("first_seen_package_id") or 0,
+                # A package id carried by an older artifact is local to the
+                # builder and unresolvable here (packages are per-database),
+                # so keep the sentinel rather than trip the FK.
+                0,
                 row.get("first_seen_globally_timestamp"),
                 row.get("total_uses", 1),
                 row.get("last_seen_timestamp"),

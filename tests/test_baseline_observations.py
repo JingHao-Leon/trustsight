@@ -185,6 +185,49 @@ def test_import_is_additive_and_never_clobbers_local_rows(artifact):
     assert _counts()["dependency_names"] == 2  # 'lib-xyz' merged in
 
 
+def test_local_package_id_is_not_portable(tmp_path, monkeypatch):
+    """A builder-local package id must never reach the FK'd column.
+
+    The artifact carries no packages table, so shipping the id can only
+    trip ``source_urls.first_seen_package_id``'s foreign key on import (or
+    mis-attribute the URL to a colliding local id).  The producer ships the
+    sentinel and the importer clamps a legacy artifact that did not.
+    """
+    import trustsight.config as config
+    import trustsight.db as db
+
+    _point_at(monkeypatch, config, db, tmp_path / "importer")
+    init_db()
+
+    # A legacy artifact may still carry a non-zero id; the import must
+    # tolerate it rather than raise "FOREIGN KEY constraint failed".
+    export._import_observations(
+        {
+            "source_urls": [
+                {
+                    "url": "https://example.com/z.tar.gz",
+                    "first_seen_package_id": 332,
+                    "first_seen_globally_timestamp": "2026-10-18 02:42:45",
+                    "total_uses": 1,
+                    "last_seen_timestamp": None,
+                }
+            ]
+        }
+    )
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT first_seen_package_id FROM source_urls WHERE url = ?",
+            ("https://example.com/z.tar.gz",),
+        ).fetchone()
+        # The producer drops the id too.
+        obs = export._canonical_observations(
+            [dict(r) for r in conn.execute("SELECT * FROM source_urls")],
+            [], [], None,
+        )
+    assert row["first_seen_package_id"] == 0
+    assert obs["source_urls"][0]["first_seen_package_id"] == 0
+
+
 def test_artifact_with_a_foreign_salt_skips_maintainer_rows(artifact):
 
     with get_connection() as conn:
