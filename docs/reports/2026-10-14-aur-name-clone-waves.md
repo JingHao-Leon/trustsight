@@ -82,3 +82,51 @@ outside the score, as attribution, never as a number.
 
 The honest summary is the one the report itself gives: these packages were
 flagged for review.
+
+## TrustSight evolution
+
+The live cycle raised the alarm from the *correlation* layer, not the payload;
+every payload rule below arrived in the days after. This is what the incident
+changed.
+
+- **[C032](../reference/rules/install-and-persist.md#c032) reads the top-level
+  scriptlet.** `H017` and `C016` scope to function bodies and the scope map
+  omits top-level lines, so nothing read an install scriptlet outside a hook -
+  yet pacman sources an `.install` on every operation and a bare top-level line
+  runs as root on each install. The campaign's payload is exactly that line,
+  `bash <(curl -L URL)`. C032 parses the committed scriptlet, stands down on an
+  unparseable partial read, and matches command-position execution outside every
+  function; where one line carries both shapes, `H090` claims the finding.
+- **[H090](../reference/rules/fetch-and-execution.md#h090) reads the
+  process-substitution carrier.** Its committed-carrier pattern was pipe-keyed,
+  so the `bash <(curl ...)` shape both waves shipped scored zero in the manifest
+  scan: every watch cycle after the introduction, and any state scan without a
+  diff, saw nothing. Two arms now reuse `H075`'s group-free process-substitution
+  patterns, so the carrier the rule already existed to catch is read.
+- **[X034](../reference/rules/crossfire.md#x034) names the archival transit.**
+  The fetch was laundered through `web.archive.org` as a redirector to a fresh
+  origin, so the trusted host and the serving host differ. X034 fires on that
+  indirection itself and stands down on a plain `curl`/`wget` to a shell, so the
+  technique is reported even where a payload rule caught the bytes. It was
+  written from these two waves.
+- **The correlation layer was tightened, not loosened.** `campaign_cluster` kept
+  every G-series finding, one-member clusters included, so a bulk dependency-hub
+  sweep read as hundreds of incidents. It now keeps only G-series clusters of two
+  or more members: a wave is still one account adopting many names at once, which
+  is what raised the alarm here, without reading a sweep as a campaign.
+- **The committed bytes are the regression corpus.** The fixtures under
+  `tests/fixtures/malicious/campaign/` are the real AUR cgit bytes, `PKGBUILD`
+  and `.install` verified byte-for-byte, scoring 100 under the current ruleset.
+  The must-not-fire surface (benign hooks, top-level assignments, execution
+  inside hook bodies, `curl|bash` in `build()`) is pinned in
+  `tests/regressions/test_install_scriptlet_rules.py`.
+- **The indicators ship as their own set.** `data/iocs/aur-typosquat-2026-10.json`
+  carries the 29 created names, the 199-byte carrier `hash` and the pinned
+  archival pattern, on the dedicated `ioc-*` release channel, so a time-sensitive
+  set can be republished without a baseline cut. `firefox-git-bin` stays out of
+  the package indicators: it is a hijacked legitimate package carrying the same
+  carrier, covered by the `hash`, and naming it would indict a recipe that will
+  be restored.
+
+The day-of alarm was correlation; the durable result is that the carrier itself
+is now read. The rules raise the cost of the technique; they do not retire it.
