@@ -22,9 +22,9 @@ that the two categories can share infrastructure.
 
 | Category | The question its evidence answers | Rule families that feed it |
 |---|---|---|
-| L1 Structural coherence | Does the change hang together as an honest edit? | C, M |
+| L1 Structural coherence | Does the change hang together as an honest edit? | C, P |
 | L2 Readability | Was anything hidden from the reader? | W, and the refusal rules X026/X027 |
-| L3 Payload signature | Does it do a known-bad thing? | R, S |
+| L3 Payload signature | Does it do a known-bad thing? | R, S, U |
 | L4 Evasion shape | Was it *written* to defeat reading? | X, E |
 | L5 Behavioral suspicion | Does the package's story make sense? | H |
 | L6 Ecosystem memory | Has the ecosystem seen this before? | D, T |
