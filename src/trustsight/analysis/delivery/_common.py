@@ -402,7 +402,13 @@ def _unpinned_source_basenames(
             if base is None:
                 continue
             item = chosen[index] if chosen and index < len(chosen) else ""
-            if not item or item.upper() in ("SKIP", "NONE"):
+            # A digest of one repeated character is a placeholder the packager
+            # must replace before the recipe builds: it matches no real
+            # download, so the source pins nothing.  H083 treats it like an
+            # absent checksum, where a real digest (pkl-lsp's
+            # merge-lsp4j-metadata.py) is a pin.
+            placeholder = len(item) > 1 and len(set(item)) == 1
+            if not item or item.upper() in ("SKIP", "NONE") or placeholder:
                 unpinned.add(base)
     return frozenset(unpinned)
 

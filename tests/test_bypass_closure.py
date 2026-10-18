@@ -174,6 +174,26 @@ def test_a_declared_source_run_as_a_relative_command_still_fires():
         "prepare() {\n  ./payload.sh\n}\n"))
 
 
+def test_a_placeholder_checksum_does_not_pin_a_declared_source():
+    """A digest that is a single repeated character is a placeholder the
+    packager must edit before the recipe builds; it matches no real
+    download, so executing the source is H083 exactly as for no checksum."""
+    assert "H083" in _fired(_diff(
+        "source=('payload.sh')\n"
+        "sha256sums=('" + "0" * 64 + "')\n"
+        "prepare() {\n  ./payload.sh\n}\n"))
+
+
+def test_a_real_checksum_pins_a_declared_source():
+    """pkl-lsp pinned merge-lsp4j-metadata.py with a real digest and still
+    scored H083; running a checksummed helper is ordinary packaging."""
+    assert "H083" not in _fired(_diff(
+        "source=('merge-lsp4j-metadata.py')\n"
+        "sha256sums=('5d41402abc4b2a76b9719d9110"
+        "17c5925d41402abc4b2a76b9719d911017c592')\n"
+        "prepare() {\n  python merge-lsp4j-metadata.py\n}\n"))
+
+
 # --- H016 host forms (F3) ----------------------------------------------
 
 def test_host_forms_are_extracted_for_ssh_family_clients():
