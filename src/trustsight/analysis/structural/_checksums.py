@@ -400,8 +400,12 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
         or (strongest in post.arrays and not post_present[strongest])
     )
     if strongest is not None and strongest_gone:
-        weaker = [base for base in _CHECKSUM_STRENGTH
-                  if base != strongest and post_present[base]]
+        # Only a *strictly weaker* array remaining is a downgrade.  The
+        # order is strongest first, so the weaker arrays are the ones after
+        # `strongest`; a stronger array that merely appears in the same diff
+        # (sha256 -> sha512) is an upgrade, not a downgrade.
+        weaker = [base for base in _CHECKSUM_STRENGTH[
+            _CHECKSUM_STRENGTH.index(strongest) + 1:] if post_present[base]]
         # Stands down when every array was removed together: H002 owns it.
         if weaker and any(post_present.values()):
             add("C022", "Checksum Strength Downgraded", "HIGH", "integrity",

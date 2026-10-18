@@ -153,6 +153,13 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         body = _strip_comment(raw)
         if not body.strip():
             continue
+        # A printed heredoc body is output text, not executed shell.  The
+        # advisory `cat <<'MSG'` in engined's hook lists `$EDITOR …` and
+        # `systemctl --user …`; the command rules below would read those as
+        # the recipe's own commands.  X020 (manifest), tracked above, is the
+        # one rule that must still see the body.
+        if index in printed_heredoc:
+            continue
         # The same line after variable/array/alias resolution.  Falls back
         # to the raw body when the resolved list is out of step, which
         # fires toward looking rather than going quiet.

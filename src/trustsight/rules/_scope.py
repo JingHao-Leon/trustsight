@@ -452,6 +452,14 @@ _PRINTED_HEREDOC_EXCLUDED_RULES = frozenset({"R052"})
 #: bluebubbles false positive.
 _HEREDOC_BODY_EXCLUDED_RULES = frozenset({"R058"})
 
+#: Fetch-and-execute shape rules on a line that only *prints* text.  An
+#: install hook that echoes `curl … | bash …` as an instruction to the
+#: reader (arctis-sound-manager) runs nothing; the pipeline is literal
+#: output.  A real pipeline never sits on a pure printer line: context
+#: ``message`` already excludes any line with an unquoted chain or
+#: redirect, so `echo x; curl … | bash` stays code.
+_MESSAGE_LINE_EXCLUDED_RULES = frozenset({"R001", "R002", "R003", "R045"})
+
 
 def apply_rules(
     resolved_strings: list[str],
@@ -677,6 +685,11 @@ def apply_rules(
                         and idx in printed_lines:
                     # A printed heredoc body is text for the user, not a
                     # command; write patterns must not match it (openxlr).
+                    continue
+                if rule["id"] in _MESSAGE_LINE_EXCLUDED_RULES \
+                        and ctx_map.get(idx) == "message":
+                    # A pipeline inside a pure printer line is printed text,
+                    # not a command the build runs.
                     continue
                 if rule["id"] in _HEREDOC_BODY_EXCLUDED_RULES \
                         and idx in heredoc_lines:

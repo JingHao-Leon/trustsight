@@ -94,11 +94,13 @@ def lint_report(text: str, filename: str) -> dict:
     if filename.endswith(".install"):
         from ..analysis.structural import _HOOK_INTERPRETER_RE, _hook_names
         from ..analysis.structural import _raw_targets, _user_writable_target
-        from ..line_lex import strip_comment
+        from ..line_lex import strip_comment, unwrap_shell_cexec
 
         for name in _hook_names(recipe):
             body = recipe.functions.get(name, "")
-            match = _HOOK_INTERPRETER_RE.search(body)
+            # Same wrapper unwrap as the analyzer: a literal `sh -c '<lit>'`
+            # re-exec reports the code it runs, not the wrapper token.
+            match = _HOOK_INTERPRETER_RE.search(unwrap_shell_cexec(body))
             if match:
                 findings.append({
                     "rule_id": "C016", "severity": "HIGH",

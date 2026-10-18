@@ -107,6 +107,8 @@ Hooks run **as root at install time**, which makes them the highest-privilege co
 
 Comments are stripped before matching: one of the corpus hits was the line `# systemctl enable input-remapper`.
 
+A literal shell re-exec wrapper (`sh -c '<body>'`), as Debian packaging templates generate, is unwrapped first: the inner body is scanned as executed code, so a benign re-exec (`exit 0`, `systemctl daemon-reload`) is not read as a fetch. A fetch inside the literal, or a dynamic argument (`sh -c "$x"`), still fires.
+
 Overlaps [R007](install-and-persist.md#r007), which matches any line mentioning `.install` at MEDIUM. R007 is left as it is because it is calibrated and in the baseline; H017 is the narrow, higher-severity companion.
 
 ### H023: Install Hook Present {#h023}
@@ -145,6 +147,9 @@ control, creating untracked dependencies and potential conflicts.
 
 Kernel modules (`dkms`), initramfs rebuilds, and service restarts are the
 expected scope of an install hook; foreign package managers are not.
+
+A package-manager name inside a printer's quoted text (`echo "run pip install
+x"`) is output for the reader, not a command, and does not fire.
 
 ### H032: Write To User Home Or RC {#h032}
 

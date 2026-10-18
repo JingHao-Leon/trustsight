@@ -39,6 +39,11 @@ Crossfire rules run against shell files. A `.desktop` entry, a licence text
 or a README is not a shell file, and a character or construct that would be
 evasion in a recipe is ordinary content there.
 
+A heredoc body that is only printed (`cat <<'MSG' ... MSG` around advisory
+text) is output, not executed shell, so the crossfire command rules skip it.
+[X020](#x020) still reads the body, because the manifest is what a later
+engine runs.
+
 ---
 
 <!-- generated: page-index -->
@@ -637,7 +642,9 @@ checksummed tarball unpacks into its own subdirectory, so a file sitting at
 the source root has no provenance at all. Files inside the unpacked tree (a
 relative path after `cd`, or `$srcdir/pkg-ver/...`), declared source names,
 freshly written names, and anything a fetch client produced (H082's case)
-stay out of scope.
+stay out of scope. A script-runtime subcommand (`bun run build`,
+`deno run x`) is not a path at all, so it stays out too; the exclusion is
+keyed to bun and deno, and `bash run` still runs a file called `run`.
 
 ### X034: Fetch Laundered Through An Archival Service {#x034}
 

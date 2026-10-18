@@ -558,6 +558,22 @@ def edge_source_file_execution(ctx, add) -> None:
                 position=fn, path=path)
             return
 
+#: Subcommands of a script *runtime*.  ``bun run build`` / ``deno run x``
+#: name a subcommand, not a file, so the token the interpreter arm captures
+#: (``run``) has no provenance because it is not a path at all.  Keyed to
+#: bun/deno only: ``bash run`` still executes a file called ``run``.
+_RUNTIME_SUBCOMMANDS = frozenset({
+    "run", "install", "i", "add", "a", "remove", "rm", "uninstall",
+    "update", "upgrade", "link", "unlink", "publish", "patch", "build",
+    "test", "bench", "x", "exec", "repl", "create", "init", "pm", "ci",
+    "why", "outdated", "audit", "info", "license", "dedupe", "prune",
+    "bunx", "trust", "eval", "fmt", "lint", "check", "bundle", "compile",
+    "doc", "coverage", "task", "cache", "vendor", "completions", "types",
+    "lsp", "serve", "jupyter",
+})
+_RUNTIME_BINARY_RE = re.compile(r"(?<![\w/.-])(?:bun|deno)\s")
+
+
 def edge_undeclared_provenance_execution(ctx, add) -> None:
     """X033 predicate: a ``$srcdir``-root file with no provenance is run.
 
@@ -594,6 +610,9 @@ def edge_undeclared_provenance_execution(ctx, add) -> None:
             # An interpreter flag is not a file: ``python -m build`` captures
             # ``-m``, which has no provenance because it is not a path.
             if raw.startswith("-"):
+                continue
+            # A subcommand of a script runtime is not a file either.
+            if raw in _RUNTIME_SUBCOMMANDS and _RUNTIME_BINARY_RE.search(m.group(0)):
                 continue
             # The bare `./script` arm drops the `./` from its capture, so a
             # relative path would otherwise read as a `$srcdir`-root file.

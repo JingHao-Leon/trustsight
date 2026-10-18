@@ -15,7 +15,9 @@ from ..differ import extract_source_array_urls
 from ..diffdoc import parse_diff_lines
 from ..novelty import normalize_url
 from ..rules import (
+    _blank_quoted,
     _classify_enclosing_function,
+    _PRINTER_LINE_RE,
 )
 from ..tokenizer import (
     join_line_continuations,
@@ -655,6 +657,13 @@ def edge_foreign_pkg(ctx, add) -> None:
         if context.get(i) == "message" or i in printed_heredoc:
             continue
         body = _strip_comment(line)
+        # A printer line's quoted arguments are printed, not run.  Playwright
+        # prints `paru -S …` inside a `printf '%s\n' '…'`; bash's quote
+        # removal leaves the format argument bare, so the message-line test
+        # above misses it.  Blank the quoted literals on a printer line so
+        # only a real invocation still matches.
+        if _PRINTER_LINE_RE.match(line):
+            body = _blank_quoted(body)
         if foreign_re.search(body):
             add("H035", "Foreign Package Manager In Install Hook", "HIGH", "installer",
                 f"{ctx.scopes.label(i, _INSTALL_HOOKS)}() invokes foreign package manager: {body.strip()[:80]}",

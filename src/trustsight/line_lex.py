@@ -406,3 +406,66 @@ def _printed_heredoc_body_indices_cached(
             delims.append((m.group(2), printed))
             break
     return frozenset(body)
+
+
+#: A literal shell re-exec: ``sh -c '<script>'`` (or ``"..."``) at a
+#: command position, with the option cluster carrying ``c``.  Debian
+#: packaging templates wrap every hook body this way (``/bin/sh -c
+#: '#!/bin/sh …'``).  Only a *literal* argument unwraps: a double-quoted
+#: body carrying ``$`` or a backtick is dynamic (``sh -c "$x"``), so the
+#: interpreter token stays visible and the rule fires exactly as before.
+_CEXEC_LITERAL_RE = re.compile(
+    r"(?P<pre>(?:^|[;&|()]|&&|\|\|)\s*)"
+    r"(?:/(?:usr/)?bin/)?(?:bash|sh|dash|zsh|ksh|ash|mksh)"
+    r"\s+-[A-Za-z]*c[A-Za-z]*\s+"
+    r"(?:'(?P<single>[^']*)'|\"(?P<double>(?:\\.|[^\"\\$`])*)\")",
+    re.DOTALL | re.MULTILINE,
+)
+
+
+def unwrap_shell_cexec(text: str, _depth: int = 8) -> str:
+    """Replace literal ``sh -c '<lit>'`` re-exec wrappers with ``<lit>``.
+
+    ``sh -c '<x>'`` executes ``<x>``, so the code a rule should read is the
+    inner literal, not the wrapper token.  Substitution runs to a fixpoint
+    (bounded by *_depth*) so nested wrappers (``sh -c 'sh -c "…"'``) are
+    unwrapped too.  A non-literal argument is left untouched.
+    """
+    if _depth <= 0:
+        return text
+
+    def _sub(match: "re.Match[str]") -> str:
+        body = match.group("single")
+        if body is None:
+            body = match.group("double")
+        return match.group("pre") + body
+
+    result = _CEXEC_LITERAL_RE.sub(_sub, text)
+    return result if result == text else unwrap_shell_cexec(result, _depth - 1)
+
+
+_CEXEC_OPEN_RE = re.compile(
+    r"\A(?P<indent>[ \t]*(?:\+[ \t]*)?)(?:/(?:usr/)?bin/)?"
+    r"(?:bash|sh|dash|zsh|ksh|ash|mksh)"
+    r"\s+-[A-Za-z]*c[A-Za-z]*\s+(?P<q>['\"])"
+)
+
+
+def strip_shell_cexec_opener(line: str) -> str:
+    """Drop a leading literal ``sh -c ['"]`` wrapper token from *line*.
+
+    The re-exec body usually spans later lines (already scanned in the same
+    hook scope), so only the opener token is removed here and the inner
+    text on this line is kept - a one-liner payload (``sh -c 'curl x | sh'``)
+    survives the strip.  A dynamic argument (``sh -c "$x"``) is left whole.
+    """
+    match = _CEXEC_OPEN_RE.match(line)
+    if match is None:
+        return line
+    rest = line[match.end():]
+    if match.group("q") == '"':
+        close = rest.find('"')
+        segment = rest if close == -1 else rest[:close]
+        if "$" in segment or "`" in segment:
+            return line
+    return match.group("indent") + rest

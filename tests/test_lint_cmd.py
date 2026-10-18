@@ -23,7 +23,7 @@ package() {
 
 _INSTALL = """\
 post_install() {
-  bash -c 'echo pwned'
+  python3 -c 'import os'
 }
 """
 

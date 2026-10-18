@@ -45,6 +45,7 @@ severity weights and the reserved identifier ranges.
 - **Pattern:** `base64(?:(?![|;&]).)*?(?:\-d|\-\-decode)\b.*(?<!\\)\|`
 - **Description:** Detects `base64 -d |` and `base64 --decode |` piped to execution. Base64-encoded scripts are a common obfuscation technique to hide malicious commands from casual review.
 - **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
+- **Printed text:** A `base64 -d | ...` that sits wholly inside a printer's quoted text is output for the reader, not an executed pipeline, so the rule stands down.
 
 ### H014: Eval or Exec Usage {#h014}
 
@@ -84,6 +85,7 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 - **Pattern:** `\b(?:xxd|uudecode)\s+[^|]*(?<!\\)\|`
 - **Description:** Detects `xxd` or `uudecode` piped onward. Both reconstruct binary content from a text representation, a way to carry a payload past text review.
 - **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
+- **Printed text:** An `xxd | ...` / `uudecode | ...` that sits wholly inside a printer's quoted text is output for the reader, not an executed pipeline, so the rule stands down.
 
 ### H065: Obfuscated Literal Reconstructed {#h065}
 

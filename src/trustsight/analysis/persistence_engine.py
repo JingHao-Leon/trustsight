@@ -20,6 +20,7 @@ from typing import Callable
 from ..deps import _strip_comment
 from ..diffdoc import parse_diff_lines
 from ..findings import stamp
+from ..line_lex import strip_shell_cexec_opener
 from ..rules import MAX_RULE_LINE_BYTES
 from ..tokenizer import split_lines
 from .build import (
@@ -256,6 +257,12 @@ def emit_install_hook(ctx: GraphContext, add: Callable) -> None:
             # in a dead hook does nothing (mercure's useradd).
             continue
         body = _strip_comment(line)
+        # A literal `sh -c '<lit>'` re-exec executes the inner literal, so
+        # strip the wrapper token and let the inner lines (already in this
+        # hook scope) carry the signal.  Debian templates wrap every hook
+        # body `exit 0`/`systemctl …`; reading the wrapper as the payload
+        # scored a benign re-exec as fetch-or-execute (trowel-bin).
+        body = strip_shell_cexec_opener(body)
         label = ctx.scopes.label(i, _INSTALL_HOOKS)
         if _network_fetch_url(body) or _HOOK_EXEC_RE.search(body):
             # Fetch or dynamic execution: the high arm the rule names.

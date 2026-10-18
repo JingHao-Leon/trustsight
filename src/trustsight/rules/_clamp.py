@@ -7,7 +7,7 @@ from ..tokenizer import (
 )
 from ._common import MAX_RULE_LINE_BYTES, MAX_SCANNED_LINES, _log
 
-__all__ = ['_COMMAND_CHAIN_RE', '_COMMENT_OR_DEP_RE', '_DEP_DECLARATION_RE', '_MESSAGE_LINE_RE', '_WHITESPACE_RUN_RE', '_has_unquoted_redirect', '_is_message_line', '_printer_quote_body_indices', '_to_pairs', 'clamp', 'clamp_diff_lines', 'clamp_text', 'filter_raw_lines', 'get_raw_diff_lines', 'get_raw_diff_lines_indexed']
+__all__ = ['_COMMAND_CHAIN_RE', '_COMMENT_OR_DEP_RE', '_DEP_DECLARATION_RE', '_MESSAGE_LINE_RE', '_PRINTER_LINE_RE', '_WHITESPACE_RUN_RE', '_has_unquoted_redirect', '_is_message_line', '_printer_quote_body_indices', '_to_pairs', 'clamp', 'clamp_diff_lines', 'clamp_text', 'filter_raw_lines', 'get_raw_diff_lines', 'get_raw_diff_lines_indexed']
 
 _COMMENT_OR_DEP_RE = re.compile(
     r"^(?:\+|)\s*(?:"
@@ -22,6 +22,15 @@ _DEP_DECLARATION_RE = re.compile(
 
 _MESSAGE_LINE_RE = re.compile(
     r'^(?:\+|)\s*(?:echo|printf|note|msg|warning|error|info)\s+["\']'
+)
+
+#: A printer line without the quote requirement of ``_MESSAGE_LINE_RE``.
+#: Bash's quote removal turns ``printf '%s\n' 'text'`` into ``printf %s\n
+#: 'text'``, so the quoted-format test misses a printer whose only argument
+#: before the text is a bare ``%s``.  Used to decide whether a matched span
+#: sits in printed text (blank the quoted literals first).
+_PRINTER_LINE_RE = re.compile(
+    r'^(?:\+|)\s*(?:echo|printf|note|msg|warning|error|info)\b'
 )
 
 _COMMAND_CHAIN_RE = re.compile(r"[;&|]|\$\(|`")
