@@ -207,7 +207,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## T-series: **Temporal** Observation History
 
-**Count:** 3 rules (T001-T003; 16 further history-backed rules still carry H ids)
+**Count:** 5 rules (T001-T003, T006-T007; 16 further history-backed rules still carry H ids)
 
 **Mechanism:** Predicates over the observation database - the history of the package, its maintainers, its signing keys and its rates. The input is stored history, not the diff, which is what makes T a distinct kind from H: fire rates depend on how much history exists, cold-start semantics are special, and reproducibility requires a pinned DB fixture. The observation-database H rules (H020, H021, H022, H026, H037, H044, H045, H046, H058, H060, H073, H074, H086, H088) are T-natured and keep their H ids for citation stability; new history-backed rules take T ids.
 
@@ -230,9 +230,9 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## G-series: **Correlation** Cross-Package Joins
 
-**Count:** 7 rules (G001-G007; G006/G007 weight 0)
+**Count:** 8 rules (G001-G008; G006/G007 weight 0)
 
-**Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N. G001 to G004 are the joins; G005 is the impersonation-campaign trigger; G006 (neighborhood elevation under an active campaign) and G007 (corroboration of a run inside an active campaign) are weight 0, because a set membership must not inflate any one member's score. The full immune-import reading is on [Correlation: Rule Nature](../nature/correlation.md).
+**Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N. G001 to G004 are the joins; G005 is the impersonation-campaign trigger; G006 (neighborhood elevation under an active campaign) and G007 (corroboration of a run inside an active campaign) are weight 0, because a set membership must not inflate any one member's score. G008 (first-seen account adoption burst) is the collective dormant-target join. The full immune-import reading is on [Correlation: Rule Nature](../nature/correlation.md).
 
 **What you can tune:**
 

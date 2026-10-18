@@ -49,6 +49,7 @@ This is a reference page. For how weight and scope work, see
 | [G005](#g005) | Impersonation Campaign | HIGH |
 | [G006](#g006) | Neighborhood Under Campaign Alert | INFO |
 | [G007](#g007) | Campaign Corroboration | INFO |
+| [G008](#g008) | First-Seen Account Adoption Burst | HIGH |
 <!-- /generated: page-index -->
 
 ### G001: Shared Gained Host {#g001}
@@ -117,3 +118,14 @@ The cytokine effect: an alerted neighborhood raises the surrounding tissue's rea
 - **Condition:** A review run whose package, or a host it newly gained, stands in the scope of an active campaign.
 
 Trained immunity, reported: while a campaign is primed, a package in its scope is named as corroborated - one `G007` entry carrying `campaign_id`, weight 0. It adds no points: the bonus it replaced measured scope *breadth*, not corroboration, and the benign corpus carries no active campaign, so the points were never measured against the false-positive rate. Inert when no campaign is active. See [Campaign Alert Mode](../../explanation/campaign-alert-mode.md).
+
+### G008: First-Seen Account Adoption Burst {#g008}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** HIGH (weight 25)
+- **Category:** `correlation`
+- **Condition:** An account with no prior maintainer history in the local database adopts at least `[thresholds] g008.min_packages` (default 5) packages within `[thresholds] g008.window_days` (default 7) days, and at least `[thresholds] g008.min_dormant` (default 3) of those targets are dormant (last git activity older than `[thresholds] g008.dormant_days` (default 180) days).
+
+The fennekuiper signature: a throwaway account sweeping up orphans in its first cycle. "First-seen" replaces "registered 3 days ago" because registration date is not in the RPC metadata and chasing profile pages would be a new fetch. First-seen is the deterministic, self-contained approximation: a throwaway account has, by definition, no prior maintainer events in the database.
+
+The dormant-target clause is the FP killer. A legitimate new maintainer adopts a package or two they care about (active packages). Nobody's first act is sweeping up 13 orphans including a high-value one. The conjunction of first-seen, many targets, and dormant targets is near-zero FP.

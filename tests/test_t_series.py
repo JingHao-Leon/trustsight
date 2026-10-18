@@ -2,7 +2,12 @@
 
 import pytest
 
-from trustsight.analysis.temporal import t_domain_findings, t_key_findings
+from trustsight.analysis.temporal import (
+    t_domain_findings,
+    t_key_findings,
+    t_metadata_git_divergence,
+    t_packager_not_in_history,
+)
 from trustsight.db import (
     domain_first_seen,
     init_db,
@@ -20,6 +25,26 @@ def db(tmp_path, monkeypatch):
     init_db()
     yield
     (tmp_path / "trustsight.db").unlink(missing_ok=True)
+
+
+class _Commit:
+    def __init__(self, commit_time: int = 0, message: str = ""):
+        self.commit_time = commit_time
+        self.message = message
+
+
+class _Project:
+    """A minimal stand-in for GitProject, for the T006/T007 rules."""
+
+    def __init__(self, commit_time: int = 0, messages=None):
+        self._commit_time = commit_time
+        self._messages = messages or []
+
+    def commit_meta(self, oids):
+        return [_Commit(commit_time=self._commit_time)]
+
+    def walk(self, head, limit=None):
+        return [_Commit(message=m) for m in self._messages]
 
 
 def test_t001_cold_index_declines(db):
@@ -73,3 +98,44 @@ def test_key_ledger_is_bounded(db, monkeypatch):
     assert observed_key_count() <= 5
     # The newest survive; the oldest were pruned.
     assert key_observed_before("key-9")
+
+
+def test_t006_fires_when_metadata_is_ahead_of_git():
+    tip = 1_700_000_000
+    project = _Project(commit_time=tip)
+    got = t_metadata_git_divergence(
+        project, "abc123", tip + 25 * 3600, None)
+    assert [f["rule_id"] for f in got] == ["T006"]
+    assert got[0]["severity"] == "MEDIUM"
+
+
+def test_t006_silent_within_the_margin():
+    tip = 1_700_000_000
+    project = _Project(commit_time=tip)
+    assert t_metadata_git_divergence(
+        project, "abc123", tip + 3600, None) == []
+
+
+def test_t006_silent_without_data():
+    project = _Project(commit_time=1_700_000_000)
+    assert t_metadata_git_divergence(project, "", 1_700_000_000, None) == []
+    assert t_metadata_git_divergence(project, "abc", None, None) == []
+
+
+def test_t007_fires_when_maintainer_is_absent_from_history():
+    project = _Project(messages=["import package", "bump to 1.2"])
+    got = t_packager_not_in_history(project, "abc123", "tippfehlr", None)
+    assert [f["rule_id"] for f in got] == ["T007"]
+    assert got[0]["severity"] == "INFO"
+
+
+def test_t007_silent_when_maintainer_appears_in_a_commit():
+    project = _Project(messages=["import package by tippfehlr"])
+    assert t_packager_not_in_history(
+        project, "abc123", "tippfehlr", None) == []
+
+
+def test_t007_silent_without_data():
+    project = _Project(messages=["import package"])
+    assert t_packager_not_in_history(project, "", "someone", None) == []
+    assert t_packager_not_in_history(project, "abc", "", None) == []

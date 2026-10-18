@@ -6,7 +6,7 @@ from typing import Optional
 from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
 
-__all__ = ['MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
+__all__ = ['MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
 
 def get_history(package_id: int, limit: int = 20, *, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
     """Return recent analysis history for *package_id*, newest first.
@@ -443,17 +443,40 @@ def record_property_transition(
         )
         conn.commit()
 
+def maintainer_first_seen(maintainer: str) -> Optional[str]:
+    """The earliest *observed_at* for *maintainer* in the property timeline.
+
+    Returns the ISO timestamp of the first time this maintainer name appeared
+    as a ``new_value`` in a ``maintainer`` property transition, or ``None``
+    if the name has never been recorded.  G008 uses this to distinguish a
+    first-seen account from an established one: a first-seen account's
+    earliest record falls within the current cycle window.
+    """
+    name = (maintainer or "").strip()
+    if not name:
+        return None
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT MIN(observed_at) FROM property_transitions "
+            "WHERE property_key = 'maintainer' "
+            "AND json_extract(new_value, '$') = ?",
+            (name,),
+        ).fetchone()
+    return row[0] if row else None
+
+
 def correlation_feed(package_names) -> dict[str, dict]:
     """Per-package G-series inputs, read from the views.
 
     ``{package: {hosts_gained, added_literals, maintainer,
-    adoption_predicates}}``.  One pass over each view instead of a query per
-    package, so correlation is O(cycle).
+    adoption_predicates, adoption_observed_at}}``.  One pass over each view
+    instead of a query per package, so correlation is O(cycle).
     """
     names = {str(n) for n in package_names if n}
     out = {
         name: {"hosts_gained": [], "added_literals": [],
-               "maintainer": "", "adoption_predicates": []}
+               "maintainer": "", "adoption_predicates": [],
+               "adoption_observed_at": ""}
         for name in names
     }
     if not names:
@@ -468,10 +491,11 @@ def correlation_feed(package_names) -> dict[str, dict]:
             if row[0] in out:
                 out[row[0]]["added_literals"].append(row[1])
         for row in conn.execute(
-                "SELECT package_name, maintainer, predicate "
+                "SELECT package_name, maintainer, predicate, observed_at "
                 "FROM adoption_events ORDER BY observed_at"):
             if row[0] in out:
                 out[row[0]]["maintainer"] = row[1]
                 if row[2] not in out[row[0]]["adoption_predicates"]:
                     out[row[0]]["adoption_predicates"].append(row[2])
+                out[row[0]]["adoption_observed_at"] = row[3]
     return out

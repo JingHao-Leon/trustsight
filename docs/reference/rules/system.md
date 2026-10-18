@@ -1264,6 +1264,14 @@ See [T002: Maintainer Domain Novelty](temporal.md#t002).
 
 See [T003: Signing Key Rotated](temporal.md#t003).
 
+### T006 {#t006}
+
+See [T006: Metadata-Git Divergence](temporal.md#t006).
+
+### T007 {#t007}
+
+See [T007: Packager Not In History](temporal.md#t007).
+
 ### G001 {#g001}
 
 See [G001: Shared Gained Host](correlation.md#g001).
@@ -1291,6 +1299,10 @@ See [G006: Neighborhood Under Campaign Alert](correlation.md#g006).
 ### G007 {#g007}
 
 See [G007: Campaign Corroboration](correlation.md#g007).
+
+### G008 {#g008}
+
+See [G008: First-Seen Account Adoption Burst](correlation.md#g008).
 
 ### A001 {#a001}
 

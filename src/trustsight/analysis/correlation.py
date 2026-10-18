@@ -15,6 +15,10 @@ supplies them), so the join logic is testable without a live corpus:
   length floor appears in at least two unrelated packages.
 * **G003 Coordinated Adoption** (MEDIUM): the same maintainer key adopted
   at least M packages in the window.
+* **G008 First-Seen Account Adoption Burst** (HIGH): an account with no
+  prior maintainer history adopts many dormant packages at once.  It reads
+  the maintainer-event timeline, so it is a DB-backed rule invoked from the
+  sweep beside G006, not from :func:`correlate`.
 
 Members are named in the finding; the roundup is one alert, not N.
 
@@ -26,10 +30,12 @@ fire on a real ``full-aur`` cycle yet.  See the correlation rule reference.
 
 from __future__ import annotations
 
+import time
 from collections import defaultdict
 
 __all__ = ["correlate", "shared_gained_host", "shared_added_literal",
-           "coordinated_adoption", "shared_upstream_dependency"]
+           "coordinated_adoption", "shared_upstream_dependency",
+           "first_seen_adoption_burst"]
 
 
 def _thresholds(config) -> dict:
@@ -263,6 +269,93 @@ def impersonation_campaign(records, min_members: int = 3) -> list[dict]:
             "params": {"members": members, "maintainer": maintainer,
                        "targets": targets, "count": len(members)},
         })
+    return out
+
+
+def first_seen_adoption_burst(records, config=None) -> list[dict]:
+    """G008: a first-seen account adopting many dormant packages at once.
+
+    An account is *first-seen* when its earliest maintainer-event in the
+    local property timeline falls within the current cycle window -- it has
+    no prior maintainer history in the database.  Registration date is not
+    in the RPC metadata and chasing profile pages would be a new fetch, so
+    first-seen is the deterministic, self-contained approximation.  A
+    throwaway account has, by definition, no prior maintainer events.
+
+    The dormant-target clause is the false-positive killer: a legitimate new
+    maintainer adopts a package or two they care about; nobody's first act is
+    sweeping up orphans.  The conjunction of first-seen, many targets, and
+    dormant targets is near-zero FP.  All parameters are config-driven and
+    fingerprint-covered.
+    """
+    from ..db import maintainer_first_seen
+    from ..db._history import _parse_ts
+
+    thresholds = _thresholds(config)
+    min_packages = int(thresholds.get("g008", {}).get("min_packages", 5))
+    window_days = int(thresholds.get("g008", {}).get("window_days", 7))
+    min_dormant = int(thresholds.get("g008", {}).get("min_dormant", 3))
+    dormant_days = int(thresholds.get("g008", {}).get("dormant_days", 180))
+
+    now = time.time()
+    window_start = now - window_days * 86400
+    dormant_cutoff = now - dormant_days * 86400
+
+    by_maintainer: dict[str, list[dict]] = defaultdict(list)
+    for record in records:
+        if not record.get("adoption"):
+            continue
+        maintainer = str(record.get("maintainer", "") or "").strip()
+        if maintainer:
+            by_maintainer[maintainer].append(record)
+
+    out: list[dict] = []
+    for maintainer, events in sorted(by_maintainer.items()):
+        first_seen = maintainer_first_seen(maintainer)
+        if first_seen is None:
+            continue
+        try:
+            first_seen_ts = _parse_ts(first_seen).timestamp()
+        except (ValueError, TypeError):
+            continue
+        if first_seen_ts < window_start:
+            continue
+
+        packages_in_window: list[str] = []
+        dormant_count = 0
+        for event in events:
+            observed_at = event.get("adoption_observed_at", "")
+            if not observed_at:
+                continue
+            try:
+                observed_ts = _parse_ts(observed_at).timestamp()
+            except (ValueError, TypeError):
+                continue
+            if observed_ts < window_start:
+                continue
+            pkg = str(event.get("package", ""))
+            if pkg and pkg not in packages_in_window:
+                packages_in_window.append(pkg)
+            last_mod = event.get("last_modified", 0)
+            if last_mod and isinstance(last_mod, (int, float)):
+                if last_mod < dormant_cutoff:
+                    dormant_count += 1
+
+        if len(packages_in_window) >= min_packages and dormant_count >= min_dormant:
+            out.append({
+                "rule_id": "G008",
+                "name": "First-Seen Account Adoption Burst",
+                "severity": "HIGH", "category": "correlation",
+                "match": (f"first-seen account {maintainer} adopted "
+                          f"{len(packages_in_window)} packages "
+                          f"({dormant_count} dormant) within {window_days} days"),
+                "params": {
+                    "maintainer": maintainer,
+                    "members": sorted(packages_in_window),
+                    "dormant_count": dormant_count,
+                    "window_days": window_days,
+                },
+            })
     return out
 
 

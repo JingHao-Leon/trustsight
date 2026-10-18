@@ -172,3 +172,80 @@ def test_correlate_includes_the_impersonation_campaign():
     ]
     ids = {f["rule_id"] for f in correlate(records, None)}
     assert "G005" in ids
+
+
+def test_g008_fires_for_first_seen_account_adopting_dormant_packages(
+        monkeypatch):
+    import time
+    from trustsight.analysis.correlation import first_seen_adoption_burst
+
+    now = time.time()
+    dormant_cutoff = now - 180 * 86400
+
+    records = [
+        {"package": f"pkg{i}", "maintainer": "fennekuiper",
+         "adoption": True, "adoption_predicates": ["H086"],
+         "adoption_observed_at": "2026-10-18 12:00:00",
+         "last_modified": int(dormant_cutoff - 86400)}
+        for i in range(5)
+    ]
+    monkeypatch.setattr(
+        "trustsight.db.maintainer_first_seen",
+        lambda m: "2026-10-18 12:00:00" if m == "fennekuiper" else None,
+    )
+    found = first_seen_adoption_burst(records, None)
+    assert [f["rule_id"] for f in found] == ["G008"]
+    assert found[0]["params"]["maintainer"] == "fennekuiper"
+    assert found[0]["params"]["dormant_count"] == 5
+
+
+def test_g008_requires_first_seen_account(monkeypatch):
+    from trustsight.analysis.correlation import first_seen_adoption_burst
+
+    records = [
+        {"package": f"pkg{i}", "maintainer": "established",
+         "adoption": True, "adoption_predicates": ["H086"],
+         "adoption_observed_at": "2026-10-18 12:00:00",
+         "last_modified": 1000}
+        for i in range(5)
+    ]
+    monkeypatch.setattr(
+        "trustsight.db.maintainer_first_seen",
+        lambda m: "2020-01-01 00:00:00",
+    )
+    assert first_seen_adoption_burst(records, None) == []
+
+
+def test_g008_requires_dormant_targets(monkeypatch):
+    import time
+    from trustsight.analysis.correlation import first_seen_adoption_burst
+
+    now = time.time()
+    records = [
+        {"package": f"pkg{i}", "maintainer": "fennekuiper",
+         "adoption": True, "adoption_predicates": ["H086"],
+         "adoption_observed_at": "2026-10-18 12:00:00",
+         "last_modified": int(now - 30 * 86400)}
+        for i in range(5)
+    ]
+    monkeypatch.setattr(
+        "trustsight.db.maintainer_first_seen",
+        lambda m: "2026-10-18 12:00:00",
+    )
+    assert first_seen_adoption_burst(records, None) == []
+
+
+def test_g008_requires_min_packages(monkeypatch):
+    from trustsight.analysis.correlation import first_seen_adoption_burst
+
+    records = [
+        {"package": "pkg0", "maintainer": "fennekuiper",
+         "adoption": True, "adoption_predicates": ["H086"],
+         "adoption_observed_at": "2026-10-18 12:00:00",
+         "last_modified": 1000},
+    ]
+    monkeypatch.setattr(
+        "trustsight.db.maintainer_first_seen",
+        lambda m: "2026-10-18 12:00:00",
+    )
+    assert first_seen_adoption_burst(records, None) == []

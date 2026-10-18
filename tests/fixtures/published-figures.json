@@ -1,6 +1,6 @@
 {
   "tests": {
-    "count": 6661,
+    "count": 6680,
     "files": 164
   },
   "seed": {
@@ -28,7 +28,7 @@
       "207 self-authored, labelled malicious fixtures"
     ],
     "docs/index.md": [
-      "243 documented detection rules across eleven families"
+      "246 documented detection rules across eleven families"
     ],
     "docs/explanation/fire-rates.md": [
       "| benign 95th percentile | 35 |",

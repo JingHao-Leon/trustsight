@@ -511,6 +511,10 @@ def _correlation_records(
             # The popular package this name clones, when it is one (the
             # corpus H029 check).  G005 groups these into a campaign.
             "impersonated_target": _impersonates(name, meta, popular) if popular else "",
+            # G008: AUR LastModified for dormancy check.
+            "last_modified": meta.get("LastModified", 0),
+            # G008: when the adoption event was observed (ISO timestamp).
+            "adoption_observed_at": info.get("adoption_observed_at", ""),
         })
     return records
 
@@ -557,12 +561,16 @@ def _run_corpus_sweep(
 
     # the G-series cross-package correlation, over the
     # cycle's records (collective input, so it runs here and not per package).
-    from ..analysis.correlation import correlate
+    from ..analysis.correlation import correlate, first_seen_adoption_burst
 
     records = _correlation_records(new_meta, old_meta, processed, popular,
                                    source_repos)
     config = load_config()
     findings.extend(correlate(records, config))
+    # G008 reads the maintainer-event timeline to tell a first-seen account
+    # from an established one; it runs before campaign activation so a burst
+    # primes campaign state like any other G-series cluster.
+    findings.extend(first_seen_adoption_burst(records, config))
 
     refused = _activate_campaigns(findings, config, log=log)
     if refused:

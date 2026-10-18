@@ -697,11 +697,21 @@ def analyze_package(
 
     # T-series temporal novelty. Cold index declines
     # (the rule is silent until the ecosystem ledger has observations).
-    from ..temporal import t_domain_findings, t_key_findings, t_key_rotation
+    from ..temporal import (
+        t_domain_findings,
+        t_key_findings,
+        t_key_rotation,
+        t_metadata_git_divergence,
+        t_packager_not_in_history,
+    )
 
     triggered_rules.extend(t_key_findings(change, config))
     triggered_rules.extend(t_key_rotation(change))
     triggered_rules.extend(t_domain_findings(new_maintainer, config))
+    triggered_rules.extend(t_metadata_git_divergence(
+        project, head_commit, upstream_mtime or 0, config))
+    triggered_rules.extend(t_packager_not_in_history(
+        project, head_commit, new_maintainer, config))
     if record:
         from ...db import (
             record_added_literals,

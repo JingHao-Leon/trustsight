@@ -98,6 +98,77 @@ def t_domain_findings(maintainer: str, config) -> list[dict]:
     return []
 
 
+def t_metadata_git_divergence(project, head_commit, last_modified,
+                              config) -> list[dict]:
+    """T006 - AUR LastModified ahead of the git tip commit date.
+
+    In aurweb, pushes set both the AUR ``LastModified`` timestamp and the git
+    commit timestamp, so divergence means commits were pushed and later
+    stripped (a history rewrite).  The benign explanations (staff reset,
+    maintainer cleanup force-push) are themselves security-relevant, so this
+    is MEDIUM, review-queue verdict.  The finding's output is designed to be
+    pasted into a report to AUR security, where push logs survive even when
+    git history does not.
+    """
+    if not head_commit or not last_modified:
+        return []
+    try:
+        records = project.commit_meta([head_commit])
+        if not records:
+            return []
+        tip_time = records[0].commit_time
+        margin = int(_t_thresholds(
+            config, "t006", "min_divergence_hours", 24)) * 3600
+        if last_modified > tip_time + margin:
+            divergence_hours = int((last_modified - tip_time) / 3600)
+            return [stamp({
+                "rule_id": "T006",
+                "name": "Metadata-Git Divergence",
+                "severity": "MEDIUM", "category": "temporal",
+                "match": (f"AUR LastModified is {divergence_hours}h ahead "
+                          "of git tip commit date"),
+                "params": {
+                    "last_updated": last_modified,
+                    "tip_commit_time": tip_time,
+                    "divergence_hours": divergence_hours,
+                },
+            })]
+    except (GitSandboxUnavailable, GitOpError):
+        note_stage_failure("temporal")
+    return []
+
+
+def t_packager_not_in_history(project, head_commit, maintainer,
+                              config) -> list[dict]:
+    """T007 - AUR maintainer not found in git commit messages (weight 0).
+
+    A weight-0 corroboration signal: the AUR says this account packaged the
+    project, but no commit in the retained git history mentions them.  Name
+    matching is fuzzy (display name vs email vs git config), so this
+    corroborates T006 and G008 but never scores alone.  On its own tier it is
+    nearly a confession; as a solo scorer it would eventually burn someone
+    with an unusual committer setup.
+    """
+    if not maintainer or not head_commit:
+        return []
+    try:
+        name_lower = maintainer.lower()
+        for commit in project.walk(head_commit, 200):
+            if name_lower in (commit.message or "").lower():
+                return []
+        return [stamp({
+            "rule_id": "T007",
+            "name": "Packager Not In History",
+            "severity": "INFO", "category": "temporal",
+            "match": (f"AUR maintainer '{maintainer}' not found in any "
+                      "commit message in the retained git history"),
+            "params": {"maintainer": maintainer},
+        })]
+    except (GitSandboxUnavailable, GitOpError):
+        note_stage_failure("temporal")
+    return []
+
+
 def _recent_update(project, head_commit):
     if not head_commit:
         return None

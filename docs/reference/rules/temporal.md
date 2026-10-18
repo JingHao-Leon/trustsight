@@ -34,6 +34,8 @@ severity weights and the reserved identifier ranges.
 | [T001](#t001) | Signing-Key Novelty | HIGH |
 | [T002](#t002) | Maintainer Domain Novelty | MEDIUM |
 | [T003](#t003) | Signing Key Rotated | HIGH |
+| [T006](#t006) | Metadata-Git Divergence | MEDIUM |
+| [T007](#t007) | Packager Not In History | INFO |
 <!-- /generated: page-index -->
 
 ### H020: Very Recent Update {#h020}
@@ -110,3 +112,34 @@ prior footprint. Cold index declines, like T001.
 The xz backdoor's shape: the trusted signer is swapped, not merely widened
 (H078) or narrowed (H024). Unlike T001 it needs no ecosystem history - the
 rotation of trust inside one commit is its own fact - so it fires cold.
+
+### T006: Metadata-Git Divergence {#t006}
+
+- **Target:** programmatic (AUR LastModified vs git tip commit date)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `temporal`
+- **Condition:** The AUR `LastModified` timestamp is ahead of the git tip
+  commit date by at least `[thresholds] t006.min_divergence_hours` (default
+  24) hours.
+
+In aurweb, pushes set both `LastModified` and the git commit timestamp, so
+divergence means commits were pushed and later stripped (a history rewrite).
+The benign explanations (staff reset, maintainer cleanup force-push) are
+themselves security-relevant, so this is MEDIUM, review-queue verdict. The
+finding's output is designed to be pasted into a report to AUR security,
+where push logs survive even when git history does not.
+
+### T007: Packager Not In History {#t007}
+
+- **Target:** programmatic (AUR maintainer vs git commit messages)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+- **Condition:** The AUR maintainer name does not appear in any commit
+  message in the retained git history of the package.
+
+A weight-0 corroboration signal: the AUR says this account packaged the
+project, but no commit in history mentions them. Name matching is fuzzy
+(display name vs email vs git config), so this corroborates T006 and G008
+but never scores alone. On its own tier it is nearly a confession; as a
+solo scorer it would eventually burn someone with an unusual committer
+setup.
