@@ -138,6 +138,14 @@ and add a stub to `docs/reference/rules/system.md`:
 See [H086: Name](../reference/rules/maintainer-and-metadata.md#h086).
 ```
 
+Each category also has a page on the **Rule Nature** tab
+(`docs/reference/nature/<category>.md`) describing where the category's ideas
+come from and what a finding means. Those pages are prose, not per-rule
+definitions, so a new rule rarely changes one; update it only when the rule
+introduces a new *kind* of claim the page does not yet cover. The two tabs are
+kept in step by the navigation check in `tests/test_docs.py`, which requires
+every page on disk to appear in the nav.
+
 Then regenerate the index, whose legend and quick-reference table are both
 derived rather than hand-maintained:
 

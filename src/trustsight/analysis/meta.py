@@ -32,6 +32,7 @@ __all__ = [
     "m_series_findings",
     "claim_contradictions",
     "cofire_absence",
+    "campaign_reactivation_notes",
     "weak_layer_span",
     "alert_volume_finding",
 ]
@@ -161,7 +162,7 @@ def _cofire_pairs() -> list[tuple[str, str]]:
 
 
 def m_tool_health(
-    triggered: list[dict], rules: list[dict] | None = None
+    triggered: list[dict], rules: list[dict] | None = None,
 ) -> list[dict]:
     """M004 + M005: instrument health, never the package's finding set.
 
@@ -170,8 +171,11 @@ def m_tool_health(
     detector-health note move a verdict.  They ride on the fact's
     ``cofire_health`` and are consumed by the harness/calibration.
 
-    *config* supplies the expected co-fire pairs for M004; M005 reads the
-    rules' own ``escalates_when`` declarations.
+    M004 reads the expected co-fire pairs; M005 reads the rules' own
+    ``escalates_when`` declarations.  M006 (campaign re-activation pressure)
+    is cycle-level instrument state with no per-package input, so it never
+    rides ``cofire_health``: the cycle reports it on the log via
+    :func:`trustsight.full_aur.pipeline._report_reactivation_pressure`.
     """
     out: list[dict] = []
     for note in cofire_absence(triggered, _cofire_pairs()):
@@ -181,6 +185,37 @@ def m_tool_health(
             "match": note, "params": {"detail": note},
         })
     out.extend(licensor_absent(triggered, rules or []))
+    return out
+
+
+def campaign_reactivation_notes(pressure: list[dict] | None) -> list[dict]:
+    """M006: a campaign class that re-armed faster than the interval allows.
+
+    A campaign is instrument state, and a class that re-arms far too often
+    (the same G-rule id corroborating a campaign over and over in a short
+    window) is the tool churning, not a package misbehaving.  The spec routes
+    this to a tool-health signal rather than letting it pass in silence.
+    Weight 0; it never joins the package's finding set.
+    """
+    out: list[dict] = []
+    for entry in pressure or ():
+        if not isinstance(entry, dict):
+            continue
+        source = str(entry.get("source", "") or "campaign")
+        campaign_id = str(entry.get("campaign_id", ""))
+        count = entry.get("count", 0)
+        span = entry.get("span", 0)
+        interval = entry.get("min_interval", 0)
+        note = (f"{source} campaign {campaign_id} re-armed {count} time(s) "
+                f"over {span} observation(s), below the {interval}-observation "
+                f"interval")
+        out.append({
+            "rule_id": "M006", "name": "Campaign Re-armed Too Often",
+            "severity": "INFO", "category": "meta",
+            "match": note,
+            "params": {"campaign_id": campaign_id, "source": source,
+                       "count": count, "span": span, "min_interval": interval},
+        })
     return out
 
 

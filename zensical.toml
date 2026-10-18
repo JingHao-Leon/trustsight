@@ -103,9 +103,9 @@ Guides = [
 ]
 
 [[project.nav]]
-Rules = [
+"Rule System" = [
   {"Rules Overview" = "reference/rules/index.md"},
-  {"Rule Nature" = "reference/rules/nature.md"},
+  {"Rule Nature (by series)" = "reference/rules/nature.md"},
   {"Rule System" = "reference/rules/system.md"},
   {"Fetch and Execution" = "reference/rules/fetch-and-execution.md"},
   {Obfuscation = "reference/rules/obfuscation.md"},
@@ -128,6 +128,32 @@ Rules = [
   {Artifact = "reference/rules/artifact.md"},
   {Indicators = "reference/rules/indicator.md"},
   {"Upstream Manifests" = "reference/rules/upstream-manifests.md"},
+]
+
+[[project.nav]]
+"Rule Nature" = [
+  {"Rule Nature Overview" = "reference/nature/index.md"},
+  {"Fetch and Execution" = "reference/nature/fetch-and-execution.md"},
+  {Obfuscation = "reference/nature/obfuscation.md"},
+  {"Deception and Anti-Analysis" = "reference/nature/deception.md"},
+  {"Install and Persistence" = "reference/nature/install-and-persist.md"},
+  {"Staging and Reconnaissance" = "reference/nature/staging-and-recon.md"},
+  {"Integrity and Verification" = "reference/nature/integrity.md"},
+  {"Naming and Dependencies" = "reference/nature/naming-and-dependency.md"},
+  {"Maintainer and Metadata" = "reference/nature/maintainer-and-metadata.md"},
+  {"Temporal Context" = "reference/nature/temporal.md"},
+  {Composition = "reference/nature/composition.md"},
+  {"Count-Based" = "reference/nature/count-based.md"},
+  {"Corpus Behavioral" = "reference/nature/corpus-behavioral.md"},
+  {Crossfire = "reference/nature/crossfire.md"},
+  {Sabotage = "reference/nature/sabotage.md"},
+  {Unverifiable = "reference/nature/unverifiable.md"},
+  {"Meta and Confluence" = "reference/nature/meta.md"},
+  {Entropy = "reference/nature/entropy.md"},
+  {Correlation = "reference/nature/correlation.md"},
+  {Artifact = "reference/nature/artifact.md"},
+  {Indicators = "reference/nature/indicator.md"},
+  {"Upstream Manifests" = "reference/nature/upstream-manifests.md"},
 ]
 
 [[project.nav]]

@@ -6,6 +6,18 @@ Every rule in TrustSight belongs to a **series** (R, H, C, D, S, X, T, G, E, I, 
 
 Understanding the nature of a rule tells you what you can tune, what you cannot, and what the finding means.
 
+### Two axes of "nature"
+
+This page reads nature along the **series** axis: *how* a rule detects. The
+[Rule Nature tab](../nature/index.md) reads nature along the **category**
+axis: *where a rule's idea comes from* and *what a finding means in the
+world*. The two cross-cut. An integrity finding is an integrity finding
+whether an R, H, or C rule produced it, and a C rule's structural invariant
+means the same thing across fetch-and-execution, composition, and integrity.
+
+Use this page to tune a mechanism; use the per-category pages to interpret a
+finding. Every category page links back to its system page here.
+
 ## R-series: **Regex** Pattern Matching
 
 **Count:** 37 rules (R001-R003, R007-R008, R010-R013, R017, R039-R059, R078, R091, R099, R104, R144, R152)
@@ -29,7 +41,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Example:** R001 matches `curl ... | bash` on resolved text. Changing the pattern to `wget ... | sh` would narrow the detection. Changing `match_target` to `raw_line` would miss payloads assembled from variables.
 
-**When it fires:** On every diff line (or resolved line) that matches the pattern. No diff context needed; no history needed.
+**When it fires:** On every diff line (or resolved line) that matches the pattern. No diff context needed; no history needed. The category reading for the payload tradition is on [Fetch and Execution: Rule Nature](../nature/fetch-and-execution.md).
 
 **Coupling to the tokenizer.** `match_target = resolved` rules detect only what the tokenizer can read; an assignment it refuses is not matched against, and the refusal routes suspicion to the X-series instead. A shrinking R fire rate beside a non-zero unresolved count is the tokenizer's boundary showing through, not silence from the recipe.
 
@@ -56,7 +68,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Known misfile.** H091 (checksum array shorter than the source array) is a two-field consistency invariant - the definition of the C-series - filed in H for ID-history reasons. Rule IDs are immutable citation targets, so the divergence is recorded here rather than migrated.
 
-**When it fires:** When the behavioral condition is met. The finding carries a line number and body extracted from the diff, but the decision required multi-line or cross-commit context.
+**When it fires:** When the behavioral condition is met. The finding carries a line number and body extracted from the diff, but the decision required multi-line or cross-commit context. H rules cross categories; the behavioral reading is on [Corpus Behavioral: Rule Nature](../nature/corpus-behavioral.md).
 
 ## C-series: **Check** Structural Invariants
 
@@ -76,7 +88,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Example:** C003 fires when source URLs changed without a version bump. It needs both the URL diff and the version diff to exist (or not exist) in the same change.
 
-**When it fires:** When two or more structural conditions co-occur in a way that violates an invariant.
+**When it fires:** When two or more structural conditions co-occur in a way that violates an invariant. The structural-invariant reading is on [Integrity and Verification: Rule Nature](../nature/integrity.md).
 
 **Filing rule.** New invariant-shaped detections default to C-series even when the ID sequence has to skip: a C rule with a fresh ID beats another H misfile (the intake freeze). C014-C025 arrived this way.
 
@@ -102,7 +114,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Cold start.** D is weakest for new, low-observation packages - exactly where novel supply-chain attacks live. A D-rule that declines to fire for insufficient observations reports that abstention as a weight-0 boundary finding naming the rule and the observation count; the absence of a D finding is never read as evidence of safety.
 
-**When it fires:** During the dependency closure walk, when a naming or composition anomaly is detected.
+**When it fires:** During the dependency closure walk, when a naming or composition anomaly is detected. The dependency reading is on [Naming and Dependencies: Rule Nature](../nature/naming-and-dependency.md).
 
 ## S-series: **Sabotage** Hostile Impact Detection
 
@@ -124,7 +136,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **The evidence vacuum.** Sabotage patterns are vanishingly rare in benign corpora, so S rules have near-zero measurable fire rates and are the least validated by calibration. The absence of an S finding is weak evidence: the series' value is severity-when-it-fires, not frequency. Every S rule ships with a mandatory fixture pair (one malicious that must fire, one benign lookalike that must not).
 
-**When it fires:** When a sabotage pattern is found in the diff or the committed file tree.
+**When it fires:** When a sabotage pattern is found in the diff or the committed file tree. The category reading is on [Sabotage: Rule Nature](../nature/sabotage.md).
 
 ## X-series: **Crossfire** Evasion Detection
 
@@ -149,7 +161,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **X is a function of refusal.** Any tokenizer improvement that resolves more constructs shrinks X's detection surface. That is the intended way this family shrinks, and every shrinkage is a measured event: the calibration replay records X-series aggregate fire rates per release, and a tokenizer change that moves any X rule's rate beyond the published epsilon carries a changelog adjudication naming the technique the family can no longer see and the rule that covers it now, if any.
 
-**When it fires:** When the tokenizer reports that it could not resolve a command, and the evasion technique is identifiable.
+**When it fires:** When the tokenizer reports that it could not resolve a command, and the evasion technique is identifiable. The category reading is on [Crossfire: Rule Nature](../nature/crossfire.md).
 
 ## P-series: **Practice** Declared Practices
 
@@ -171,7 +183,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Absence is signal.** P findings are present-or-absent. No P001 means the recipe declares no checksums. Read P findings as a claims ledger - the recipe's own account of what it declares - and read the gaps between entries as what it does not. Not scored, per B10, forever.
 
-**When it fires:** On every analysis, for every package that declares the practice. P findings are present or absent, not triggered by a diff.
+**When it fires:** On every analysis, for every package that declares the practice. P findings are present or absent, not triggered by a diff. P is a claims surface rather than an evidence category, so it has no Nature page of its own; the [category map](../nature/index.md) lists the rest.
 
 ## W-series: **Warning** Analysis Boundaries
 
@@ -191,7 +203,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Example:** W001 reports "a script invoked from inside the source tree was not read." W002 reports "npm install resolving dependencies from a registry." Neither changes the score; both tell the reviewer where the analysis stopped.
 
-**When it fires:** When the analysis encounters a boundary it cannot cross. Always shown, never scored.
+**When it fires:** When the analysis encounters a boundary it cannot cross. Always shown, never scored. The category reading is on [Unverifiable: Rule Nature](../nature/unverifiable.md).
 
 ## T-series: **Temporal** Observation History
 
@@ -214,13 +226,13 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Cold start.** A fresh index has no baseline, so T rules **decline silently** rather than flag every key and domain a new install sees; the abstention is named as a weight-0 boundary, never read as a clean result.
 
-**When it fires:** When the stored history makes the change anomalous, or a ledger entry is novel. Never on a diff alone.
+**When it fires:** When the stored history makes the change anomalous, or a ledger entry is novel. Never on a diff alone. The category reading is on [Temporal Context: Rule Nature](../nature/temporal.md).
 
 ## G-series: **Correlation** Cross-Package Joins
 
-**Count:** 4 rules (G001-G004)
+**Count:** 7 rules (G001-G007; G006/G007 weight 0)
 
-**Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N.
+**Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N. G001 to G004 are the joins; G005 is the impersonation-campaign trigger; G006 (neighborhood elevation under an active campaign) and G007 (corroboration of a run inside an active campaign) are weight 0, because a set membership must not inflate any one member's score. The full immune-import reading is on [Correlation: Rule Nature](../nature/correlation.md).
 
 **What you can tune:**
 
@@ -236,7 +248,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Not per package.** A single `review`/`inspect` cannot supply the input, so G runs only in the full-AUR sweep; the layer profile shows L8 as "not exercised" outside a correlation cycle. The shared literal's content is never printed - only its class and the members.
 
-**When it fires:** At cycle end, when a host, literal or adopter is shared by enough packages in the window.
+**When it fires:** At cycle end, when a host, literal or adopter is shared by enough packages in the window. The category reading is on [Correlation: Rule Nature](../nature/correlation.md).
 
 ## E-series: **Entropy** Distribution Statistics
 
@@ -257,7 +269,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Calibration.** Every E threshold ships **empty**, so the series is silent until an operator or the calibration job sets it from the first corpus measurement (`scripts/entropy_calibrate.py` prints conservative percentile floors). The benign fire rate is the published number; the tool never rewrites the shipped defaults.
 
-**When it fires:** When the added content's distribution crosses a configured threshold. Silent until one is set.
+**When it fires:** When the added content's distribution crosses a configured threshold. Silent until one is set. The category reading is on [Entropy: Rule Nature](../nature/entropy.md).
 
 ## I-series: **Indicator** Signed External Data
 
@@ -280,11 +292,11 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Empty by default.** A fresh install ships an empty list, so a miss is uninformative until the operator imports a signed set; a stale or unsigned baseline is refused, never merged.
 
-**When it fires:** On an exact indicator match, at maximum alert priority, outside the score.
+**When it fires:** On an exact indicator match, at maximum alert priority, outside the score. The category reading is on [Indicators: Rule Nature](../nature/indicator.md).
 
 ## M-series: **Meta** Confluence Of Findings
 
-**Count:** 3 rules (M001-M003; M004 is a tool-health check, never a package finding)
+**Count:** 6 rules (M001-M006; M004-M006 are tool-health checks, never package findings)
 
 **Mechanism:** Predicates over the finding set itself. Every other series reads the recipe; M reads the *findings* - a declared practice contradicted by structure, or a composition of weak signals that is only visible from the whole profile. Its input is the finding multiset **after** the ownership resolver, so two rules that matched the same line have already collapsed to one owner.
 
@@ -298,11 +310,11 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 - The cluster-rate gate: every M rule's benign fire rate must stay at or below its members' before its threshold ships
 - The rule ID
 
-**Example:** M001 fires when the recipe declares a practice and a structural finding contradicts it in the same run - checksums declared (P001) while H091 reports the arrays do not cover every source. M002 fires when three or more layers fired, none above the alert bar, and raises the reported band one step (never adding points).
+**Example:** M001 fires when the recipe declares a practice and a structural finding contradicts it in the same run - checksums declared (P001) while H091 reports the arrays do not cover every source. M002 fires when three or more layers fired, none above the alert bar, and raises the reported band one step (never adding points). M004 to M006 are tool-health checks: M006 fires when a campaign class re-arms within `campaign_min_reactivation_observations` observations, reports the churn, and still refreshes the window.
 
 **Fires at its inputs' layer.** M owns no static layer: it records which inputs composed and is labelled by them. M002/M003 are weight 0 but escalate the band one step, gated by `M escalation stays below the benign cap`.
 
-**When it fires:** After the ownership resolver, when a contradiction or a weak-signal composition is present.
+**When it fires:** After the ownership resolver, when a contradiction or a weak-signal composition is present. The category reading is on [Meta and Confluence: Rule Nature](../nature/meta.md).
 
 ## A-series: **Artifact** Built-Package Inspection
 
@@ -324,7 +336,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Disagreement stays visible.** When L9 contradicts L1-L8, both profiles render in full and the verdict carries an explicit `l9_divergence` notice; L9 never edits, suppresses or reweights static findings. Reproducibility comparison is a v1.1 query over recorded artifact hashes.
 
-**When it fires:** Only in the optional L9 lane, when the built artifact does not match the recipe's declared surface.
+**When it fires:** Only in the optional L9 lane, when the built artifact does not match the recipe's declared surface. The category reading is on [Artifact: Rule Nature](../nature/artifact.md).
 
 ## U-series: **Manifest** Committed Dependency Surfaces
 
@@ -343,7 +355,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Example:** U003 fires when a `Cargo.toml` gains a `git = "..."` dependency whose host the recipe never declared; U002 records the added and removed dependency names at weight 0.
 
-**When it fires:** On a committed manifest the diff added, removed or changed.
+**When it fires:** On a committed manifest the diff added, removed or changed. The category reading is on [Upstream Manifests: Rule Nature](../nature/upstream-manifests.md).
 
 ## Known fuzzy edges
 
@@ -372,7 +384,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 | X | **Crossfire** | Evasion detection | Severity only | Severity-based | When tokenizer reports evasion |
 | E | **Entropy** | Distribution of added content | Thresholds (ship empty) | Severity-based | When a configured distribution threshold is crossed |
 | T | **Temporal** | Ecosystem history and ledgers | Severity, thresholds | Severity-based | When history makes the change anomalous |
-| G | **Correlation** | Cross-package joins over the cycle | N/M/window per rule | Severity-based | At cycle end, never per package |
+| G | **Correlation** | Cross-package joins over the cycle | N/M/window per rule | Severity-based (G006/G007 weight 0) | At cycle end, never per package |
 | I | **Indicator** | Membership in signed external data | Curator keys, cadence | Outside the score | On an indicator match |
 | M | **Meta** | Other rules' findings | Layer count, per-layer ceiling | Severity-based; M002/M003 weight 0 | After the ownership resolver |
 | A | **Artifact** | Built package manifest | Enable flag only | Outside the score (L9) | Only in the optional build lane |
@@ -382,6 +394,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 
 ## See Also
 
+- [Rule Nature (per category)](../nature/index.md); where each category's rules come from and what a finding means
 - [Rules Reference](index.md); complete catalog by category
 - [Rule System Reference](system.md); engine internals, severity weights, field definitions
 - [Configuring Rules and Weights](../../guides/configuring-rules-and-weights.md); how to tune R-series rules

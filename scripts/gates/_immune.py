@@ -18,6 +18,7 @@ from scripts.gates._core import Gate
 __all__ = [
     "gate_campaign_state_is_instrument_state",
     "gate_campaign_expiry_is_structural",
+    "gate_campaign_reactivation_is_bounded",
     "gate_campaign_points_are_attributed",
     "gate_elevation_is_attributed",
     "gate_escalation_is_one_notch",
@@ -68,6 +69,39 @@ def gate_campaign_state_is_instrument_state() -> Gate:
             problems.append(f"config_fingerprint references {token!r}")
     return Gate("campaign state is instrument state", not problems,
                 problems or "fingerprint carries no campaign state")
+
+
+def gate_campaign_reactivation_is_bounded() -> Gate:
+    """A campaign class that re-arms too often is reported, not silently re-armed.
+
+    M006: re-activation still refreshes the window (the spec never asks to
+    block it), but a class churning faster than the interval is surfaced as a
+    tool-health note rather than passed over in silence.
+    """
+    problems: list[str] = []
+    with _temp_db() as db:
+        now = db.observation_seq()
+        db.activate_campaign("g005:m", {"package_names": ["yyay"]}, "G005",
+                             ttl_obs=50, now_obs=now)
+        # A class armed once is not churning.
+        if db.reactivation_pressure(5) != []:
+            problems.append("a singly-armed class was reported as churning")
+        db.activate_campaign("g005:m", {"package_names": ["yyay"]}, "G005",
+                             ttl_obs=50, now_obs=now + 1)
+        db.activate_campaign("g005:m", {"package_names": ["yyay"]}, "G005",
+                             ttl_obs=50, now_obs=now + 2)
+        named = [p["campaign_id"] for p in db.reactivation_pressure(5)]
+        if named != ["g005:m"]:
+            problems.append(f"the churning class was not reported: {named}")
+        # The window was still refreshed, not blocked.
+        if [c["campaign_id"] for c in db.active_campaigns(now_obs=now + 2)] != [
+                "g005:m"]:
+            problems.append("the refresh was blocked instead of reported")
+        # An interval of 0 disables the check.
+        if db.reactivation_pressure(0) != []:
+            problems.append("interval 0 did not disable the check")
+    return Gate("campaign re-activation is bounded", not problems,
+                problems or "M006 reports the churn without blocking it")
 
 
 def gate_campaign_expiry_is_structural() -> Gate:
@@ -222,6 +256,16 @@ def gate_expired_overrides_are_reported() -> Gate:
               and kept and kept[0].get("override_expired") is True)
     finally:
         ov.load_overrides = saved
+    # The expiry must also reach the terminal, not only the data layer: a
+    # lapsed override a reviewer cannot see is one they will re-file.
+    if ok:
+        from trustsight.schema import PackageFact
+        from scripts.gates._core import _render_inspect_text
+
+        text = _render_inspect_text(PackageFact(
+            package_name="p", final_score=0, overrides_expired=["H029"]))
+        if "H029" not in text:
+            ok = False
     return Gate("expired overrides are reported", ok,
                 ["a lapsed override stayed silent"] if not ok
                 else "the finding returned and the expiry was named")
@@ -245,7 +289,7 @@ def gate_corroborated_suppression_is_terminal_visible() -> Gate:
         }],
     )
     text = _render_inspect_text(fact)
-    ok = "C005" in text
+    ok = "C005" in text and "indicator corroborated" in text
     return Gate("corroborated suppression is terminal-visible", ok,
                 ["the suppressed finding did not render"] if not ok
                 else "the finding renders beside its override")

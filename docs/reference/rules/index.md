@@ -54,7 +54,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Crossfire](crossfire.md) | `crossfire` | 34 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 10 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
-| [Meta and Confluence](meta.md) | `meta` | 5 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
+| [Meta and Confluence](meta.md) | `meta` | 6 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 | [Correlation](correlation.md) | `correlation` | 7 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
 | [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
@@ -256,6 +256,7 @@ is deliberately non-contiguous; see
 | [M003](meta.md#m003) | Composition Not Owned Elsewhere | Meta | MEDIUM | [Meta and Confluence](meta.md) |
 | [M004](meta.md#m004) | Expected Co-fire Absent | Meta | INFO | [Meta and Confluence](meta.md) |
 | [M005](meta.md#m005) | Licensor Absent On Licensed Shape | Meta | INFO | [Meta and Confluence](meta.md) |
+| [M006](meta.md#m006) | Campaign Re-armed Too Often | Meta | INFO | [Meta and Confluence](meta.md) |
 | [R001](fetch-and-execution.md#r001) | Remote Script Execution | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R002](fetch-and-execution.md#r002) | Wget Pipe to Shell | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R003](obfuscation.md#r003) | Base64 Decode and Execute | Regex | CRITICAL | [Obfuscation](obfuscation.md) |

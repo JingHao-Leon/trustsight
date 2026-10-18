@@ -40,7 +40,7 @@ promise of safety. The evidence is what you decide on. See
 
 !!! tip "Rules Reference"
 
-    TrustSight ships 242 documented detection rules across eleven families: 37 R-series detection rules, 103 H-series heuristics, 32 C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, 34 X-series crossfire rules, five M-series meta rules, three E-series entropy rules, three T-series temporal rules, and seven G-series correlation rules, and six U-series manifest rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families are reported but never weighted: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W010. The optional L9 build lane adds eight artifact rules A001-A008, reported outside the heuristic when enabled. Each rule has a severity, match target, and scope that determine how it fires and what it reports.
+    TrustSight ships 243 documented detection rules across eleven families: 37 R-series detection rules, 103 H-series heuristics, 32 C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, 34 X-series crossfire rules, six M-series meta rules, three E-series entropy rules, three T-series temporal rules, and seven G-series correlation rules, and six U-series manifest rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families are reported but never weighted: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W010. The optional L9 build lane adds eight artifact rules A001-A008, reported outside the heuristic when enabled. Each rule has a severity, match target, and scope that determine how it fires and what it reports.
 
     [Browse the full rule catalog &rarr;](reference/rules/index.md)
 
@@ -113,7 +113,8 @@ the coverage states, and a worked report example.
 | Page | What it covers |
 |------|----------------|
 | [Rules](reference/rules/index.md) | Complete R/H/C/D/S/X catalog with severity, weight, and description. |
-| [Rule Nature](reference/rules/nature.md) | How each series detects: Regex, Heuristic, Check, Dependency, Sabotage, Crossfire, Practice, and Warning. |
+| [Rule Nature (by series)](reference/rules/nature.md) | How each series detects: Regex, Heuristic, Check, Dependency, Sabotage, Crossfire, Practice, and Warning. |
+| [Rule Nature (by category)](reference/nature/index.md) | Where each category's rules come from and what a finding means in the world. |
 | [CLI](reference/cli.md) | Full command reference for review, inspect, history, config. |
 | [Configuration](reference/configuration.md) | config.toml and its sibling rule, host, pattern, naming, threshold, and domain files. |
 | [Report Schema](reference/report-schema.md) | Stored PackageFact and CLI/API report JSON shapes. |

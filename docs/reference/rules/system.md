@@ -1236,6 +1236,10 @@ See [M004: Expected Co-fire Absent](meta.md#m004).
 
 See [M005: Licensor Absent On Licensed Shape](meta.md#m005).
 
+### M006 {#m006}
+
+See [M006: Campaign Re-armed Too Often](meta.md#m006).
+
 ### E001 {#e001}
 
 See [E001: Added-Text Compression Ratio](entropy.md#e001).

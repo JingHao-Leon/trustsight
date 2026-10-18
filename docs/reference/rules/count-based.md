@@ -2,6 +2,8 @@
 
 # Count-Based
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/count-based.md).
+
 A count crossed a fixed threshold. What separates these from
 [composition](composition.md) is that the count is over indicators of one
 kind rather than over distinct kinds, and what separates them from

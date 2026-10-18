@@ -2,6 +2,8 @@
 
 # Correlation
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/correlation.md).
+
 G rules take the **set** of recent analyses as their input. D walks one
 package's dependency graph; T reads one package's history; G asks what
 several packages share.
@@ -110,8 +112,8 @@ The cytokine effect: an alerted neighborhood raises the surrounding tissue's rea
 ### G007: Campaign Corroboration {#g007}
 
 - **Target:** programmatic (a run inside an active campaign)
-- **Severity:** INFO, weight 0 to 5 (the bounded bonus)
+- **Severity:** INFO, weight 0 (report-only)
 - **Category:** `correlation`
 - **Condition:** A review run whose package, or a host it newly gained, stands in the scope of an active campaign.
 
-Trained immunity, scored: while a campaign is primed, a package in its scope earns `+min(5, corroboration_count)` points, once, as one attributable breakdown entry carrying `campaign_id`. Bounded so a wide campaign cannot inflate a run, and inert when no campaign is active (the calibration corpus carries none). See [Campaign Alert Mode](../../explanation/campaign-alert-mode.md).
+Trained immunity, reported: while a campaign is primed, a package in its scope is named as corroborated - one `G007` entry carrying `campaign_id`, weight 0. It adds no points: the bonus it replaced measured scope *breadth*, not corroboration, and the benign corpus carries no active campaign, so the points were never measured against the false-positive rate. Inert when no campaign is active. See [Campaign Alert Mode](../../explanation/campaign-alert-mode.md).

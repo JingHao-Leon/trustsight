@@ -2,6 +2,8 @@
 
 # Upstream Manifests
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/upstream-manifests.md).
+
 TrustSight never fetches what a package declares (A2) and never extracts an
 upstream archive (A8): the cargo stays sealed. But the dependency manifests
 that ship *beside* a recipe are committed to the repository, so the existing

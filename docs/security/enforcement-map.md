@@ -22,6 +22,7 @@ python scripts/security_gates.py
 | `alert counts reconcile` | B5 | `shown + grouped == rendered`; the JSON is never filtered |
 | `campaign state is instrument state` | B1 | the config fingerprint carries no campaign or observation state |
 | `campaign expiry is structural` | A11 | an expired campaign is never returned by `active_campaigns` |
+| `campaign re-activation is bounded` | B1 | a class re-arming faster than the interval is reported as `M006`, never blocked |
 | `campaign points are attributed` | B1 | every campaign bonus is a `G007` entry carrying `campaign_id` |
 | `elevation is attributed` | B1/B10 | `G006` is weight-0 INFO and names the campaign whose scope it touched |
 | `escalation is one notch` | B10 | licensing moves a band one step, never more |

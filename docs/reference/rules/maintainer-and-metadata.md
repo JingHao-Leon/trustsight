@@ -2,6 +2,8 @@
 
 # Maintainer and Metadata
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/maintainer-and-metadata.md).
+
 Who owns the package changed (H026, H044, H074, C006), a property that held
 across a long run of observations changed (H037, H049, H050, H051, H054), a
 maintainer's activity deviated from their baseline (H058), or an epoch was

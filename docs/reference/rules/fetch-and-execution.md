@@ -2,6 +2,8 @@
 
 # Fetch and Execution
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/fetch-and-execution.md).
+
 Code reaches the machine and runs. Every rule here claims one of three
 things: something was fetched, something was executed, or a path connects
 the two. They are the densest group in the ruleset because the shapes are

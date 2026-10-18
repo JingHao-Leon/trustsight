@@ -231,9 +231,17 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         inside.add_row("[yellow]Suppressed by override[/]", "")
         for r in fact.suppressed_rules:
             scope = r.get("override_package") or "ALL packages"
+            corroborated = ("  (indicator corroborated)"
+                            if r.get("indicator_corroborated") else "")
             inside.add_row("", Text(
                 f"  {clean(r['rule_id'])}  ({clean(scope)})  "
-                f"{clean(r.get('override_reason', ''))}"))
+                f"{clean(r.get('override_reason', ''))}{corroborated}"))
+
+    if getattr(fact, "overrides_expired", None):
+        inside.add_row("", "")
+        inside.add_row("[yellow]Overrides expired[/]", "")
+        for rid in fact.overrides_expired:
+            inside.add_row("", Text(f"  {clean(str(rid))}  no longer suppressing"))
 
     if getattr(fact, "acknowledged_urls", None):
         inside.add_row("", "")
@@ -405,8 +413,14 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         print("  Suppressed by override (did not affect the score):")
         for r in fact.suppressed_rules:
             scope = r.get("override_package") or "ALL packages"
+            corroborated = (" (indicator corroborated)"
+                            if r.get("indicator_corroborated") else "")
             print(f"    {clean(r['rule_id'])} ({clean(scope)}) "
-                  f"{clean(r.get('override_reason', ''))}")
+                  f"{clean(r.get('override_reason', ''))}{corroborated}")
+    if getattr(fact, "overrides_expired", None):
+        print("  Overrides expired (no longer suppressing):")
+        for rid in fact.overrides_expired:
+            print(f"    {clean(str(rid))}")
     if getattr(fact, "acknowledged_urls", None):
         print("  Acknowledged source URLs (did not affect the score):")
         for r in fact.acknowledged_urls:

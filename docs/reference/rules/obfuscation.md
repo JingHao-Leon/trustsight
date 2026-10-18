@@ -2,6 +2,8 @@
 
 # Obfuscation
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/obfuscation.md).
+
 The recipe hides what it does from whoever reads it. Encoding (R003, R043,
 R045), runtime assembly (R039, R040) and name indirection (H080) are
 all the same move: the line a reviewer sees is not the command that runs.

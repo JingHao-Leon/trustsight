@@ -2,6 +2,8 @@
 
 # Artifact
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/artifact.md).
+
 A rules inspect the **built package manifest**, not the diff. They are the
 optional **L9 build lane**: off by default, run only inside the project's
 rootless, networkless container, and never blended into the static score.

@@ -2,6 +2,8 @@
 
 # Entropy
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/entropy.md).
+
 E rules read the **distribution** of the added content. No patterns, no
 refusal semantics: an attacker who writes resolvable-but-obfuscated code
 defeats the X-series' refusal coupling, but a distribution does not care

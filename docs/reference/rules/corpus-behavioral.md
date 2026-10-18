@@ -2,6 +2,8 @@
 
 # Corpus Behavioral
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/corpus-behavioral.md).
+
 The package's position in the corpus, or its deviation from a corpus
 baseline. H046, H057, H060, H061, and H073 are Class D rules that run once
 per metadata cycle in `trustsight full-aur`.

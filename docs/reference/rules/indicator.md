@@ -2,6 +2,8 @@
 
 # Indicators
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/indicator.md).
+
 An indicator rule asks one question: does a declared surface match an entry in
 **signed external data**? The mechanism is membership, not a heuristic - the
 answer is exact equality against a list TrustSight did not invent. H056 reads

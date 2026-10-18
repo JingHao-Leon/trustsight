@@ -2,6 +2,8 @@
 
 # Unverifiable
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/unverifiable.md).
+
 W rules report **what the analysis could not check**.
 
 Every other rule says "this recipe does something". A W finding says "this

@@ -2,6 +2,8 @@
 
 # Sabotage
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/sabotage.md).
+
 A payload that wrecks, exhausts or steals rather than exfiltrates.
 
 Every other family on these pages describes a *supply-chain* compromise:

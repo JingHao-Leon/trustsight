@@ -2,6 +2,8 @@
 
 # Install and Persistence
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/install-and-persist.md).
+
 Something survives the build. Install hooks run as root at install time,
 which makes them the highest-privilege code a PKGBUILD carries (R007, H017,
 H023, H035), and units, pacman hooks and setuid bits keep running long

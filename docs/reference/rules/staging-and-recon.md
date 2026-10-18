@@ -2,6 +2,8 @@
 
 # Staging and Reconnaissance
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/staging-and-recon.md).
+
 A packaging step may write inside `$srcdir` and `$pkgdir` and nowhere else.
 These rules are the boundary (R058, H038, H076, H085), the hidden case
 (H042, H007) and the question of what the build learned about the host it

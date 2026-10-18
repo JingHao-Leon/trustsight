@@ -2,6 +2,8 @@
 
 # Meta and Confluence
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/meta.md).
+
 M rules take **other rules' findings** as their input. Every other series
 reads the recipe; this one reads the finding set.
 
@@ -36,6 +38,7 @@ This is a reference page. For how weight and scope work, see
 | [M003](#m003) | Composition Not Owned Elsewhere | MEDIUM |
 | [M004](#m004) | Expected Co-fire Absent | INFO |
 | [M005](#m005) | Licensor Absent On Licensed Shape | INFO |
+| [M006](#m006) | Campaign Re-armed Too Often | INFO |
 <!-- /generated: page-index -->
 
 ### M001: Claim Contradicted By Structure {#m001}
@@ -107,3 +110,18 @@ did - the detector travelled without its usual company. Like M004 this is a
 sensor-health observation, not evidence about the package, so it goes to the
 `cofire_health` channel and never scores. See
 [Escalation Licensing](../../explanation/escalation-licensing.md).
+
+### M006: Campaign Re-armed Too Often {#m006}
+
+- **Target:** programmatic (tool health)
+- **Severity:** INFO, weight 0
+- **Category:** `meta`
+
+A campaign re-armed faster than
+`[alerts] campaign_min_reactivation_observations` allows. The window is still
+refreshed - re-activation is never blocked - but a campaign that re-primes over
+and over is the **instrument** churning, not a package misbehaving, so it is
+surfaced as a tool-health note rather than passed over in silence. Unlike M004
+and M005 it is a cycle-level observation: it is raised in the correlation
+cycle's log, not attached to any package's `cofire_health`, and it never
+scores. See [Campaign Alert Mode](../../explanation/campaign-alert-mode.md).

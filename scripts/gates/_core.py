@@ -315,7 +315,9 @@ def _parity_fact():
         risk="Critical",
         coverage_gaps=["line_truncated"],
         changes=["PKGBUILD modified"],
-        suppressed_rules=[{"rule_id": "R099", "severity": "LOW"}],
+        suppressed_rules=[{"rule_id": "R099", "severity": "LOW",
+                           "indicator_corroborated": True}],
+        overrides_expired=["H029"],
         acknowledged_urls=[{
             "url": "https://example.org/known.tar.gz",
             "reason": "reviewed 2026-10-01",

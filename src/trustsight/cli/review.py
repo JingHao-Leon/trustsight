@@ -455,9 +455,18 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
         # only in the JSON body.
         for entry in r.get("suppressed_rules", []):
             scope = entry.get("override_package") or "ALL packages"
+            corroborated = (" (indicator corroborated)"
+                            if entry.get("indicator_corroborated") else "")
             typer.echo(
                 f"  [Suppressed: {clean(entry.get('rule_id', ''))} "
-                f"({clean(scope)}) {clean(entry.get('override_reason', ''))}]"
+                f"({clean(scope)}) {clean(entry.get('override_reason', ''))}"
+                f"{corroborated}]"
+            )
+        # A lapsed override is named too (B5): silence must not mean both
+        # "no override" and "the override expired".
+        for rid in r.get("overrides_expired", []):
+            typer.echo(
+                f"  [Override expired: {clean(str(rid))}; no longer suppressing]"
             )
         for m in r.get("ioc_matches", []):
             expired = " [EXPIRED]" if m.expired else ""
@@ -599,8 +608,18 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
                 rule_id = entry.get("rule_id", "")
                 scope = entry.get("override_package") or "ALL packages"
                 reason = entry.get("override_reason", "")
+                corroborated = ("  (indicator corroborated)"
+                                if entry.get("indicator_corroborated") else "")
                 table.add_row("", Text(
-                    f"  {clean(rule_id)}  ({clean(scope)})  {clean(reason)}"))
+                    f"  {clean(rule_id)}  ({clean(scope)})  {clean(reason)}"
+                    f"{corroborated}"))
+
+        expired_overrides = r.get("overrides_expired", [])
+        if expired_overrides:
+            table.add_row("Overrides expired", "")
+            for rid in expired_overrides:
+                table.add_row("", Text(
+                    f"  {clean(str(rid))}  no longer suppressing"))
 
         ioc_matches = r.get("ioc_matches", [])
         if ioc_matches:

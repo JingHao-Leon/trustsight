@@ -2,6 +2,8 @@
 
 # Deception and Anti-Analysis
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/deception.md).
+
 These rules target the reviewer, not the shell. R012 and R013 are the two
 FATAL rules: reviewer-directed template text, and codepoints that make displayed
 text differ from executed text. Both contribute weight 0 and name themselves in

@@ -290,6 +290,7 @@ must never kill the watch loop. Overridden per run by `--notify`.
 | `max_rendered_findings` | int | `50` | Findings the terminal renders in full before it groups the remainder as `...and N more findings (see --json)`. The JSON report is never filtered. A weight-0 `W010 (Alert Volume Capped)` boundary records the saturation. `0` disables the cap. |
 | `max_cycle_alerts` | int | `0` | Flagged packages a single `full-aur --watch` webhook names before it degrades to counts plus the top-K by score. The stored record keeps every package. `0` disables the cycle cap. |
 | `max_active_campaigns` | int | `8` | How many campaigns may be active at once in campaign alert mode. A new activation beyond the cap evicts the oldest only when its TTL has also lapsed; a live TTL is never shortened. |
+| `campaign_min_reactivation_observations` | int | `5` | Minimum spacing, in observations, between re-activations of the same campaign class (a G-rule id). A class that re-arms faster is still refreshed (re-activation is never blocked), but the churn is surfaced as a weight-0 `M006 (Campaign Re-armed Too Often)` tool-health note in the correlation cycle's log. `0` disables the check. |
 
 ### `[deep]`
 

@@ -343,6 +343,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "M003": _C.META,
     "M004": _C.META,
     "M005": _C.META,
+    "M006": _C.META,
     "E001": _C.ENTROPY,
     "E002": _C.ENTROPY,
     "E003": _C.ENTROPY,

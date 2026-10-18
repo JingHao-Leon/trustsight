@@ -20,6 +20,7 @@ from trustsight.scoring import DECLARED_REASONS
 
 ROOT = Path(__file__).resolve().parent.parent
 RULES_DIR = ROOT / "docs" / "reference" / "rules"
+NATURE_DIR = ROOT / "docs" / "reference" / "nature"
 SYSTEM_MD = RULES_DIR / "system.md"
 INDEX_MD = RULES_DIR / "index.md"
 CLI_MD = ROOT / "docs" / "reference" / "cli.md"
@@ -115,6 +116,34 @@ def test_every_page_belongs_to_a_category():
     known = {c.doc_page for c in RuleCategory} | NON_RULE_PAGES
     stray = sorted(p.name for p in RULES_DIR.glob("*.md") if p.name not in known)
     assert stray == [], f"pages under docs/reference/rules/ with no category: {stray}"
+
+
+# The Rule Nature tab splits the same categories along the other axis: where
+# the rules come from and what a finding means.  Its pages live in a parallel
+# directory so they stay outside `build_rules_index.py`'s scan; the two checks
+# below keep the pair in step and keep that scan innocent.
+
+
+def test_every_category_has_a_nature_page():
+    missing = sorted(
+        c.value for c in RuleCategory if not (NATURE_DIR / f"{c.value}.md").exists()
+    )
+    assert missing == [], f"RuleCategory members with no Nature page: {missing}"
+
+
+# A rule definition on a Nature page would be a second copy of the mechanics
+# the System page owns, and would look like content to any future scan of the
+# directory.  `^### [A-Z]\\d{3}:` is exactly the heading `build_rules_index.py`
+# reads, so a Nature page must never carry one.
+_NATURE_RULE_HEADING_RE = re.compile(r"^### [A-Z]\d{3}:", re.M)
+
+
+@pytest.mark.parametrize(
+    "page", sorted(NATURE_DIR.glob("*.md")), ids=lambda p: p.name
+)
+def test_no_nature_page_documents_a_rule(page):
+    found = sorted(set(_NATURE_RULE_HEADING_RE.findall(page.read_text())))
+    assert found == [], f"{page.name} carries rule headings: {found}"
 
 
 @pytest.mark.parametrize("rule_id", sorted(RULE_CATEGORIES), ids=str)

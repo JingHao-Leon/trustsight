@@ -2,6 +2,8 @@
 
 # Crossfire
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/crossfire.md).
+
 Crossfire rules fire on **how a diff is written**, not on what it does.
 
 Every other rule family matches a payload: a fetch, a write, a privilege

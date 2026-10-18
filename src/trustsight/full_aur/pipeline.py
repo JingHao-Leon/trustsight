@@ -302,7 +302,7 @@ def _campaign_identity(finding: dict) -> tuple[str, dict[str, list[str]]] | None
     return f"{rule_id}:{key}", scope
 
 
-def _activate_campaigns(findings: list[dict], config: dict) -> list[str]:
+def _activate_campaigns(findings: list[dict], config: dict, log=None) -> list[str]:
     """Prime campaign state for every corroborated cluster this cycle.
 
     A campaign is instrument state: it is written only by corroborated
@@ -314,6 +314,11 @@ def _activate_campaigns(findings: list[dict], config: dict) -> list[str]:
     memory, and silently failing to remember a new campaign would violate the
     transparency the mechanism is built around, so the caller reports each
     refusal rather than dropping it.
+
+    A class that re-arms faster than
+    ``[alerts] campaign_min_reactivation_observations`` is still refreshed -
+    the window is never shortened - but the churn is surfaced as an M006
+    tool-health note rather than passed over in silence.
     """
     alerts = (config or {}).get("alerts", {}) or {}
     try:
@@ -335,7 +340,32 @@ def _activate_campaigns(findings: list[dict], config: dict) -> list[str]:
             ttl_obs=ttl, max_active=max_active)
         if not activated:
             refused.append(campaign_id)
+    _report_reactivation_pressure(alerts, log)
     return refused
+
+
+def _report_reactivation_pressure(alerts: dict, log) -> None:
+    """M006: surface a campaign class that re-armed faster than the interval.
+
+    Instrument health, not a package finding: a class churning is the tool
+    re-priming the same shape over and over, which the spec routes to a
+    tool-health signal.  Weight 0 and never attributed to a package.
+    """
+    if log is None:
+        return
+    try:
+        min_interval = int(
+            (alerts or {}).get("campaign_min_reactivation_observations", 5) or 0)
+    except (TypeError, ValueError, OverflowError):
+        min_interval = 5
+    if min_interval <= 0:
+        return
+    from ..analysis.meta import campaign_reactivation_notes
+    from ..db import reactivation_pressure
+
+    for note in campaign_reactivation_notes(
+            reactivation_pressure(min_interval)):
+        log.warning("%s: %s", note["rule_id"], note["match"])
 
 
 def _report_expired_campaigns(log) -> None:
@@ -534,7 +564,7 @@ def _run_corpus_sweep(
     config = load_config()
     findings.extend(correlate(records, config))
 
-    refused = _activate_campaigns(findings, config)
+    refused = _activate_campaigns(findings, config, log=log)
     if refused:
         # Campaign mode is temporary memory; refusing to remember a campaign
         # because every slot holds a live TTL must be visible, not silent.

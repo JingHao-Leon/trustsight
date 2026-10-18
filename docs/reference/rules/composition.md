@@ -2,6 +2,8 @@
 
 # Composition
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/composition.md).
+
 Distinct kinds of finding co-occurred. The combination is the signal.
 
 H027 and H043 carry weight 0 by design: the points are already on the board

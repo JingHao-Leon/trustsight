@@ -107,6 +107,12 @@ max_active_campaigns = 8
 # measured in observations is what keeps a primed state from becoming
 # chronic.
 campaign_ttl_observations = 40
+# Campaign alert mode: minimum spacing, in observations, between
+# re-activations of the SAME campaign class (a G-rule id).  A class that
+# re-arms faster than this is still refreshed, but the over-frequent
+# re-arming is surfaced as an M006 tool-health note rather than passed over
+# in silence.  0 disables the check.
+campaign_min_reactivation_observations = 5
 
 [verify]
 # The optional L9 build lane. When enabled, `trustsight

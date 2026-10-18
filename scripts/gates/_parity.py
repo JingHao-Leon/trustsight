@@ -257,6 +257,7 @@ def gate_every_render_reports_the_same_information() -> Gate:
     gap = "diff_truncated"
     change = "PKGBUILD moved"
     suppressed = "R099"
+    expired = "H029"
     dependency = "render-parity-dep"
     fact = PackageFact(
         package_name="render-parity", old_version="1.0", new_version="1.1",
@@ -266,7 +267,9 @@ def gate_every_render_reports_the_same_information() -> Gate:
                                     reason="curlpipe", file="PKGBUILD", line=4)],
         final_score=25, risk="Medium", coverage_gaps=[gap], changes=[change],
         suppressed_rules=[{"rule_id": suppressed, "severity": "LOW",
-                           "override_reason": "known"}],
+                           "override_reason": "known",
+                           "indicator_corroborated": True}],
+        overrides_expired=[expired],
         dependencies=[DependencyReport(name=dependency, depth=1, score=40,
                                        risk="High", risk_label="High",
                                        finding_count=1)],
@@ -302,6 +305,8 @@ def gate_every_render_reports_the_same_information() -> Gate:
     required = {
         "the coverage gap (B2)": (GAP_REASONS[gap], gap),
         "the suppressed rule (B5)": (suppressed,),
+        "the corroboration marker (B5)": ("indicator corroborated",),
+        "the expired override (B5)": (expired,),
         "the change summary (B7)": (change,),
         # A dependency is a full analysis with its own band, so a surface
         # that hides it is hiding a result and not a detail.

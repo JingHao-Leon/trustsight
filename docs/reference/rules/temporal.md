@@ -2,6 +2,8 @@
 
 # Temporal Context
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/temporal.md).
+
 How recently the package or this revision appeared. These read git commit
 timestamps on the AUR repository and nothing else, so none of them needs a
 diff. H020 and H021 also fire on first-seen packages through

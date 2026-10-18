@@ -2,6 +2,8 @@
 
 # Integrity and Verification
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/integrity.md).
+
 A verification the recipe carried is weakened, removed, or cannot cover
 what it claims to. The checksum rules (H001, H002, C001 to C005) and the
 signature rules (H024, H078) are the core; the build-flag rules

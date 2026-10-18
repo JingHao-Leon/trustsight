@@ -25,12 +25,18 @@ __all__ = [
     "all_campaigns",
     "expired_unannounced",
     "mark_expiry_announced",
+    "reactivation_pressure",
 ]
 
 #: Default lifetime, in observations.  Small on purpose: tens of recorded
 #: analyses, not days.  A TTL measured in observations is what makes expiry
 #: real rather than a policy someone forgets to enforce.
 DEFAULT_TTL_OBSERVATIONS = 40
+
+#: Default minimum spacing, in observations, between re-activations of the
+#: same campaign class.  A class that re-arms faster than this is still
+#: refreshed, but :func:`reactivation_pressure` reports it (M006).
+DEFAULT_MIN_REACTIVATION_OBSERVATIONS = 5
 
 #: Largest scope a campaign may store.  A scope comes from a corpus
 #: finding's members/targets, but bounding the stored row keeps a pathological
@@ -121,6 +127,19 @@ def _read_scope(raw, source: str) -> dict[str, list[str]]:
     return {"package_names": values}
 
 
+def _row_int(row, name: str, default: int = 0) -> int:
+    """*row*'s integer column *name*, or *default* when it is absent.
+
+    The re-activation columns were added after ``campaign_alerts`` shipped, so
+    a row read before the additive migration ran (or a hand-built test row)
+    may not carry them.
+    """
+    try:
+        return int(row[name])
+    except (IndexError, KeyError, TypeError, ValueError):
+        return default
+
+
 def _row_to_dict(row) -> dict:
     return {
         "campaign_id": row["campaign_id"],
@@ -130,6 +149,9 @@ def _row_to_dict(row) -> dict:
         "ttl_obs": int(row["ttl_obs"]),
         "expires_at_obs": int(row["activated_at_obs"]) + int(row["ttl_obs"]),
         "expiry_announced": int(row["expiry_announced"] or 0),
+        "activation_count": _row_int(row, "activation_count", 1),
+        "first_activated_at_obs": _row_int(row, "first_activated_at_obs"),
+        "last_activated_at_obs": _row_int(row, "last_activated_at_obs"),
     }
 
 
@@ -220,9 +242,13 @@ def activate_campaign(
         if existing is not None:
             conn.execute(
                 "UPDATE campaign_alerts SET scope_json = ?, source = ?,"
-                " activated_at_obs = ?, ttl_obs = ?, expiry_announced = 0"
+                " activated_at_obs = ?, ttl_obs = ?, expiry_announced = 0,"
+                " activation_count = activation_count + 1,"
+                " first_activated_at_obs = CASE WHEN first_activated_at_obs = 0"
+                "   THEN activated_at_obs ELSE first_activated_at_obs END,"
+                " last_activated_at_obs = ?"
                 " WHERE campaign_id = ?",
-                (payload, source, now, ttl, campaign_id),
+                (payload, source, now, ttl, now, campaign_id),
             )
             conn.commit()
             return True
@@ -249,8 +275,45 @@ def activate_campaign(
         conn.execute(
             "INSERT INTO campaign_alerts"
             " (campaign_id, scope_json, source, activated_at_obs, ttl_obs,"
-            "  expiry_announced) VALUES (?, ?, ?, ?, ?, 0)",
-            (campaign_id, payload, source, now, ttl),
+            "  expiry_announced, activation_count, first_activated_at_obs,"
+            "  last_activated_at_obs) VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)",
+            (campaign_id, payload, source, now, ttl, now, now),
         )
         conn.commit()
         return True
+
+
+def reactivation_pressure(min_interval_obs: int = 0) -> list[dict]:
+    """Campaign classes that re-armed faster than ``min_interval_obs``.
+
+    A class is a campaign's source rule id (``G005``, ``G001``).  Re-arming
+    the same class in quick succession is not evidence about any package: it
+    is the instrument's own state churning, which the spec calls out as an
+    M-family tool-health signal (M006).  The window is still refreshed - this
+    only *reports* the churn, it never blocks a re-activation.
+
+    A class is flagged when it re-armed more than once and the span between
+    its first and last activation is shorter than the interval allows for the
+    number of re-arms: ``(last - first) < min_interval * (count - 1)``.  An
+    interval of 0 disables the check.
+    """
+    interval = _safe_int(min_interval_obs, 0)
+    if interval <= 0:
+        return []
+    out: list[dict] = []
+    for campaign in all_campaigns():
+        count = int(campaign.get("activation_count", 1) or 1)
+        if count <= 1:
+            continue
+        first = int(campaign.get("first_activated_at_obs", 0) or 0)
+        last = int(campaign.get("last_activated_at_obs", 0) or 0)
+        span = last - first
+        if first and span < interval * (count - 1):
+            out.append({
+                "campaign_id": campaign["campaign_id"],
+                "source": campaign.get("source", ""),
+                "count": count,
+                "span": span,
+                "min_interval": interval,
+            })
+    return out

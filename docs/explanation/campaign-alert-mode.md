@@ -70,7 +70,8 @@ to mean both "there was no campaign" and "the campaign ended".
 - **`[alerts] campaign_ttl_observations`** keeps the default lifetime short -
   tens of observations, not thousands.
 - A campaign class that re-arms far too often is surfaced as a tool-health
-  note, not silently re-armed.
+  note (`M006`, weight 0), not silently re-armed. The window is still
+  refreshed; only the churn is reported.
 
 None of this state is stored in a report or a config fingerprint. Like
 recorded history, it is **instrument state**: it changes what TrustSight

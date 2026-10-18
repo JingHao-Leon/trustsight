@@ -80,6 +80,7 @@ def run_gates() -> list[Gate]:
         gate_alert_counts_reconcile(),
         gate_campaign_state_is_instrument_state(),
         gate_campaign_expiry_is_structural(),
+        gate_campaign_reactivation_is_bounded(),
         gate_campaign_points_are_attributed(),
         gate_elevation_is_attributed(),
         gate_escalation_is_one_notch(),
@@ -312,6 +313,7 @@ from scripts.gates._parity import (
 )
 from scripts.gates._immune import (
     gate_campaign_expiry_is_structural,
+    gate_campaign_reactivation_is_bounded,
     gate_corroborated_suppression_is_terminal_visible,
     gate_campaign_points_are_attributed,
     gate_campaign_state_is_instrument_state,

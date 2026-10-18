@@ -2,6 +2,8 @@
 
 # Naming and Dependencies
 
+Where these rules come from and what a finding means: [Rule Nature](../nature/naming-and-dependency.md).
+
 A name is claimed, or a dependency set changes, in a way that redirects
 what gets installed. H029 covers the package's own name impersonating a
 popular one; D002 covers the same attack against a dependency name; H064

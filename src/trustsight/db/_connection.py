@@ -438,7 +438,14 @@ def init_db():
                 source TEXT NOT NULL DEFAULT '',
                 activated_at_obs INTEGER NOT NULL,
                 ttl_obs INTEGER NOT NULL,
-                expiry_announced INTEGER NOT NULL DEFAULT 0
+                expiry_announced INTEGER NOT NULL DEFAULT 0,
+                /* Re-activation pressure (M006): a class that re-arms faster
+                   than [alerts] campaign_min_reactivation_observations is
+                   still refreshed, but the count and span let the pipeline
+                   report the over-frequent re-arming as a tool-health note. */
+                activation_count INTEGER NOT NULL DEFAULT 1,
+                first_activated_at_obs INTEGER NOT NULL DEFAULT 0,
+                last_activated_at_obs INTEGER NOT NULL DEFAULT 0
             );
 
             /* Class D adoption feed: one row per package per corpus cycle.
@@ -552,6 +559,13 @@ _ADDED_COLUMNS = {
     # path can scan it for an unconditional root fetch/write at install time.
     "pkgbuild_snapshots": {
         "install_text": "TEXT",
+    },
+    # M006 re-activation pressure: how often a campaign class has re-armed and
+    # the observation span over which it did so.
+    "campaign_alerts": {
+        "activation_count": "INTEGER NOT NULL DEFAULT 1",
+        "first_activated_at_obs": "INTEGER NOT NULL DEFAULT 0",
+        "last_activated_at_obs": "INTEGER NOT NULL DEFAULT 0",
     },
 }
 
