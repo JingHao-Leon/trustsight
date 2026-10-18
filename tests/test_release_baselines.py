@@ -68,3 +68,46 @@ def test_baseline_workflow_requires_and_signs_the_corpus_family():
     assert "--corpus /tmp/release-assets/baseline-corpus.tar.zst" in workflow
     assert "--seed-archive /tmp/release-assets/baseline-seed.tar.gz" in workflow
     assert "if: steps.check_seed.outputs.needs_build" not in workflow
+
+
+def test_release_builder_ioc_only_emits_pairs_without_the_baseline_family(
+        tmp_path, monkeypatch):
+    """The ioc-* channel release carries only signed IOC pairs.
+
+    No seed, corpus or ``baseline-manifest.json`` may land on an ioc release:
+    a seed or corpus fetch resolves ``baseline-*`` tags and would 404 here.
+    """
+    builder = _release_builder()
+    key = Ed25519PrivateKey.generate()
+    key_path = tmp_path / "signing-key"
+    key_path.write_bytes(key.private_bytes_raw())
+    iocs = tmp_path / "incident.json"
+    iocs.write_text(json.dumps([{"type": "domain", "value": "evil.example"}]))
+    out = tmp_path / "ioc-assets"
+
+    monkeypatch.setattr("sys.argv", [
+        "build_release_baselines.py", "--out", str(out), "--sign-key", str(key_path),
+        "--ioc-only", "--ioc", str(iocs), "--ioc-source", "curator",
+        "--ioc-incident", "incident",
+    ])
+    assert builder.main() == 0
+
+    names = {path.name for path in out.iterdir() if not path.name.endswith(".sig")}
+    assert names == {
+        "baseline-ioc-curator-incident-manifest.json",
+        "baseline-ioc-curator-incident-iocs.jsonl",
+    }
+    for name in names:
+        assert verify_artifact(
+            (out / name).read_bytes(),
+            (out / f"{name}.sig").read_bytes(),
+            key.public_key().public_bytes_raw(),
+        )
+
+
+def test_ioc_workflow_publishes_only_to_the_ioc_channel():
+    workflow = (ROOT / ".github" / "workflows" / "ioc.yml").read_text()
+    assert "--ioc-only" in workflow
+    assert "baseline-ioc-*" in workflow
+    assert "baseline-seed.tar.gz" not in workflow
+    assert "baseline-corpus.tar.zst" not in workflow

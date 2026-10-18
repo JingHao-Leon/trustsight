@@ -520,7 +520,7 @@ Inspect and migrate the hashed maintainer seed.
 trustsight seed info
 trustsight seed stats
 trustsight seed migrate [--from-backup]
-trustsight seed fetch [--tag TAG] [--key PATH]
+trustsight seed fetch [--tag TAG] [--channel OWNER/REPO] [--key PATH]
 ```
 
 ### Subcommands
@@ -537,6 +537,7 @@ trustsight seed fetch [--tag TAG] [--key PATH]
 | Flag | Description |
 |------|-------------|
 | `--tag` | Fetch a specific release tag instead of the latest release. Baseline assets default to the newest `baseline-*` release, or the configured [`[seed] baseline_tag`](configuration.md#seed) when discovery fails. |
+| `--channel` | Follow this release channel (`owner/repo`) for one run instead of [`[release] channel`](configuration.md#release). A non-official channel is verified against its own pinned key and warns that you are trusting that publisher. |
 | `--key` | Verify against this ed25519 public key file instead of the pinned key shipped in the package. |
 | `--from-backup` | Migrate from the `maintainers_deprecated_backup` table left behind after the automatic v0.12.0 migration. |
 | `--json` | Output JSON. |
@@ -668,7 +669,7 @@ Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snaps
 
 ```
 trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--json]
-trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--json]
+trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--auto-pull-baselines] [--auto-pull-iocs] [--json]
 trustsight full-aur --transitions PACKAGE [--limit N] [--json]
 ```
 
@@ -683,6 +684,8 @@ trustsight full-aur --transitions PACKAGE [--limit N] [--json]
 | `--watch` | Keep running cycles on an interval until interrupted. |
 | `--interval SECONDS` | Seconds between `--watch` cycles. Defaults to `[limits] watch_interval` (3600) and is clamped to `[limits] watch_min_interval` (60). |
 | `--cycles N` | Stop `--watch` after N cycles. `0`, the default, means run until interrupted. |
+| `--auto-pull-baselines` | With `--watch`, after each cycle check the followed baseline channel and pull and import a newer `baseline-seed.tar.gz` (verified against the channel's pinned key). Off by default. Cannot be combined without `--watch`; exits 2. |
+| `--auto-pull-iocs` | With `--watch`, after each cycle pull and import newer IOC feeds (verified against the pinned distribution key). Off by default. Cannot be combined without `--watch`; exits 2. |
 | `--notify URL` | POST each cycle's new alerts as a JSON document to this webhook, on single-shot cycles and `--watch` alike. Overrides `[notify] webhook` in `config.toml`. A dead receiver is logged and swallowed; a quiet cycle sends nothing. |
 | `--over-threshold N` | Alerting bar: packages scoring strictly above N land in the cycle's `over_threshold` list, which the webhook document carries. Default 35, the benign corpus's measured p95. |
 | `--since YYYY-MM-DD` | Replay change history from this date: each cycle analyses the packages whose AUR `LastModified` falls in one day of AUR time, skipping empty days, and joins the live delta stream when caught up. The cursor persists in the database, so a replay resumes across restarts. Sweep and adoption-feed machinery stay out of replay cycles. |
@@ -787,7 +790,7 @@ trustsight ioc export [<dir>] [--source SOURCE] [--json]
 |------------|-------------|
 | `sources` | Show configured and imported baseline sources. |
 | `import` | Import a baseline directory. Replaces any existing rows for the same source. |
-| `update` | Re-import baselines from local directories, or, when no `--path` is given, update every enabled feed whose `url` is a release-channel URL: the `baseline-ioc-<prefix>-manifest.json` / `-iocs.jsonl` pair is downloaded, verified against the pinned distribution key, and imported (curator-key verification still applies). Feeds with any other URL are refused. `--federation URL` instead fetches a publisher's `manifest.json`/`iocs.jsonl` and verifies them against `--publisher-key`. |
+| `update` | Re-import baselines from local directories, or, when no `--path` is given, update every enabled feed whose `url` is a release-channel URL: the `baseline-ioc-<prefix>-manifest.json` / `-iocs.jsonl` pair is downloaded from the newest `ioc-*` release (or the newest `baseline-*` release before the channel split, or a feed's pinned `tag`), verified against the pinned distribution key, and imported (curator-key verification still applies). A feed whose `url` is any other `http(s)` URL is read as a publisher's federation directory (`manifest.json`/`iocs.jsonl`) and verified against the feed's own pinned `key`; a feed with no `key` is refused. `--federation URL` instead fetches a publisher's `manifest.json`/`iocs.jsonl` and verifies them against `--publisher-key`. |
 | `list` | List active IOC entries, optionally filtered by source or type. |
 | `export` | Write the current IOC database to a baseline directory, or with `--json` and no directory, print the merged IOC view to stdout for debugging. |
 
@@ -841,7 +844,7 @@ The output names which stores were searched. An empty corpus reports that nothin
 Download, verify and import the signed corpus baseline from the release channel.
 
 ```
-trustsight corpus fetch [--tag TAG] [--yes] [--json]
+trustsight corpus fetch [--tag TAG] [--channel OWNER/REPO] [--yes] [--json]
 ```
 
 The corpus baseline ships as `baseline-corpus.tar.zst` on the newest
@@ -865,6 +868,7 @@ under a different salt are skipped rather than re-namespaced.
 | Flag | Description |
 |------|-------------|
 | `--tag` | Fetch from a specific release tag instead of the newest `baseline-*` release. |
+| `--channel` | Follow this release channel (`owner/repo`) for one run instead of [`[release] channel`](configuration.md#release). A non-official channel is verified against its own pinned key and warns that you are trusting that publisher. |
 | `--yes` | Import without asking, even into an existing non-empty corpus. Without it, importing into a non-empty corpus prompts first; declining exits 2. |
 | `--json` | Print the plan and the import counts as JSON, without prompting. |
 

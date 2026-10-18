@@ -3,6 +3,7 @@ import tomllib
 from trustsight.config import (
     GETENT_ENUMERATION_FRAGMENT,
     configured_baseline_tag,
+    configured_ioc_tag,
     ensure_default_configs,
     load_config,
     load_domains,
@@ -172,6 +173,31 @@ def test_configured_baseline_tag_reads_without_creating_a_config(tmp_path, monke
 
     (cfg_dir / "config.toml").write_text('[seed]\nbaseline_tag = ""\n')
     assert configured_baseline_tag() is None
+
+
+def test_configured_ioc_tag_reads_without_creating_a_config(tmp_path, monkeypatch):
+    """The dedicated IOC channel's fallback tag, read-only.
+
+    An unset or empty ``[baselines.ioc] tag`` means "resolve the live
+    channel"; an explicit value pins it.  The lookup never creates a config.
+    """
+    from trustsight.config import DEFAULT_IOC_TAG
+
+    cfg_dir = tmp_path / ".config" / "trustsight"
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)
+
+    assert configured_ioc_tag() == DEFAULT_IOC_TAG
+    assert DEFAULT_IOC_TAG is None  # ships unset: resolve, do not pin
+    assert not cfg_dir.exists()  # the lookup created nothing
+
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.toml").write_text(
+        '[baselines.ioc]\ntag = "ioc-2026-10-18"\n'
+    )
+    assert configured_ioc_tag() == "ioc-2026-10-18"
+
+    (cfg_dir / "config.toml").write_text('[baselines.ioc]\ntag = ""\n')
+    assert configured_ioc_tag() is None
 
 
 def test_load_config_bucket_weights(tmp_path, monkeypatch):

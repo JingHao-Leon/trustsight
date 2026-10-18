@@ -49,14 +49,24 @@ key swap cannot be silent.
 ### The release channel
 
 Every baseline the tool consumes at runtime is distributed as a release asset
-named with the `baseline-` prefix, and **a channel release** (tag
-`baseline-<date>`) ships the whole family. Channel releases are kept apart
-from software releases: a `vX.Y.Z` tag carries the program and its notes,
-never baseline assets, and the tool discovers the newest asset-bearing
-`baseline-*` release through the GitHub API, falling back to the configured
-[`[seed] baseline_tag`](configuration.md#seed) when the API is unreachable (and
-refusing when that is empty). `latest` is never the fallback: it is a `v*`
-release and carries no baseline assets. The
+named with the `baseline-` prefix. **A baseline channel release** (tag
+`baseline-<date>`) ships the bulk family (seed, corpus, IOC pairs and the
+inventory), and **a dedicated IOC channel release** (tag `ioc-<date>`) ships
+only the IOC pairs so a time-sensitive indicator set can be republished without
+a full baseline cut. Both are kept apart from software releases: a `vX.Y.Z` tag
+carries the program and its notes, never baseline assets.
+
+The tool discovers the newest asset-bearing release per channel through the
+GitHub API: the seed and corpus resolve the newest `baseline-*` release, and the
+IOC pairs resolve the newest `ioc-*` release. The two namespaces never mix; a
+seed or corpus fetch matches only `baseline-*`, so it can never be pointed at an
+`ioc-*` release. When the API is unreachable the configured fallback is used,
+[`[seed] baseline_tag`](configuration.md#seed) for the baseline family and
+[`[baselines.ioc] tag`](configuration.md#baselinesioc) for the IOC pairs (and
+when the IOC fallback is empty and no `ioc-*` release exists yet, the pairs fall
+back to the newest `baseline-*` release, where they originally shipped);
+discovery and fallback both refuse rather than guess. `latest` is never the
+fallback: it is a `v*` release and carries no baseline assets. The
 [publishing guide](../contributing/publishing-baselines.md) documents the
 cadence and `seed fetch --tag` for pinning.
 
@@ -68,6 +78,10 @@ cadence and `seed fetch --tag` for pinning.
 | `baseline-corpus.tar.zst` | the corpus baseline artifact | downloaded and imported with `trustsight import-baseline` |
 | `baseline-manifest.json` | per-asset SHA-256, size and signature, plus the public key used | release inventory |
 
+The seed, corpus and `baseline-manifest.json` live only on a `baseline-<date>`
+release; the IOC pairs live on an `ioc-<date>` release (or, before the channel
+split, on a `baseline-<date>` release).
+
 Every asset ships with a detached `.sig` sibling: the raw 64-byte Ed25519
 signature over the **exact asset bytes**, under the pinned distribution key.
 The bounded asset bytes must be downloaded before that signature can be
@@ -76,6 +90,21 @@ used. A download that does not verify is refused (`ReleaseSignatureError`).
 `scripts/build_release_baselines.py` assembles and signs the family, and
 self-verifies every signature with the program's own verifier before it
 writes, so it cannot emit a release the tool would refuse.
+
+### Following another channel
+
+The official channel (`emiliano-go/trustsight`) is the default and is verified
+against the distribution key pinned in the package. To follow a different
+publisher, set [`[release] channel`](configuration.md#release) to an
+`owner/repo` slug and pin that publisher's ed25519 key in
+[`[release] key`](configuration.md#release) (64 hex characters or a path to a
+raw key file); `seed fetch --channel owner/repo` and
+`corpus fetch --channel owner/repo` do the same for one run. The key is the
+whole trust decision: a non-official channel is verified against *its* key, and
+a non-official channel with no pinned key is refused rather than verified
+against the official key. Every import from a non-official channel prints a
+warning naming the channel and its key fingerprint, so trusting a third party
+is never silent.
 
 ### Building and importing a signed corpus baseline
 

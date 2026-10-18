@@ -1243,6 +1243,8 @@ def run_watch(
     notify_url: Optional[str] = None,
     over_threshold: Optional[int] = None,
     since: Optional[int] = None,
+    auto_pull_baselines: bool = False,
+    auto_pull_iocs: bool = False,
 ) -> list[CycleResult]:
     """Run corpus cycles on an interval until interrupted.
 
@@ -1365,6 +1367,17 @@ def run_watch(
                 # on the channel unambiguously means the watcher is dead
                 # rather than merely quiet.
                 _log("  heartbeat delivered")
+            # Data freshness, checked AFTER the scan: a newer baseline seed or
+            # IOC set is pulled once and then recorded, so the next cycle sees
+            # nothing new until the channel moves again.  Best-effort: a
+            # failed pull is logged and the watch continues.
+            if auto_pull_baselines or auto_pull_iocs:
+                from ..channels import auto_pull
+
+                for note in auto_pull(
+                    baselines=auto_pull_baselines, iocs=auto_pull_iocs
+                ):
+                    _log(f"  {note}")
             if cycles and len(results) >= cycles:
                 break
             # A backfill is a queue, not a schedule: the interval governs the

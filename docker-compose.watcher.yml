@@ -17,6 +17,10 @@ services:
     container_name: trustsight-watch
     command: ["full-aur", "--watch", "--interval", "1800"]
     restart: unless-stopped
+    # Re-fetch :latest on every `up`.  Docker keeps an existing :latest image
+    # and will not re-pull the tag on its own, so without this a host silently
+    # runs the version it first pulled, however far behind the channel moves.
+    pull_policy: always
     volumes:
       - trustsight-data:/home/ts/.local/share/trustsight
       - ./trustsight-config:/home/ts/.config/trustsight:ro

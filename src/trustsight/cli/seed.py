@@ -1,8 +1,6 @@
 """Commands for inspecting and managing the hashed maintainer seed."""
 
 import json
-import shutil
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,7 +16,6 @@ from ..db import (
     _hash_maintainer_value,
     get_connection,
     get_metadata,
-    import_seed,
     init_db,
     seed_observation_count,
 )
@@ -105,6 +102,10 @@ def seed_fetch(
     tag: str | None = typer.Option(
         None, "--tag", help="Fetch a specific release tag instead of the latest"
     ),
+    channel: str | None = typer.Option(
+        None, "--channel",
+        help="Follow this release channel (owner/repo) instead of [release] channel",
+    ),
     key: str | None = typer.Option(
         None, "--key", help="Path to the pinned ed25519 public key (shipped key by default)"
     ),
@@ -112,12 +113,15 @@ def seed_fetch(
 ):
     """Download, verify and import the signed seed release asset.
 
-    The seed ships as ``baseline-seed.tar.gz`` in the TrustSight release
+    The seed ships as ``baseline-seed.tar.gz`` in the followed release
     channel together with a detached Ed25519 signature.  The download is
-    verified against the pinned distribution key before anything is
-    imported; a mismatch is a refusal, not a warning.
+    verified against that channel's pinned key before anything is imported; a
+    mismatch is a refusal, not a warning.  ``--channel`` follows a
+    non-official ``owner/repo`` channel for this run, which must be paired
+    with its key in config; the import then warns that you are trusting that
+    publisher.
     """
-    from .. import release
+    from .. import channels, release
 
     if release.offline():
         msg = "The release channel is disabled (TRUSTSIGHT_OFFLINE is set)."
@@ -128,16 +132,7 @@ def seed_fetch(
         raise typer.Exit(code=2)
 
     try:
-        with download_progress(
-            "Downloading baseline-seed.tar.gz...",
-            enabled=use_rich_progress() and not json_output,
-        ) as on_download:
-            data = release.fetch_verified_asset(
-                "baseline-seed.tar.gz",
-                tag=tag,
-                pubkey_path=Path(key) if key else None,
-                on_progress=on_download,
-            )
+        active_channel = release.active_baseline_channel(channel)
     except release.ReleaseError as exc:
         msg = f"Seed fetch refused: {exc}"
         if json_output:
@@ -146,20 +141,27 @@ def seed_fetch(
             _print_colored(msg, "red", stderr=True)
         raise typer.Exit(code=2)
 
-    tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-seed-fetch-"))
-    try:
-        path = tmp_dir / "baseline-seed.tar.gz"
-        path.write_bytes(data)
-        stats = import_seed(path)
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+    def progress(description: str):
+        return download_progress(
+            description, enabled=use_rich_progress() and not json_output
+        )
 
-    result = {
-        "status": "ok",
-        "tag": tag or "latest",
-        "url": release.asset_url("baseline-seed.tar.gz", tag),
-        **stats,
-    }
+    try:
+        stats = channels.pull_baseline_seed(
+            channel=active_channel,
+            tag=tag,
+            progress=progress,
+            pubkey_path=Path(key) if key else None,
+        )
+    except release.ReleaseError as exc:
+        msg = f"Seed fetch refused: {exc}"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+
+    result = {"status": "ok", **stats}
     if json_output:
         typer.echo(json.dumps(result, indent=2))
     else:

@@ -188,6 +188,20 @@ This table was named `[experimental_rules]` before the rename. The old name is s
 | `auto_import` | bool | `true` | On an eligible first CLI `review` or `inspect`, optionally import the novelty seed when the database has neither a seed nor analysis history. The seed lives on the release channel as `baseline-seed.tar.gz`; the fetch verifies it and skips silently when offline or verification fails. Set this to `false` to use structural detection without seeded context. Other commands do not fetch it automatically. See [`trustsight seed-db`](cli.md#trustsight-seed-db). |
 | `baseline_tag` | string | `baseline-2026-09-24` | Fallback release tag for the seed when the GitHub releases API cannot be reached (offline or rate-limited). The seed lives only on `baseline-*` releases, so the default is never `latest`. Bumped in the release that publishes a new baseline; set it to `""` to disable the fallback so an unreachable API refuses instead. |
 
+### `[release]`
+
+The baseline release channel TrustSight follows for its signed seed and
+corpus baselines. The official channel (`emiliano-go/trustsight`) is the
+default and is verified against the distribution key pinned in the package.
+Pointing this at another repository makes that publisher's key the trust
+anchor, so a non-official import warns every time and a channel with no
+configured `key` is refused rather than verified against the official key.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `channel` | string | `""` | Baseline release channel as `owner/repo`. Empty means the official channel (`emiliano-go/trustsight`). A non-official channel needs `key`. |
+| `key` | string | `""` | The pinned ed25519 public key for a non-official `channel`: either 64 hex characters or a path to a raw key file. Ignored for the official channel, which uses the key shipped in the package. A non-official channel with no `key` is refused. |
+
 ### `[baselines]`
 
 Container for optional federated baseline sources. Currently only the IOC
@@ -200,6 +214,7 @@ replace local structural detection or alter rules, weights, or thresholds.
 |-----|------|---------|-------------|
 | `enabled` | bool | `true` | Run the IOC baseline match stage during analysis. |
 | `sources` | array of strings | `[]` | Baseline source names to consult. An empty list means "all imported sources". |
+| `tag` | string | `""` | Fallback release tag for the dedicated IOC channel when the GitHub releases API cannot be reached (offline or rate-limited). Empty means "resolve the newest `ioc-*` release, then the newest `baseline-*` release". Set it to pin an exact channel, e.g. `"ioc-2026-10-18"`. A feed's own `tag` overrides this. |
 
 #### `[[baselines.ioc.feeds]]`
 
@@ -208,17 +223,23 @@ no default feeds; operators add trusted sources here.  A feed whose `url`
 names the TrustSight [release channel](baseline-keys.md#the-release-channel)
 is updated automatically: `ioc update` downloads the pair
 `baseline-ioc-<prefix>-manifest.json` and `baseline-ioc-<prefix>-iocs.jsonl`
-(plus their detached signatures), verifies both against the pinned
-distribution key, then imports with the curator-key check the normal
-`ioc import` path performs.  Any other `url` is refused with an explicit
-"not implemented" error; there is no scheme in which an unverified remote
-baseline is imported.
+(plus their detached signatures) from the newest `ioc-*` release (the
+dedicated IOC channel), verifies both against the pinned distribution key,
+then imports with the curator-key check the normal `ioc import` path performs.
+When no `ioc-*` release exists yet the pair is resolved from the newest
+`baseline-*` release, where it originally shipped.  Any other `http(s)` `url` is
+read as a publisher's federation directory (`manifest.json` + `iocs.jsonl`) and
+verified against the feed's own pinned `key`; a feed with no `key` is refused,
+and a non-`http(s)` `url` is refused with an explicit error. The import is the
+same curator-key-checked `ioc import` path in every case.
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `name` | string | Feed identifier (a `[a-z0-9.-]` slug by default, or set `asset`). |
-| `url` | string | Feed URL.  Release-channel URLs (`https://github.com/emiliano-go/trustsight/releases`) trigger verified updates. |
+| `url` | string | Feed URL.  A release-channel URL (`https://github.com/emiliano-go/trustsight/releases`, or the configured `[release] channel`) triggers a verified channel update. Any other `http(s)` URL is a federation directory. |
 | `asset` | string | Optional asset prefix override.  Defaults to `name`; the assets fetched are `baseline-ioc-<prefix>-manifest.json` and `baseline-ioc-<prefix>-iocs.jsonl`. |
+| `tag` | string | Optional release tag override.  Pins the exact channel release for this feed's pair, overriding `[baselines.ioc] tag` and channel discovery.  Must be `[A-Za-z0-9._-]`. |
+| `key` | string | Ed25519 public key pinning a non-release-channel publisher (64 hex characters or a path to a raw key file). Required for a federation `url`; ignored for a release-channel `url`, which uses the channel's key. |
 | `enabled` | bool | Whether the feed is active. |
 
 ### `[depth]`
@@ -452,13 +473,14 @@ HIGH. The shipped file is empty, and a miss is uninformative.
 
 ## Environment variables
 
-TrustSight reads ten environment variables. Everything else that changes
+TrustSight reads sixteen environment variables. Everything else that changes
 behaviour is a config key or a command flag.
 
 | Variable | Values | Effect |
 |----------|--------|--------|
 | `TRUSTSIGHT_OFFLINE` | `1`, `true`, `yes` (case-insensitive, surrounding whitespace ignored); anything else is off | Forbids outbound requests to the release channel. |
-| `TRUSTSIGHT_NO_UPDATE_CHECK` | `1`, `true`, `yes` (case-insensitive); anything else is off | Disables the once-a-command "a newer release exists" notice. |
+| `TRUSTSIGHT_NO_UPDATE_CHECK` | `1`, `true`, `yes` (case-insensitive); anything else is off | Disables the once-a-command "a newer release exists" notice, and with it the baseline/IOC pending notice below. |
+| `TRUSTSIGHT_NO_PENDING_CHECK` | `1`, `true`, `yes` (case-insensitive); anything else is off | Disables only the once-a-command "a newer baseline/IOC is available" notice, keeping the program-version notice. |
 | `NO_COLOR` | Any non-empty value | Disables Rich output; terminal and pipe both get the plain renderer. |
 | `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |

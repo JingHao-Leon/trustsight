@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
@@ -168,76 +168,29 @@ def ioc_import(
         )
 
 
-_ASSET_PREFIX_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
-
-
 def _update_feed(feed: dict, show_progress: bool = False) -> dict:
-    """Update one configured feed from the release channel, verifiably.
+    """Update one configured feed from its channel, verifiably.
 
-    A feed whose ``url`` names the TrustSight release channel is fetched as
-    the pair ``baseline-ioc-<prefix>-manifest.json`` and
-    ``baseline-ioc-<prefix>-iocs.jsonl``, each with its detached signature,
-    both verified against the pinned distribution key before the curator
-    signature inside the manifest is checked by ``import_baseline``.  Any
-    other URL is refused: there is no scheme in which an unverified remote
-    baseline is imported.
+    A feed whose ``url`` names a followed release channel is fetched as the
+    pair ``baseline-ioc-<prefix>-manifest.json`` / ``-iocs.jsonl`` from the
+    newest ``ioc-*`` release (or a feed ``tag``); the detached signatures are
+    verified against that channel's pinned key.  Any other ``http(s)`` URL is
+    read as a publisher's federation directory and verified against the feed's
+    own ``key``.  Either way the import is refused unless every byte is
+    verified.  The work itself lives in :mod:`trustsight.channels`, shared with
+    the watcher's ``--auto-pull-iocs``; this only supplies the progress bar.
 
     *show_progress* draws one download bar per asset on stderr; the default
     keeps direct calls (and tests) silent.
     """
-    from ..ioc_baseline import (
-        InvalidSignatureError,
-        MalformedBaselineError,
-        UnsignedBaselineError,
-        import_baseline,
-    )
+    from .. import channels
 
-    from .. import release
+    progress = None
+    if show_progress:
+        def progress(description: str):
+            return download_progress(description, enabled=True)
 
-    name = feed.get("name") or ""
-    url = feed.get("url") or ""
-    prefix = feed.get("asset") or name
-    if not release.is_release_url(url):
-        return {
-            "feed": name,
-            "status": "error",
-            "error": (
-                "unsupported feed URL; only the TrustSight release channel is "
-                "implemented (use 'ioc import <dir>' for local baselines)"
-            ),
-        }
-    if not prefix or not _ASSET_PREFIX_RE.match(prefix):
-        return {
-            "feed": name,
-            "status": "error",
-            "error": f"invalid asset prefix {prefix!r}; use [a-z0-9.-]",
-        }
-    manifest_asset = f"baseline-ioc-{prefix}-manifest.json"
-    iocs_asset = f"baseline-ioc-{prefix}-iocs.jsonl"
-    tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-ioc-fetch-"))
-    try:
-        with download_progress(
-            f"Downloading {manifest_asset}...", enabled=show_progress
-        ) as on_download:
-            (tmp_dir / "manifest.json").write_bytes(
-                release.fetch_verified_asset(manifest_asset, on_progress=on_download)
-            )
-        with download_progress(
-            f"Downloading {iocs_asset}...", enabled=show_progress
-        ) as on_download:
-            (tmp_dir / "iocs.jsonl").write_bytes(
-                release.fetch_verified_asset(iocs_asset, on_progress=on_download)
-            )
-        # The bytes were already verified against the pinned key by
-        # `fetch_verified_asset`; the manifest's own key is accepted here
-        # only because that check already happened on the way in.
-        result = import_baseline(tmp_dir, source_name=name, trust_manifest_key=True)
-        return {"feed": name, "status": "ok", "url": release.asset_url(manifest_asset), **result}
-    except (release.ReleaseError, UnsignedBaselineError, InvalidSignatureError,
-            MalformedBaselineError, FileNotFoundError) as exc:
-        return {"feed": name, "status": "error", "error": str(exc)}
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+    return channels.pull_ioc_feed(feed, progress=progress)
 
 
 def _update_federation(
@@ -250,7 +203,7 @@ def _update_federation(
     (hashed indicators only, the curator signature inside the manifest is
     checked by ``import_baseline``).
     """
-    from .. import release
+    from .. import channels, release
     from ..ioc_baseline import (
         InvalidSignatureError,
         MalformedBaselineError,
@@ -258,6 +211,9 @@ def _update_federation(
         import_baseline,
     )
 
+    # A federation publisher is by definition non-official: say so before any
+    # byte is fetched or imported.
+    print(channels.publisher_warning(base_url.rstrip("/")), file=sys.stderr)
     tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-ioc-federation-"))
     try:
         for asset, target in (("manifest.json", "manifest.json"),
@@ -293,9 +249,10 @@ def ioc_update(
 
     Without ``--path`` the command updates every enabled feed whose url is a
     TrustSight release channel URL: the ``baseline-ioc-*`` assets are
-    downloaded, verified against the pinned distribution key, and imported.
-    ``--federation URL`` fetches a publisher's ``manifest.json``/``iocs.jsonl``
-    from that base URL and verifies them against ``--publisher-key``.
+    downloaded from the newest ``ioc-*`` release, verified against the pinned
+    distribution key, and imported.  ``--federation URL`` fetches a
+    publisher's ``manifest.json``/``iocs.jsonl`` from that base URL and
+    verifies them against ``--publisher-key``.
     """
     from ..ioc_baseline import (
         InvalidSignatureError,

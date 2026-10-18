@@ -2,6 +2,20 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **A dedicated IOC release channel.** IOC pairs move off the bulk `baseline-*` family onto their own `ioc-<date>` releases so a time-sensitive indicator set can be republished without a baseline cut. `trustsight ioc update` resolves the newest `ioc-*` release (or a feed's pinned `tag`, or `[baselines.ioc] tag`), and falls back to the newest `baseline-*` release until the first `ioc-*` release exists; a seed or corpus fetch still matches only `baseline-*`, so it can never be pointed at an `ioc-*` release. A new `ioc.yml` workflow publishes the pairs with `build_release_baselines.py --ioc-only`. See [Publishing Baselines](contributing/publishing-baselines.md#the-dedicated-ioc-channel).
+- **A configurable baseline release channel.** A `[release]` section (`channel`, `key`) follows a baseline channel other than the shipped `emiliano-go/trustsight`, and `seed fetch`/`corpus fetch` take a `--channel owner/repo` override for one run. A non-official channel is verified against its own pinned ed25519 key (64 hex or a key file) and warns on every import that you are trusting that publisher; a non-official channel with no `key` is refused rather than verified against the official key.
+- **A once-a-command pending notice for baselines and IOCs.** Like the version notice, `trustsight` warns on stderr when a followed channel offers a `baseline-*` or `ioc-*` release the operator has not pulled yet, and stops once the pull is recorded. It is silent offline, never prompts, and is disabled with `TRUSTSIGHT_NO_PENDING_CHECK` (or the master `TRUSTSIGHT_NO_UPDATE_CHECK`).
+- **The watcher can pull data on its own.** `full-aur --watch --auto-pull-baselines --auto-pull-iocs` checks the followed channels after each cycle and pulls and imports a newer baseline seed and/or IOC feed, verified the same way the manual commands verify them. Off by default, and refused without `--watch`.
+- **Federation feeds for `ioc update`.** A feed whose `url` is not a release channel is now treated as a publisher's signed directory (`manifest.json` + `iocs.jsonl`), verified against the feed's own pinned `key`, instead of being refused as unimplemented.
+
+### Fixed
+
+- **A `release` event no longer publishes a `:latest` Docker image for a baseline/IOC tag.** The container publish job skipped non-version release tags so a data release does not rebuild the image; the watcher compose file also sets `pull_policy: always`, so an existing local `:latest` is re-pulled instead of silently reused.
+
 ## [0.21.0] - 2026-10-18
 
 ### Added

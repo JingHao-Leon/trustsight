@@ -22,12 +22,14 @@ from trustsight.db import get_connection, init_db
 def _the_channel_is_the_subject(monkeypatch):
     """Corpus fetch reaches the release channel, so opt out of offline mode."""
     monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
-    release._BASELINE_TAG_RESOLVED = False
-    release._BASELINE_TAG_CACHE = None
+    release._TAGS_RESOLVED.clear()
+    release._TAG_CACHE.clear()
     monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: None)
+    monkeypatch.setattr(release, "_resolve_ioc_tag", lambda: None)
     monkeypatch.setattr(
         release, "_configured_baseline_tag", lambda: "baseline-2026-08-10"
     )
+    monkeypatch.setattr(release, "_configured_ioc_tag", lambda: None)
 
 
 @pytest.fixture

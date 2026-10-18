@@ -35,15 +35,17 @@ def _the_channel_is_the_subject(monkeypatch):
     mock to exercise the baseline-tag path.
     """
     monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
-    # Reset the module-level cache so each test starts fresh.
-    release._BASELINE_TAG_RESOLVED = False
-    release._BASELINE_TAG_CACHE = None
-    # Nothing here may reach the API, and the configured fallback is pinned to
-    # a fixed tag so the tests never read (or create) the operator's config.
-    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: None)
+    # Reset the module-level tag cache so each test starts fresh.
+    release._TAGS_RESOLVED.clear()
+    release._TAG_CACHE.clear()
+    # Nothing here may reach the API, and the configured fallbacks are pinned to
+    # fixed tags so the tests never read (or create) the operator's config.
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda channel=None: None)
+    monkeypatch.setattr(release, "_resolve_ioc_tag", lambda channel=None: None)
     monkeypatch.setattr(
         release, "_configured_baseline_tag", lambda: "baseline-2026-08-10"
     )
+    monkeypatch.setattr(release, "_configured_ioc_tag", lambda: None)
 
 # ---------------------------------------------------------------------------
 # URL building
@@ -61,8 +63,14 @@ def test_asset_url_pins_a_tag_when_given():
     assert url.endswith("/download/v0.12.0/baseline-seed.tar.gz")
 
 
+def test_asset_url_refuses_a_tag_that_is_not_a_path_segment():
+    """A tag is a URL path segment; a slash or dot-dot never reaches the URL."""
+    with pytest.raises(release.ReleaseFetchError):
+        release.asset_url("baseline-seed.tar.gz", "../evil")
+
+
 def test_asset_url_discovers_baseline_tag_for_seed(monkeypatch):
-    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: "baseline-2026-08-10")
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda channel=None: "baseline-2026-08-10")
     url = release.asset_url("baseline-seed.tar.gz")
     assert url == (
         "https://github.com/emiliano-go/trustsight/releases"
@@ -77,7 +85,7 @@ def test_asset_url_falls_back_to_the_configured_tag(monkeypatch):
     ``v*`` release) can never serve it; the old fallback built a URL that
     404s the moment the unauthenticated releases API is rate-limited.
     """
-    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: None)
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda channel=None: None)
     monkeypatch.setattr(
         release, "_configured_baseline_tag", lambda: "baseline-2026-09-24"
     )
@@ -88,7 +96,7 @@ def test_asset_url_falls_back_to_the_configured_tag(monkeypatch):
 
 def test_asset_url_fails_closed_without_any_tag(monkeypatch):
     """No discovery and no fallback is a refusal, not a ``latest`` guess."""
-    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: None)
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda channel=None: None)
     monkeypatch.setattr(release, "_configured_baseline_tag", lambda: None)
     with pytest.raises(release.ReleaseFetchError):
         release.asset_url("baseline-seed.tar.gz")
@@ -97,10 +105,40 @@ def test_asset_url_fails_closed_without_any_tag(monkeypatch):
 def test_asset_url_ignores_baseline_discovery_for_non_baseline_assets(monkeypatch):
     """Non-baseline assets (e.g. source tarballs) always use /latest/."""
     called = []
-    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: (called.append(1) or "baseline-2026-08-10"))
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda channel=None: (called.append(1) or "baseline-2026-08-10"))
     url = release.asset_url("trustsight-0.15.6.tar.gz")
     assert called == []  # _resolve_baseline_tag was NOT called
     assert url.endswith("/latest/download/trustsight-0.15.6.tar.gz")
+
+
+def test_asset_url_resolves_the_dedicated_ioc_channel(monkeypatch):
+    """An ioc pair resolves the newest ioc-* release, never baseline-*."""
+    called = []
+    monkeypatch.setattr(release, "_resolve_ioc_tag", lambda channel=None: "ioc-2026-10-18")
+    monkeypatch.setattr(
+        release, "_resolve_baseline_tag", lambda channel=None: (called.append(1) or "baseline-2026-08-10"))
+    url = release.asset_url("baseline-ioc-emo-asa-2026-manifest.json")
+    assert url.endswith(
+        "/download/ioc-2026-10-18/baseline-ioc-emo-asa-2026-manifest.json")
+    assert called == []  # the baseline channel was NOT consulted
+
+
+def test_asset_url_uses_the_configured_ioc_tag_when_discovery_fails(monkeypatch):
+    monkeypatch.setattr(release, "_resolve_ioc_tag", lambda channel=None: None)
+    monkeypatch.setattr(release, "_configured_ioc_tag", lambda: "ioc-2026-10-01")
+    url = release.asset_url("baseline-ioc-emo-asa-2026-iocs.jsonl")
+    assert url.endswith(
+        "/download/ioc-2026-10-01/baseline-ioc-emo-asa-2026-iocs.jsonl")
+
+
+def test_asset_url_falls_back_to_baseline_channel_for_ioc_pairs(monkeypatch):
+    """Before the first ioc-* release the pair still ships on baseline-*."""
+    monkeypatch.setattr(release, "_resolve_ioc_tag", lambda channel=None: None)
+    monkeypatch.setattr(release, "_configured_ioc_tag", lambda: None)
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda channel=None: "baseline-2026-09-24")
+    url = release.asset_url("baseline-ioc-emo-asa-2026-manifest.json")
+    assert url.endswith(
+        "/download/baseline-2026-09-24/baseline-ioc-emo-asa-2026-manifest.json")
 
 
 def test_is_release_url_accepts_only_the_channel():
@@ -465,13 +503,14 @@ def test_update_feed_fetches_verifies_and_imports(tmp_path, monkeypatch):
     assert [r["value"] for r in rows] == ["evil.example"]
 
 
-def test_update_feed_refuses_a_foreign_url(tmp_path, monkeypatch):
+def test_update_feed_refuses_a_foreign_url_without_a_key(tmp_path, monkeypatch):
+    """A non-release URL is a federation directory; without a pinned key it is refused."""
     from trustsight.cli import ioc as ioc_mod
 
     feed = {"name": "foreign", "url": "https://example.org/ioc/", "enabled": True}
     result = ioc_mod._update_feed(feed)
     assert result["status"] == "error"
-    assert "release channel" in result["error"]
+    assert "key" in result["error"]
 
 
 def test_update_feed_refuses_a_bad_asset_prefix(tmp_path, monkeypatch):
@@ -480,6 +519,48 @@ def test_update_feed_refuses_a_bad_asset_prefix(tmp_path, monkeypatch):
     feed = {"name": "../evil", "url": release.RELEASE_BASE_URL, "enabled": True}
     result = ioc_mod._update_feed(feed)
     assert result["status"] == "error"
+
+
+def test_update_feed_pins_the_feed_tag(tmp_path, monkeypatch):
+    """A feed's own ``tag`` pins the exact channel release for both assets."""
+    from trustsight.cli import ioc as ioc_mod
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    init_db()
+
+    curator = Ed25519PrivateKey.generate()
+    manifest_bytes, iocs_bytes = _build_ioc_pair(tmp_path, curator)
+    seen = {}
+
+    def fake_fetch(asset_name, tag=None, **kwargs):
+        seen[asset_name] = tag
+        if asset_name.endswith("-manifest.json"):
+            return manifest_bytes
+        return iocs_bytes
+
+    monkeypatch.setattr(release, "fetch_verified_asset", fake_fetch)
+    monkeypatch.setattr(
+        release, "asset_url", lambda name, tag=None, channel=None: f"https://x/{tag}/{name}")
+
+    feed = {"name": "emo-asa-2026", "url": release.RELEASE_BASE_URL,
+            "enabled": True, "tag": "ioc-2026-10-18"}
+    result = ioc_mod._update_feed(feed)
+    assert result["status"] == "ok"
+    assert seen == {
+        "baseline-ioc-emo-asa-2026-manifest.json": "ioc-2026-10-18",
+        "baseline-ioc-emo-asa-2026-iocs.jsonl": "ioc-2026-10-18",
+    }
+
+
+def test_update_feed_refuses_a_tag_that_is_not_a_path_segment(tmp_path, monkeypatch):
+    """A tag is a URL path segment; a slash or dot-dot is refused up front."""
+    from trustsight.cli import ioc as ioc_mod
+
+    feed = {"name": "emo", "url": release.RELEASE_BASE_URL, "enabled": True,
+            "tag": "../evil"}
+    result = ioc_mod._update_feed(feed)
+    assert result["status"] == "error"
+    assert "invalid release tag" in result["error"]
 
 
 # ---------------------------------------------------------------------------

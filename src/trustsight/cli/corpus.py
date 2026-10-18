@@ -96,6 +96,10 @@ def corpus_fetch(
     tag: str | None = typer.Option(
         None, "--tag", help="Fetch a specific release tag instead of the latest"
     ),
+    channel: str | None = typer.Option(
+        None, "--channel",
+        help="Follow this release channel (owner/repo) instead of [release] channel",
+    ),
     yes: bool = typer.Option(
         False, "--yes", help="Import without asking, even into a non-empty corpus"
     ),
@@ -103,19 +107,20 @@ def corpus_fetch(
 ):
     """Download, verify and import the signed corpus baseline.
 
-    The corpus baseline ships as ``baseline-corpus.tar.zst`` in the
-    TrustSight release channel with a detached ed25519 signature.  The
-    signature is verified against the pinned distribution key before the
-    artifact bytes are parsed; a mismatch is a refusal, not a warning,
-    and there is no path that imports unverified bytes.  A version 2
-    artifact also warms the novelty priors (source URLs, dependency
-    names, salted maintainer hashes) as part of the import.
+    The corpus baseline ships as ``baseline-corpus.tar.zst`` in the followed
+    release channel with a detached ed25519 signature.  The signature is
+    verified against that channel's pinned key before the artifact bytes are
+    parsed; a mismatch is a refusal, not a warning, and there is no path that
+    imports unverified bytes.  A version 2 artifact also warms the novelty
+    priors (source URLs, dependency names, salted maintainer hashes) as part
+    of the import.  ``--channel`` follows a non-official ``owner/repo``
+    channel; the import then warns that you are trusting that publisher.
 
     Unless ``--yes`` is given, importing into an existing non-empty
     corpus asks first; declining exits 2.  With ``--json`` the plan is
     printed without prompting, like every other ``--json`` mode.
     """
-    from .. import release
+    from .. import channels, release
 
     ensure_default_configs()
     init_db()
@@ -128,8 +133,19 @@ def corpus_fetch(
             _print_colored(msg, "red", stderr=True)
         raise typer.Exit(code=2)
 
+    try:
+        active_channel = release.active_baseline_channel(channel)
+    except release.ReleaseError as exc:
+        msg = f"Corpus fetch refused: {exc}"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+
     existing = _corpus_row_counts()
-    plan = {"asset": CORPUS_ASSET_NAME, "tag": tag or "latest", **existing}
+    plan = {"asset": CORPUS_ASSET_NAME, "tag": tag or "latest",
+            "channel": active_channel.repo, **existing}
     if json_output:
         typer.echo(json.dumps({"plan": plan}))
     elif (existing["profiles"] or existing["snapshots"]) and not yes:
@@ -141,6 +157,9 @@ def corpus_fetch(
             _print_colored("Corpus fetch cancelled; the local corpus is unchanged.", "yellow")
             raise typer.Exit(code=2)
 
+    warning = channels.non_official_warning(active_channel)
+    if warning:
+        _print_colored(warning, "yellow", stderr=True)
     try:
         with download_progress(
             f"Downloading {CORPUS_ASSET_NAME}...",
@@ -148,6 +167,7 @@ def corpus_fetch(
         ) as on_download:
             data = release.fetch_verified_asset(
                 CORPUS_ASSET_NAME, tag=tag, on_progress=on_download,
+                channel=active_channel,
             )
     except release.ReleaseError as exc:
         msg = f"Corpus fetch refused: {exc}"

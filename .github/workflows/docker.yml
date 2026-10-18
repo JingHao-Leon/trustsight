@@ -31,8 +31,10 @@ jobs:
       contents: read
       packages: write
     if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event_name != 'workflow_run' ||
+       github.event.workflow_run.conclusion == 'success') &&
+      (github.event_name != 'release' ||
+       startsWith(github.event.release.tag_name, 'v'))
     steps:
       - name: Resolve the image version
         id: meta

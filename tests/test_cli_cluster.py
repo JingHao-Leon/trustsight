@@ -407,7 +407,8 @@ def test_full_aur_watch_invokes_the_loop(monkeypatch):
     assert result.exit_code == 0, result.output
     assert seen == {"interval": 120, "cycles": 2, "json_output": False,
                     "notify_url": None, "over_threshold": None,
-                    "since": None}
+                    "since": None, "auto_pull_baselines": False,
+                    "auto_pull_iocs": False}
 
 
 def test_full_aur_watch_ending_on_a_refusal_exits_2(monkeypatch):

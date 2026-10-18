@@ -11,9 +11,12 @@ from ._default_config import (
     DEFAULT_CONFIG,
     DEFAULT_HOSTS,
     DEFAULT_IOCS,
+    DEFAULT_IOC_TAG,
     DEFAULT_NAMING,
     DEFAULT_NOVELTY_WEIGHTS,
     DEFAULT_PATTERNS,
+    DEFAULT_RELEASE_CHANNEL,
+    DEFAULT_RELEASE_KEY,
     DEFAULT_SOURCE_DIVERGENCE_ALLOW,
     DEFAULT_THRESHOLDS,
     STRUCTURAL_MATCHES,
@@ -594,6 +597,63 @@ def configured_baseline_tag() -> str | None:
         value = str(DEFAULT_BASELINE_TAG or "").strip()
     return value or None
 
+def configured_ioc_tag() -> str | None:
+    """The fallback tag for the dedicated IOC channel, or ``None``.
+
+    Read from ``[baselines.ioc] tag`` without creating a config file, for the
+    same reason as :func:`configured_baseline_tag`: this runs while a download
+    URL is built.  An unset or empty value returns ``None``, which means
+    "resolve the newest ``ioc-*`` release, then the ``baseline-*`` fallback".
+    """
+    path = CONFIG_DIR / "config.toml"
+    try:
+        with open(path, "rb") as f:
+            section = tomllib.load(f).get("baselines", {}).get("ioc") or {}
+    except (OSError, tomllib.TOMLDecodeError):
+        section = {}
+    if "tag" in section:
+        value = str(section["tag"] or "").strip()
+    else:
+        value = str(DEFAULT_IOC_TAG or "").strip()
+    return value or None
+
+def _release_section() -> dict:
+    """The ``[release]`` table, read without creating a config file."""
+    path = CONFIG_DIR / "config.toml"
+    try:
+        with open(path, "rb") as f:
+            return tomllib.load(f).get("release") or {}
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+
+def configured_release_channel() -> str | None:
+    """The followed release channel as an ``owner/repo`` slug, or ``None``.
+
+    ``None`` means the canonical official channel.  Read without creating a
+    config file, for the same reason as :func:`configured_baseline_tag`: this
+    runs while a download URL is built.
+    """
+    section = _release_section()
+    if "channel" in section:
+        value = str(section["channel"] or "").strip()
+    else:
+        value = str(DEFAULT_RELEASE_CHANNEL or "").strip()
+    return value or None
+
+def configured_release_key() -> str | None:
+    """The pinned ed25519 key for a non-official release channel, or ``None``.
+
+    A path to a raw 32-byte key file, or 64 hex characters.  ``None`` means
+    "use the pinned official key"; the caller only consults this for a
+    non-official channel.
+    """
+    section = _release_section()
+    if "key" in section:
+        value = str(section["key"] or "").strip()
+    else:
+        value = str(DEFAULT_RELEASE_KEY or "").strip()
+    return value or None
+
 _shipped_rules_cache: list[dict] | None = None
 
 def shipped_rules() -> list[dict]:
@@ -945,4 +1005,4 @@ def _review_policy_material(config: dict) -> dict:
     return {"name": policy.name, "threshold": policy.threshold}
 
 
-__all__ = ['ANY_EXECUTOR', 'CACHE_DIR', 'CATALOGUED_FETCH_ALTERNATIVES', 'CONFIG_DIR', 'DATA_DIR', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_DOMAINS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NAMING', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_PATTERNS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_RULES', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_THRESHOLDS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'EXEC_WRAPPER', 'GETENT_ENUMERATION_FRAGMENT', 'INT_WEIGHT_GROUPS', 'KNOWN_BOOL_KEYS', 'LEGACY_DEFAULT_REVIEW_LIMIT', 'LEGACY_IOCS_STUBS', 'LEGACY_RULE_PATTERNS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'Path', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'SHIPPED_RULESET_VERSION', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', 'STRUCTURED_EXTRACTOR', '_LEGACY_REVIEW_LIMIT_RE', '_RULESET_VERSION_RE', '_SEMANTIC_FIELDS', '_STRUCTURAL_CLAMPED', '_SUBCOMMAND_OPTS', '_free_hosting_pattern', '_free_registrar_tld_pattern', '_log', '_refresh_legacy_iocs', '_refresh_legacy_recon_commands', '_refresh_legacy_review_limit', '_replace_rule_block', '_review_policy_material', '_rule_blocks', '_shipped_rule_fields', '_shipped_rules_cache', '_standard_port_pattern', '_toml_cache', '_toml_escape_str', '_toml_str_list', '_toml_value', 'clamp_structural_severity', 'config_fingerprint', 'configured_baseline_tag', 'copy', 'drifted_shipped_rules', 'enforce_fatal_rules', 'ensure_default_configs', 'ensure_dirs', 'load_config', 'load_domains', 'load_hosts', 'load_ioc_sources', 'load_iocs', 'load_naming', 'load_patterns', 'load_rules', 'load_structural_rules', 'load_thresholds', 'load_toml', 'local_ruleset_version', 'logging', 'missing_shipped_rules', 'os', 'outdated_shipped_rules', 're', 'ruleset_age_drift', 'set_config', 'shipped_fatal_rule_ids', 'shipped_rules', 'sync_rules', 'tomllib', 'write_default_file']
+__all__ = ['ANY_EXECUTOR', 'CACHE_DIR', 'CATALOGUED_FETCH_ALTERNATIVES', 'CONFIG_DIR', 'DATA_DIR', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_DOMAINS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_IOC_TAG', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NAMING', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_PATTERNS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_RELEASE_CHANNEL', 'DEFAULT_RELEASE_KEY', 'DEFAULT_RULES', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_THRESHOLDS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'EXEC_WRAPPER', 'GETENT_ENUMERATION_FRAGMENT', 'INT_WEIGHT_GROUPS', 'KNOWN_BOOL_KEYS', 'LEGACY_DEFAULT_REVIEW_LIMIT', 'LEGACY_IOCS_STUBS', 'LEGACY_RULE_PATTERNS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'Path', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'SHIPPED_RULESET_VERSION', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', 'STRUCTURED_EXTRACTOR', '_LEGACY_REVIEW_LIMIT_RE', '_RULESET_VERSION_RE', '_SEMANTIC_FIELDS', '_STRUCTURAL_CLAMPED', '_SUBCOMMAND_OPTS', '_free_hosting_pattern', '_free_registrar_tld_pattern', '_log', '_refresh_legacy_iocs', '_refresh_legacy_recon_commands', '_refresh_legacy_review_limit', '_replace_rule_block', '_review_policy_material', '_rule_blocks', '_shipped_rule_fields', '_shipped_rules_cache', '_standard_port_pattern', '_toml_cache', '_toml_escape_str', '_toml_str_list', '_toml_value', 'clamp_structural_severity', 'config_fingerprint', 'configured_baseline_tag', 'configured_release_channel', 'configured_release_key', 'configured_ioc_tag', 'copy', 'drifted_shipped_rules', 'enforce_fatal_rules', 'ensure_default_configs', 'ensure_dirs', 'load_config', 'load_domains', 'load_hosts', 'load_ioc_sources', 'load_iocs', 'load_naming', 'load_patterns', 'load_rules', 'load_structural_rules', 'load_thresholds', 'load_toml', 'local_ruleset_version', 'logging', 'missing_shipped_rules', 'os', 'outdated_shipped_rules', 're', 'ruleset_age_drift', 'set_config', 'shipped_fatal_rule_ids', 'shipped_rules', 'sync_rules', 'tomllib', 'write_default_file']

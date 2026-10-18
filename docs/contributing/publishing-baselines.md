@@ -37,19 +37,28 @@ does not match `baseline.json`), upload the asset over the channel release
 named by `CALIBRATION_CORPUS_TAG` in `.github/workflows/calibration.yml`, and
 move that tag in the same commit.
 
-**Two release kinds, kept apart.** Software releases are tagged `vX.Y.Z`
-and carry the program and its release notes, never baseline assets. Channel
-releases are tagged `baseline-<date>` (for example `baseline-2026-08-10`)
-and carry the `baseline-*` assets. A channel release is published **after**
-its software release. The tool discovers the newest asset-bearing
-`baseline-*` release through the GitHub API, falling back to the configured
-[`[seed] baseline_tag`](../reference/configuration.md#seed) when the API is
-unreachable (and refusing when that is empty); `latest` is never used, because
-a `v*` release carries no baseline assets. **Bump `[seed] baseline_tag` in the
-same commit that publishes a new channel release**, so an offline or
-rate-limited client still reaches the current seed. The intended cadence:
-publish a software release, then publish a fresh `baseline-<date>` right behind
-it whenever the baselines need refreshing.
+**Three release kinds, kept apart.** Software releases are tagged `vX.Y.Z`
+and carry the program and its release notes, never baseline assets. Baseline
+channel releases are tagged `baseline-<date>` (for example `baseline-2026-08-10`)
+and carry the bulk `baseline-*` family (seed, corpus, IOC pairs and the
+inventory). Dedicated IOC channel releases are tagged `ioc-<date>` and carry
+only the IOC pairs, so a time-sensitive indicator set can be republished
+without a full baseline cut. A channel release is published **after** its
+software release. The tool discovers the newest asset-bearing `baseline-*`
+release (seed and corpus) and the newest asset-bearing `ioc-*` release (the IOC
+pairs) through the GitHub API; a seed or corpus fetch matches only `baseline-*`
+and can never be pointed at an `ioc-*` release. Discovery falls back to the
+configured [`[seed] baseline_tag`](../reference/configuration.md#seed) for the
+baseline family and [`[baselines.ioc] tag`](../reference/configuration.md#baselinesioc)
+for the IOC pairs when the API is unreachable (and refuses when that is empty);
+`latest` is never used, because a `v*` release carries no baseline assets.
+**Bump `[seed] baseline_tag` in the same commit that publishes a new baseline
+release**, and set `[baselines.ioc] tag` when you want an offline client to
+reach a pinned IOC channel, so an offline or rate-limited client still reaches
+the current baselines. The intended cadence: publish a software release, then
+publish a fresh `baseline-<date>` right behind it whenever the baselines need
+refreshing, and cut an `ioc-<date>` release between baseline releases whenever a
+new curated indicator set is ready.
 
 **Pinning.** The default channel follows the newest asset-bearing
 `baseline-*` release. `trustsight seed fetch --tag baseline-2026-08-10`
@@ -249,6 +258,27 @@ assets are named `baseline-ioc-<source>-<incident>-manifest.json` and
 `trustsight ioc update` to fetch them sets a feed with `name` (or `asset`)
 equal to `<source>-<incident>` and `url` pointing at the release channel;
 see [configuration](../reference/configuration.md#baselinesiocfeeds).
+
+### The dedicated IOC channel
+
+IOC indicators are time-sensitive; publishing them should not wait on a full
+baseline cut. Create a draft `ioc-<date>` release and run the IOC workflow
+against it:
+
+```bash
+gh release create ioc-2026-10-18 --draft --title "IOC channel 2026-10-18"
+gh workflow run ioc.yml -f tag=ioc-2026-10-18
+```
+
+The workflow builds only the IOC pairs (via
+`scripts/build_release_baselines.py --ioc-only`), signs them under the
+distribution key, and uploads them with their `.sig` siblings. It writes no
+seed, corpus or `baseline-manifest.json`: a seed or corpus fetch resolves
+`baseline-*` tags only and would 404 on an `ioc-*` release. Verify the assets
+on the draft, then publish it. Every subsequent `trustsight ioc update` (with
+no pinned `tag`) resolves the newest `ioc-*` release, so a new date tag
+supersedes the previous one; an operator who wants a reproducible set pins a
+feed `tag` or the `[baselines.ioc] tag` fallback.
 
 ## Prepare a baseline release
 

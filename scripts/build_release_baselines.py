@@ -27,6 +27,11 @@ The distribution key never enters this repository.  Give the workflow
 the raw private key via the Actions secret; for a local run, pass a
 PEM key or a raw 32-byte key file.
 
+With ``--ioc-only`` the script emits just the IOC pairs, for the dedicated
+``ioc-<date>`` channel release that republishes time-sensitive indicators
+without a full baseline cut.  No seed, corpus or ``baseline-manifest.json``
+is written.
+
 Usage::
 
     python scripts/build_release_baselines.py \
@@ -154,10 +159,18 @@ def main() -> int:
                         help="Curator key for the IOC manifests (default: the distribution key)")
     parser.add_argument("--corpus", type=Path, default=None,
                         help="Corpus baseline artifact (.tar.zst) to re-sign")
+    parser.add_argument("--ioc-only", action="store_true",
+                        help="Build only the IOC pair(s), for the dedicated "
+                             "ioc-* channel: no seed, corpus or "
+                             "baseline-manifest.json is emitted")
     args = parser.parse_args()
 
     if len(args.ioc) != len(args.ioc_source) or len(args.ioc) != len(args.ioc_incident):
         parser.error("one --ioc-source and one --ioc-incident per --ioc input")
+    if args.ioc_only and not args.ioc:
+        parser.error("--ioc-only needs at least one --ioc input")
+    if args.ioc_only and (args.seed_v2_dir or args.seed_archive or args.corpus):
+        parser.error("--ioc-only cannot be combined with a seed or --corpus")
 
     out_dir = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -178,6 +191,12 @@ def main() -> int:
     if args.corpus:
         data = args.corpus.read_bytes()
         write_signed_asset(out_dir, "baseline-corpus.tar.zst", data, private_key, assets)
+
+    if args.ioc_only:
+        # The ioc-* channel carries only the IOC pairs; a baseline-manifest.json
+        # here would be a baseline-family artifact on the wrong release.
+        print(f"Wrote {len(assets)} IOC asset(s) for the ioc-* channel.")
+        return 0
 
     manifest = {
         "schema_version": 1,

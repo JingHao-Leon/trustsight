@@ -3,7 +3,7 @@
 import tomllib
 from ._defaults_executor import DEFAULT_ANTI_ANALYSIS_PROBES, DEFAULT_CONFUSABLE_CHARS, DEFAULT_CONFUSABLE_DOMAINS, DEFAULT_COVERT_EGRESS_CLIENTS, DEFAULT_COVERT_EGRESS_ENDPOINTS, DEFAULT_ECOSYSTEM_PREFIXES, DEFAULT_FOREIGN_PKG_MANAGERS, DEFAULT_FREE_HOSTING_DOMAINS, DEFAULT_FREE_REGISTRAR_TLDS, DEFAULT_H029_MIN_OBSERVATIONS, DEFAULT_H029_PLAIN_MIN_OBSERVATIONS, DEFAULT_KNOWN_SUFFIXES, DEFAULT_MANIFEST_FILENAMES, DEFAULT_NETWORK_TOOLS, DEFAULT_OBFUSCATION_INDICATORS, DEFAULT_PARSE_TIME_FETCH, DEFAULT_PASTE_HOSTS, DEFAULT_RECON_COMMANDS, DEFAULT_SECURITY_RELEVANT_FLAGS, DEFAULT_SECURITY_RELEVANT_LIBRARIES, DEFAULT_SOURCE_SCHEMES, DEFAULT_STANDARD_PORTS, DEFAULT_UPLOAD_FLAGS, DEFAULT_VARIANT_SUFFIXES
 
-__all__ = ['DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_NAMING', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_PATTERNS', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_THRESHOLDS', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', '_STRUCTURAL_CLAMPED', '_toml_escape_str', '_toml_str_list', '_toml_value']
+__all__ = ['DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_IOC_TAG', 'DEFAULT_NAMING', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_PATTERNS', 'DEFAULT_RELEASE_CHANNEL', 'DEFAULT_RELEASE_KEY', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_THRESHOLDS', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', '_STRUCTURAL_CLAMPED', '_toml_escape_str', '_toml_str_list', '_toml_value']
 
 DEFAULT_CONFIG = """\
 [severity_weights]
@@ -160,6 +160,20 @@ auto_import = true
 # release that publishes a new baseline.
 baseline_tag = "baseline-2026-09-24"
 
+[release]
+# The release channel the baseline seed and corpus are pulled from, as a
+# GitHub "owner/repo" slug.  Empty means the official channel
+# (emiliano-go/trustsight), whose ed25519 key is pinned inside the package.
+# Point it at another repository to follow that publisher's baselines; doing so
+# MUST be paired with the publisher's key in ``key`` below, and every import
+# from a non-official channel warns that you are trusting that publisher.
+channel = ""
+
+# The ed25519 public key that signs the chosen channel's baseline assets: a
+# path to a raw 32-byte key file, or 64 hex characters.  Required when
+# ``channel`` names a non-official repo, ignored for the official channel.
+key = ""
+
 [baselines.ioc]
 # IOC Federation baselines (v0.12.0).  ``enabled`` gates the match stage
 # during analysis; ``sources`` is a list of baseline source names to
@@ -168,13 +182,24 @@ baseline_tag = "baseline-2026-09-24"
 enabled = true
 sources = []
 
+# Fallback release tag for the dedicated IOC channel when the GitHub
+# releases API cannot be reached (offline or rate-limited).  Empty means
+# "resolve the newest ioc-* release, and only if there is none fall back to
+# the newest baseline-* release", where the IOC pairs originally shipped.
+# Set it to pin an exact channel, e.g. tag = "ioc-2026-10-18".  A feed's own
+# `tag` overrides this.
+tag = ""
+
 [[baselines.ioc.feeds]]
 # Example feed entry.  TrustSight ships with no default feeds; operators
 # add trusted sources here and import them explicitly.  A feed whose url
 # is a release-channel URL is updated by `trustsight ioc update`, which
-# downloads baseline-ioc-<asset>-manifest.json/-iocs.jsonl, verifies the
-# distribution signature, and imports with the curator-key check.  Any
-# other url is refused.  `asset` defaults to `name`.
+# downloads baseline-ioc-<asset>-manifest.json/-iocs.jsonl from the newest
+# ioc-* release (the dedicated IOC channel), verifies the distribution
+# signature, and imports with the curator-key check.  Any other http(s) url
+# is read as a publisher's federation directory (manifest.json + iocs.jsonl)
+# and needs that publisher's ed25519 key in ``key``; a non-http url is
+# refused.  `asset` defaults to `name`; `tag` pins an exact channel release.
 name = "example-feed"
 url = "https://example.org/trustsight/ioc-baseline/"
 enabled = false
@@ -298,6 +323,22 @@ DEFAULT_SOURCE_DIVERGENCE_ALLOW = (
 
 DEFAULT_BASELINE_TAG = (
     tomllib.loads(DEFAULT_CONFIG).get("seed", {}).get("baseline_tag") or None
+)
+
+DEFAULT_IOC_TAG = (
+    tomllib.loads(DEFAULT_CONFIG)
+    .get("baselines", {})
+    .get("ioc", {})
+    .get("tag")
+    or None
+)
+
+DEFAULT_RELEASE_CHANNEL = (
+    tomllib.loads(DEFAULT_CONFIG).get("release", {}).get("channel") or None
+)
+
+DEFAULT_RELEASE_KEY = (
+    tomllib.loads(DEFAULT_CONFIG).get("release", {}).get("key") or None
 )
 
 def _toml_escape_str(val: str) -> str:

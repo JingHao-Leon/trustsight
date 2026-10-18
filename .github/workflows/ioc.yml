@@ -1,0 +1,92 @@
+name: IOC Channel
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft IOC tag to complete, e.g. ioc-2026-10-18
+        required: true
+        type: string
+      ioc_source:
+        description: Curator name recorded in the IOC baseline manifests
+        default: emiliano-go
+
+permissions:
+  contents: write
+
+# Builds and uploads the dedicated IOC channel assets for a draft *ioc*
+# release (tag ``ioc-<date>``): one signed ``baseline-ioc-<source>-<incident>``
+# manifest/iocs pair per curated input under ``data/iocs/``.  The channel is
+# kept separate from the bulk ``baseline-*`` family so a time-sensitive
+# indicator set can be republished without a full baseline cut; a seed or
+# corpus fetch resolves only ``baseline-*`` tags and can never be pointed at
+# an ``ioc-*`` release.
+#
+# Every asset ships with a detached ``.sig`` under the distribution key held
+# in the BASELINE_SIGNING_KEY Actions secret; ``trustsight ioc update`` refuses
+# a download whose signature does not verify against the pinned key (see
+# docs/reference/baseline-keys.md).  No seed, corpus or
+# ``baseline-manifest.json`` is written to an *ioc* release.
+
+jobs:
+  ioc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Install
+        run: uv sync --locked --extra dev --python 3.12
+
+      - name: Verify the draft IOC release exists
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          case "$TAG" in
+            ioc-*) ;;
+            *) echo "tag must be an ioc-<date> release, got: $TAG" >&2; exit 1 ;;
+          esac
+          gh release view "$TAG" --json tagName >/dev/null
+
+      - name: Write the distribution signing key
+        env:
+          BASELINE_SIGNING_KEY: ${{ secrets.BASELINE_SIGNING_KEY }}
+        run: |
+          umask 077
+          if [ -z "$BASELINE_SIGNING_KEY" ]; then
+            echo "no BASELINE_SIGNING_KEY secret configured; cannot sign assets" >&2
+            exit 1
+          fi
+          printf '%s' "$BASELINE_SIGNING_KEY" > /tmp/sign-key.pem
+
+      - name: Build and sign the ioc-* assets
+        shell: bash
+        env:
+          IOC_SOURCE: ${{ inputs.ioc_source }}
+        run: |
+          curator="${IOC_SOURCE:-emiliano-go}"
+          IOC_ARGS=()
+          for f in data/iocs/*.json; do
+            base="$(basename "$f")"
+            [ "$base" = "example.json" ] && continue
+            incident="${base%.json}"
+            IOC_ARGS+=(--ioc "$f" --ioc-source "$curator" --ioc-incident "$incident")
+          done
+          if [ "${#IOC_ARGS[@]}" -eq 0 ]; then
+            echo "no data/iocs/*.json inputs to publish" >&2
+            exit 1
+          fi
+          uv run python scripts/build_release_baselines.py \
+            --out /tmp/ioc-assets \
+            --sign-key /tmp/sign-key.pem \
+            --ioc-only \
+            "${IOC_ARGS[@]}"
+
+      - name: Upload ioc-* assets to the release
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release upload "$TAG" /tmp/ioc-assets/baseline-ioc-*

@@ -35,9 +35,10 @@ def _main(
     # (handled eagerly above).
     argv = sys.argv[1:]
     if not any(token in argv for token in ("-h", "--help", "-v", "--version")):
-        from .updates import check_and_warn
+        from .updates import check_and_warn, check_and_warn_pending
 
         check_and_warn()
+        check_and_warn_pending()
 
 
 # Register all command modules

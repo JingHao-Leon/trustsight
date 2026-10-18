@@ -581,24 +581,21 @@ def maybe_auto_import_seed(
     return stats
 
 def _import_seed_from_release(quiet: bool = False) -> Optional[dict]:
-    """Fetch, verify and import the release-channel seed asset."""
-    import shutil
-    import tempfile
+    """Fetch, verify and import the release-channel seed asset.
 
-    from ..release import ReleaseError, fetch_verified_asset
+    Routed through :func:`trustsight.channels.pull_baseline_seed` so an
+    auto-import on first run is the same verified pull an operator gets from
+    ``seed fetch``, including the non-official-channel warning and the pull
+    record that silences the pending notice.
+    """
+    from ..channels import pull_baseline_seed
+    from ..release import ReleaseError
 
     try:
-        data = fetch_verified_asset("baseline-seed.tar.gz")
+        stats = pull_baseline_seed()
     except ReleaseError as exc:
         log.info("release seed unavailable: %s", exc)
         return None
-    tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-seed-"))
-    try:
-        path = tmp_dir / "baseline-seed.tar.gz"
-        path.write_bytes(data)
-        stats = import_seed(path)
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
     if not quiet:
         added = stats['urls_added']
         log.info(
