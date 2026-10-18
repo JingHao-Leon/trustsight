@@ -8,7 +8,8 @@ from ...file_kinds import files_at_line, is_shell_file
 from ...tokenizer import join_line_continuations, split_lines
 from ...rules import clamp_text
 from ._common import _DECEPTIVE_SPACE_RE, _FENCE_RE, _command_words, _continuation_lines, _dependency_array_lines, _executes, _home_alias_hit, _loop_variable_names, _path_lookup_names, _pipeline_sink, _resolved_records, log
-from ._x01_x08 import X001_RE, X002_SHAPES, X003_SHAPES, X004_SHAPES, X006_SHAPES
+from ._x01_x08 import (X001_RE, X002_SHAPES, X003_SHAPES, X004_SHAPES, X006_SHAPES,
+                       X034_ARCHIVE_RE, X034_EXECUTOR_RE)
 from ._x09_x16 import X009_RE, X010_RE, X011_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at
 from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_passthrough
 
@@ -298,6 +299,20 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
                 and not _X009_CLIENT_RE.search(head)):
             record("X023", line_no, "command output executed as a script",
                    body.strip())
+
+        # X034 - an archival service laundered into an executor. The archived
+        # path carries a second absolute URL, so a trusted archive host fronts
+        # a fresh origin. Gated on an executor on the same line, so a
+        # legitimate `source=()` fetch of a vanished upstream through
+        # web.archive.org stays quiet, and stood down when a plain curl/wget
+        # fetch-to-shell rule (R001/R002) already owns the line.
+        if (index not in printed_heredoc
+                and X034_ARCHIVE_RE.search(body)
+                and X034_EXECUTOR_RE.search(body)
+                and not (sink and _X016_FETCH_RE.search(head)
+                         and _X016_KNOWN_EXECUTOR_RE.match(sink))):
+            record("X034", line_no,
+                   "fetch laundered through an archival service", body.strip())
 
         if _X021_SET_GLOB_RE.search(body):
             positional_glob = True

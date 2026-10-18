@@ -4,7 +4,7 @@
 
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
-rules X001-X033, integrity-change rules C001-C032, dependency rules
+rules X001-X034, integrity-change rules C001-C032, dependency rules
 D001-D004, temporal rules T001-T003, correlation rules G001-G003, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M003, committed-manifest
 rules U001-U005, artifact rules A001-A008, declared-practice rules P001-P008 (P004 skipped), and
@@ -51,7 +51,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
-| [Crossfire](crossfire.md) | `crossfire` | 33 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
+| [Crossfire](crossfire.md) | `crossfire` | 34 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 10 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 5 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
@@ -133,7 +133,7 @@ is deliberately non-contiguous; see
 | [C030](maintainer-and-metadata.md#c030) | Epoch Removed With Version Unchanged | Integrity-change | INFO | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [C031](install-and-persist.md#c031) | Boot Or System Image Tool Run During Build | Integrity-change | HIGH | [Install and Persistence](install-and-persist.md) |
 | [C032](install-and-persist.md#c032) | Scriptlet Executes Commands At Top Level | Integrity-change | HIGH | [Install and Persistence](install-and-persist.md) |
-| [D001](naming-and-dependency.md#d001) | Novel Dependency Added | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
+| [D001](naming-and-dependency.md#d001) | Novel Dependency Added | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
 | [D004](naming-and-dependency.md#d004) | Dependency Hijack Via Provides | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
@@ -353,6 +353,7 @@ is deliberately non-contiguous; see
 | [X031](crossfire.md#x031) | Build Reads Non-Code Text | Crossfire | HIGH | [Crossfire](crossfire.md) |
 | [X032](crossfire.md#x032) | Command Name Assembled By Splicing | Crossfire | HIGH | [Crossfire](crossfire.md) |
 | [X033](crossfire.md#x033) | File With No Provenance Executed | Crossfire | HIGH | [Crossfire](crossfire.md) |
+| [X034](crossfire.md#x034) | Fetch Laundered Through An Archival Service | Crossfire | HIGH | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
 Weight-0 declared-practice findings (`P001`-`P008`, P004 skipped) are not detections

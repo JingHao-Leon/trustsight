@@ -6,9 +6,10 @@ from ...config import (
     DECOMPRESSOR as _DECOMPRESSOR,
     STRUCTURED_EXTRACTOR as _STRUCTURED_EXTRACTOR,
 )
-from ._common import _CMD, _CONFUSABLE_CHARS, _INTERPRETER_DECODE, _SHELL, _SHELL_CMD
+from ._common import _CMD, _CONFUSABLE_CHARS, _INTERPRETER_DECODE, _SHELL, _SHELL_CMD, _SHELL_NAME
 
-__all__ = ['X001_RE', 'X002_SHAPES', 'X003_SHAPES', 'X004_SHAPES', 'X006_SHAPES']
+__all__ = ['X001_RE', 'X002_SHAPES', 'X003_SHAPES', 'X004_SHAPES', 'X006_SHAPES',
+           'X034_ARCHIVE_RE', 'X034_EXECUTOR_RE']
 
 X001_RE = re.compile(
     # Every pipe here must be operative: an escaped bar hands the decoded
@@ -250,4 +251,29 @@ X006_SHAPES = (
     ("raw-ip-source", re.compile(
         r"https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?(?:/|$)",
         re.IGNORECASE)),
+)
+
+# X034: an archival service used as a redirector.  The host itself is not
+# suspect - `web.archive.org` is a trusted name - which is the point: the
+# archived path embeds a *second* absolute URL, so the reader sees a
+# reputable domain while a fresh origin is what actually gets fetched.  A
+# legitimate recipe that pins a vanished upstream through the archive spells
+# a single URL (`source=("https://web.archive.org/web/<id>/https://…tar.gz")`);
+# the extra scheme inside the path is the laundering.
+X034_ARCHIVE_RE = re.compile(
+    r"https?://(?:web\.archive\.org|webcache\.googleusercontent\.com"
+    r"|archive\.(?:today|ph|is|li))/[^\s'\"]*https?://",
+    re.IGNORECASE,
+)
+
+#: The executor half of X034: the laundered URL is only an evasion of a
+#: payload rule when something on the line runs code - `bash <(curl URL)`,
+#: `curl URL | sh`, an interpreter handed the URL.  A plain archive fetch
+#: that writes a file has no executor and stays quiet.
+#:
+#: Anchored to command position (start, a separator, or whitespace), so the
+#: `sh` of a filename (`.../linux.sh`) is not an executor.  A `/bin/sh`
+#: prefix is still admitted, because that one does run.
+X034_EXECUTOR_RE = re.compile(
+    r"(?:^|[;&|()\s])(?:/(?:usr/)?bin/)?(?:" + _SHELL_NAME + r")\b"
 )

