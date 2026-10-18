@@ -214,7 +214,7 @@ replace local structural detection or alter rules, weights, or thresholds.
 |-----|------|---------|-------------|
 | `enabled` | bool | `true` | Run the IOC baseline match stage during analysis. |
 | `sources` | array of strings | `[]` | Baseline source names to consult. An empty list means "all imported sources". |
-| `tag` | string | `""` | Fallback release tag for the dedicated IOC channel when the GitHub releases API cannot be reached (offline or rate-limited). Empty means "resolve the newest `ioc-*` release, then the newest `baseline-*` release". Set it to pin an exact channel, e.g. `"ioc-2026-10-18"`. A feed's own `tag` overrides this. |
+| `tag` | string | `""` | Fallback release tag for the dedicated IOC channel when the GitHub releases API cannot be reached (offline or rate-limited). Empty means "resolve the newest `ioc-*` release", which is then refused if unreachable. Set it to pin an exact channel, e.g. `"ioc-2026-10-18"`. A feed's own `tag` overrides this. |
 
 #### `[[baselines.ioc.feeds]]`
 
@@ -226,8 +226,7 @@ is updated automatically: `ioc update` downloads the pair
 (plus their detached signatures) from the newest `ioc-*` release (the
 dedicated IOC channel), verifies both against the pinned distribution key,
 then imports with the curator-key check the normal `ioc import` path performs.
-When no `ioc-*` release exists yet the pair is resolved from the newest
-`baseline-*` release, where it originally shipped.  Any other `http(s)` `url` is
+Any other `http(s)` `url` is
 read as a publisher's federation directory (`manifest.json` + `iocs.jsonl`) and
 verified against the feed's own pinned `key`; a feed with no `key` is refused,
 and a non-`http(s)` `url` is refused with an explicit error. The import is the

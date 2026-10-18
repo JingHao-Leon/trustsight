@@ -50,7 +50,7 @@ key swap cannot be silent.
 
 Every baseline the tool consumes at runtime is distributed as a release asset
 named with the `baseline-` prefix. **A baseline channel release** (tag
-`baseline-<date>`) ships the bulk family (seed, corpus, IOC pairs and the
+`baseline-<date>`) ships the bulk family (the seed, the corpus and the
 inventory), and **a dedicated IOC channel release** (tag `ioc-<date>`) ships
 only the IOC pairs so a time-sensitive indicator set can be republished without
 a full baseline cut. Both are kept apart from software releases: a `vX.Y.Z` tag
@@ -62,10 +62,10 @@ IOC pairs resolve the newest `ioc-*` release. The two namespaces never mix; a
 seed or corpus fetch matches only `baseline-*`, so it can never be pointed at an
 `ioc-*` release. When the API is unreachable the configured fallback is used,
 [`[seed] baseline_tag`](configuration.md#seed) for the baseline family and
-[`[baselines.ioc] tag`](configuration.md#baselinesioc) for the IOC pairs (and
-when the IOC fallback is empty and no `ioc-*` release exists yet, the pairs fall
-back to the newest `baseline-*` release, where they originally shipped);
-discovery and fallback both refuse rather than guess. `latest` is never the
+[`[baselines.ioc] tag`](configuration.md#baselinesioc) for the IOC pairs; the
+IOC pairs live only on `ioc-*` releases, so with no fallback and no reachable
+`ioc-*` release the fetch refuses rather than reaching for a baseline copy.
+Discovery and fallback both refuse rather than guess. `latest` is never the
 fallback: it is a `v*` release and carries no baseline assets. The
 [publishing guide](../contributing/publishing-baselines.md) documents the
 cadence and `seed fetch --tag` for pinning.
@@ -79,8 +79,7 @@ cadence and `seed fetch --tag` for pinning.
 | `baseline-manifest.json` | per-asset SHA-256, size and signature, plus the public key used | release inventory |
 
 The seed, corpus and `baseline-manifest.json` live only on a `baseline-<date>`
-release; the IOC pairs live on an `ioc-<date>` release (or, before the channel
-split, on a `baseline-<date>` release).
+release; the IOC pairs live only on an `ioc-<date>` release.
 
 Every asset ships with a detached `.sig` sibling: the raw 64-byte Ed25519
 signature over the **exact asset bytes**, under the pinned distribution key.

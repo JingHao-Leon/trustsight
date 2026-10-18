@@ -3,15 +3,11 @@
 
 Every baseline the tool consumes at runtime is distributed as a release
 asset in the TrustSight repository with the ``baseline-`` prefix, and a
-release ships the whole family:
+baseline release ships the whole family:
 
 * ``baseline-seed.tar.gz`` - the v2 hashed maintainer seed (built
   separately by ``scripts/build_hashed_seed.py``, given here as a
   ``trustsight-seed-v2/`` directory and repackaged)
-* ``baseline-ioc-<source>-<incident>-manifest.json`` and
-  ``baseline-ioc-<source>-<incident>-iocs.jsonl`` - one pair per curated
-  IOC input file; the manifest carries the curator key and its own
-  signature, exactly as ``scripts/build_ioc_baseline.py`` produces
 * ``baseline-corpus.tar.zst`` - the corpus baseline (built separately
   with ``trustsight full-aur --export``, given here as a file and
   re-signed)
@@ -27,10 +23,11 @@ The distribution key never enters this repository.  Give the workflow
 the raw private key via the Actions secret; for a local run, pass a
 PEM key or a raw 32-byte key file.
 
-With ``--ioc-only`` the script emits just the IOC pairs, for the dedicated
-``ioc-<date>`` channel release that republishes time-sensitive indicators
-without a full baseline cut.  No seed, corpus or ``baseline-manifest.json``
-is written.
+The IOC pairs are *not* part of the baseline family.  With ``--ioc-only``
+the script emits just the signed ``baseline-ioc-<source>-<incident>`` pairs
+for the dedicated ``ioc-<date>`` channel release, so a time-sensitive
+indicator set is republished without a full baseline cut.  No seed, corpus
+or ``baseline-manifest.json`` is written.
 
 Usage::
 
@@ -38,8 +35,13 @@ Usage::
         --out dist/ \
         --sign-key /tmp/distribution-key.pem \
         --seed-v2-dir /tmp/seed-v2 \
-        --ioc data/iocs/asa-2026.json --ioc-source emiliano-go --ioc-incident asa-2026 \
         --corpus /tmp/corpus.tar.zst
+
+    python scripts/build_release_baselines.py \
+        --out dist/ \
+        --sign-key /tmp/distribution-key.pem \
+        --ioc-only \
+        --ioc data/iocs/asa-2026.json --ioc-source emiliano-go --ioc-incident asa-2026
 """
 
 import argparse
@@ -150,7 +152,7 @@ def main() -> int:
     seed_group.add_argument("--seed-archive", type=Path, default=None,
                             help="Existing canonical baseline-seed.tar.gz to re-sign")
     parser.add_argument("--ioc", type=Path, action="append", default=[],
-                        help="Curated IOC JSON input file (repeatable)")
+                        help="Curated IOC JSON input file (repeatable; requires --ioc-only)")
     parser.add_argument("--ioc-source", action="append", default=[],
                         help="Curator source name, one per --ioc")
     parser.add_argument("--ioc-incident", action="append", default=[],
@@ -167,6 +169,8 @@ def main() -> int:
 
     if len(args.ioc) != len(args.ioc_source) or len(args.ioc) != len(args.ioc_incident):
         parser.error("one --ioc-source and one --ioc-incident per --ioc input")
+    if args.ioc and not args.ioc_only:
+        parser.error("--ioc ships only on the ioc-* channel: pass --ioc-only")
     if args.ioc_only and not args.ioc:
         parser.error("--ioc-only needs at least one --ioc input")
     if args.ioc_only and (args.seed_v2_dir or args.seed_archive or args.corpus):
@@ -181,22 +185,23 @@ def main() -> int:
     pubkey_hex = private_key.public_key().public_bytes_raw().hex()
 
     assets: list[dict] = []
+    if args.ioc_only:
+        # The ioc-* channel carries only the IOC pairs: a baseline-manifest.json
+        # here would be a baseline-family artifact on the wrong release, and the
+        # baseline family never carries the pairs.
+        print(f"Building the ioc-* assets into {out_dir}")
+        build_ioc_assets(args, out_dir, private_key, assets)
+        print(f"Wrote {len(assets)} IOC asset(s) for the ioc-* channel.")
+        return 0
+
     print(f"Building release baselines into {out_dir}")
     if args.seed_v2_dir:
         build_seed_asset(args.seed_v2_dir, out_dir, private_key, assets)
     if args.seed_archive:
         copy_seed_asset(args.seed_archive, out_dir, private_key, assets)
-    if args.ioc:
-        build_ioc_assets(args, out_dir, private_key, assets)
     if args.corpus:
         data = args.corpus.read_bytes()
         write_signed_asset(out_dir, "baseline-corpus.tar.zst", data, private_key, assets)
-
-    if args.ioc_only:
-        # The ioc-* channel carries only the IOC pairs; a baseline-manifest.json
-        # here would be a baseline-family artifact on the wrong release.
-        print(f"Wrote {len(assets)} IOC asset(s) for the ioc-* channel.")
-        return 0
 
     manifest = {
         "schema_version": 1,

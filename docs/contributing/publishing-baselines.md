@@ -1,4 +1,4 @@
-<!-- description: The maintainer workflow for building, signing and publishing the novelty seed, the IOC baselines and the corpus baseline to the release channel. -->
+<!-- description: The maintainer workflow for building, signing and publishing the novelty seed, the corpus baseline and the IOC channel to the release channel. -->
 
 # Publishing Baselines
 
@@ -16,9 +16,6 @@ release asset in the TrustSight repository, named with the `baseline-`
 prefix, and **a baseline release ships the whole family**:
 
 - `baseline-seed.tar.gz` (the v2 hashed novelty seed) plus `.sig`;
-- `baseline-ioc-<source>-<incident>-manifest.json` and the newline-delimited
-  `baseline-ioc-<source>-<incident>-iocs.jsonl`, one pair per curated IOC
-  input, each with its detached `.sig`;
 - `baseline-corpus.tar.zst` (the corpus baseline) plus `.sig`;
 - `baseline-manifest.json` (per-asset SHA-256, size and signature) plus its
   detached `.sig`.
@@ -40,7 +37,7 @@ move that tag in the same commit.
 **Three release kinds, kept apart.** Software releases are tagged `vX.Y.Z`
 and carry the program and its release notes, never baseline assets. Baseline
 channel releases are tagged `baseline-<date>` (for example `baseline-2026-08-10`)
-and carry the bulk `baseline-*` family (seed, corpus, IOC pairs and the
+and carry the bulk `baseline-*` family (the seed, the corpus and the
 inventory). Dedicated IOC channel releases are tagged `ioc-<date>` and carry
 only the IOC pairs, so a time-sensitive indicator set can be republished
 without a full baseline cut. A channel release is published **after** its
@@ -67,15 +64,15 @@ it; keep the tag of the channel release you verified if you want a
 reproducible seed.
 
 `scripts/build_release_baselines.py` assembles and signs the family:
-it takes the seed's `trustsight-seed-v2/` directory, the curated IOC inputs,
-and the corpus artifact, signs every asset's exact bytes with the distribution
-key, self-verifies every signature with the program's own verifier, and writes
-the manifest. Every asset also gets a detached `.sig` sibling under the same
-key; the tool refuses any download whose signature does not verify.
+it takes the seed's `trustsight-seed-v2/` directory and the corpus artifact,
+signs every asset's exact bytes with the distribution key, self-verifies every
+signature with the program's own verifier, and writes the manifest. Every asset
+also gets a detached `.sig` sibling under the same key; the tool refuses any
+download whose signature does not verify.
 
 A publishable **full baseline family** requires the seed and
-`baseline-corpus.tar.zst`; it also includes a signed IOC `.jsonl`/manifest pair
-for every curated IOC input. The baseline workflow refuses to proceed without
+`baseline-corpus.tar.zst`; the IOC pairs are not part of it and ship on the
+dedicated `ioc-<date>` channel. The baseline workflow refuses to proceed without
 the corpus asset. It uses the canonical seed already attached to the channel
 release, or builds the documented fallback when that asset is absent.
 
@@ -240,9 +237,10 @@ and [IOC federation](../reference/ioc.md).
 
 ```bash
 ## Curate data/iocs/<incident>.json from primary sources. Provide it to the
-## release build script, which signs each manifest with the curator key
-## (--ioc-sign-key, defaulting to the distribution key) and adds the
-## distribution signature on top, or build the directory form yourself:
+## IOC channel build (scripts/build_release_baselines.py --ioc-only), which
+## signs each manifest with the curator key (--ioc-sign-key, defaulting to the
+## distribution key) and adds the distribution signature on top, or build the
+## directory form yourself:
 python scripts/build_ioc_baseline.py \
     --from-file data/iocs/<incident>.json \
     --source <curator> \
@@ -251,8 +249,9 @@ python scripts/build_ioc_baseline.py \
     --sign ~/trustsight-release.raw
 ```
 
-The release workflow signs and uploads the IOC assets automatically from
-every curated `data/iocs/*.json` (it skips `example.json`). Because the
+The IOC workflow signs and uploads the IOC assets automatically from every
+curated `data/iocs/*.json` (it skips `example.json`) to the dedicated
+`ioc-<date>` channel; no `baseline-*` release carries them. Because the
 assets are named `baseline-ioc-<source>-<incident>-manifest.json` and
 `baseline-ioc-<source>-<incident>-iocs.jsonl`, an operator who wants
 `trustsight ioc update` to fetch them sets a feed with `name` (or `asset`)

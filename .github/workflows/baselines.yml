@@ -6,16 +6,15 @@ on:
         description: Existing draft baseline tag to complete, e.g. baseline-2026-08-17
         required: true
         type: string
-      ioc_source:
-        description: Curator name recorded in the IOC baseline manifests
-        default: emiliano-go
 
 permissions:
   contents: write
 
 # Builds and uploads the ``baseline-*`` release assets for a draft
 # *baseline* release (tag ``baseline-<date>``): the hashed novelty seed, the
-# curated IOC baseline pairs, and the summary manifest.  Every asset ships
+# corpus baseline and the summary manifest.  The curated IOC pairs are *not*
+# part of this family; they ship on the dedicated ``ioc-<date>`` channel via
+# ``ioc.yml``.  Every asset ships
 # with a detached ``.sig`` under the distribution key held in the
 # BASELINE_SIGNING_KEY Actions secret; the tool refuses a download whose
 # signature does not verify against the pinned key shipped in the package
@@ -157,8 +156,6 @@ jobs:
 
       - name: Build and sign the baseline-* assets
         shell: bash
-        env:
-          IOC_SOURCE: ${{ inputs.ioc_source }}
         run: |
           SEED_ARGS=()
           if [ -d /tmp/seed-v2 ]; then
@@ -166,20 +163,11 @@ jobs:
           else
             SEED_ARGS=(--seed-archive /tmp/release-assets/baseline-seed.tar.gz)
           fi
-          curator="${IOC_SOURCE:-emiliano-go}"
-          IOC_ARGS=()
-          for f in data/iocs/*.json; do
-            base="$(basename "$f")"
-            [ "$base" = "example.json" ] && continue
-            incident="${base%.json}"
-            IOC_ARGS+=(--ioc "$f" --ioc-source "$curator" --ioc-incident "$incident")
-          done
           uv run python scripts/build_release_baselines.py \
             --out /tmp/baselines \
             --sign-key /tmp/sign-key.pem \
             --corpus /tmp/release-assets/baseline-corpus.tar.zst \
-            "${SEED_ARGS[@]}" \
-            "${IOC_ARGS[@]}"
+            "${SEED_ARGS[@]}"
 
       - name: Upload baseline-* assets to the release
         env:

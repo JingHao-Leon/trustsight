@@ -426,18 +426,18 @@ def asset_url(asset_name: str, tag: str | None = None,
 
     Without *tag* the ``latest`` release is used; GitHub redirects to the
     newest tag.  A ``baseline-ioc-*`` asset resolves the newest ``ioc-*``
-    release (the dedicated, fast-moving IOC channel), other ``baseline-*``
-    assets the newest ``baseline-*`` release.  With *tag* the download is
-    pinned to that exact release.
+    release (the dedicated, fast-moving IOC channel); the seed, the corpus
+    and every other ``baseline-*`` asset resolve the newest ``baseline-*``
+    release.  With *tag* the download is pinned to that exact release.
 
-    A ``baseline-*`` asset never falls back to ``latest``: the seed, the IOC
-    pairs and the other baselines live only on their channel releases, so a
-    version tag cannot carry them.  When discovery fails, the configured
-    fallback tag (:func:`_configured_baseline_tag`, or
-    :func:`_configured_ioc_tag` for the IOC pairs) is used; when there is none,
-    the function fails closed rather than building a URL that cannot resolve.
-    A non-official channel has no configured fallback: its tag must come from
-    discovery or an explicit *tag*.
+    Neither channel falls back to ``latest``: the IOC pairs live only on
+    ``ioc-*`` releases and the seed/corpus only on ``baseline-*`` releases,
+    so a ``v*`` version tag can never carry them.  When discovery fails, the
+    configured fallback tag (:func:`_configured_baseline_tag` for the
+    baseline family, :func:`_configured_ioc_tag` for the IOC pairs) is used;
+    when there is none, the function fails closed rather than building a URL
+    that cannot resolve.  A non-official channel has no configured fallback:
+    its tag must come from discovery or an explicit *tag*.
     """
     channel = channel or official_channel()
     if tag:
@@ -453,8 +453,13 @@ def asset_url(asset_name: str, tag: str | None = None,
         ioc_tag = _resolve_ioc_tag(channel) or fallback_ioc
         if ioc_tag:
             return f"{channel.base_url}/download/{ioc_tag}/{asset_name}"
-        # No dedicated IOC release yet: the pair still ships on the newest
-        # baseline-* release, so fall through to the baseline channel.
+        # The pairs live only on the ioc-* channel; there is no baseline copy
+        # to fall back to, so a missing channel is a refusal.
+        raise ReleaseFetchError(
+            f"no {asset_name} is reachable: the release API is unavailable "
+            "and no fallback IOC tag is configured; pass --tag "
+            "(e.g. --tag ioc-2026-10-18) or set [baselines.ioc] tag"
+        )
     if asset_name.startswith("baseline-"):
         baseline_tag = _resolve_baseline_tag(channel) or fallback_baseline
         if baseline_tag:
@@ -487,8 +492,8 @@ def _configured_ioc_tag() -> str | None:
     """The operator-configured fallback IOC channel tag, or ``None``.
 
     Read without writing any config file, because this runs while a URL is
-    being built.  ``None`` means "use the live channel, then the legacy
-    ``baseline-*`` channel"; it is never a ``latest`` guess.
+    being built.  ``None`` means "use the live channel"; it is never a
+    ``latest`` guess.
     """
     from .config import configured_ioc_tag
 

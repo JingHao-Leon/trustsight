@@ -184,8 +184,8 @@ sources = []
 
 # Fallback release tag for the dedicated IOC channel when the GitHub
 # releases API cannot be reached (offline or rate-limited).  Empty means
-# "resolve the newest ioc-* release, and only if there is none fall back to
-# the newest baseline-* release", where the IOC pairs originally shipped.
+# "resolve the newest ioc-* release", refused if unreachable.  The pairs
+# live only on ioc-* releases, never on a baseline-* release.
 # Set it to pin an exact channel, e.g. tag = "ioc-2026-10-18".  A feed's own
 # `tag` overrides this.
 tag = ""

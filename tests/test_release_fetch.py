@@ -131,14 +131,14 @@ def test_asset_url_uses_the_configured_ioc_tag_when_discovery_fails(monkeypatch)
         "/download/ioc-2026-10-01/baseline-ioc-emo-asa-2026-iocs.jsonl")
 
 
-def test_asset_url_falls_back_to_baseline_channel_for_ioc_pairs(monkeypatch):
-    """Before the first ioc-* release the pair still ships on baseline-*."""
+def test_asset_url_refuses_an_ioc_pair_with_no_reachable_ioc_channel(monkeypatch):
+    """The pairs live only on ioc-* releases; there is no baseline copy."""
     monkeypatch.setattr(release, "_resolve_ioc_tag", lambda channel=None: None)
     monkeypatch.setattr(release, "_configured_ioc_tag", lambda: None)
-    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda channel=None: "baseline-2026-09-24")
-    url = release.asset_url("baseline-ioc-emo-asa-2026-manifest.json")
-    assert url.endswith(
-        "/download/baseline-2026-09-24/baseline-ioc-emo-asa-2026-manifest.json")
+    monkeypatch.setattr(release, "_resolve_baseline_tag",
+                        lambda channel=None: "baseline-2026-09-24")
+    with pytest.raises(release.ReleaseFetchError):
+        release.asset_url("baseline-ioc-emo-asa-2026-manifest.json")
 
 
 def test_is_release_url_accepts_only_the_channel():
@@ -473,6 +473,8 @@ def test_update_feed_fetches_verifies_and_imports(tmp_path, monkeypatch):
     from trustsight.cli import ioc as ioc_mod
 
     monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    monkeypatch.setattr(release, "_resolve_ioc_tag",
+                        lambda channel=None: "ioc-2026-10-18")
     init_db()
 
     curator = Ed25519PrivateKey.generate()

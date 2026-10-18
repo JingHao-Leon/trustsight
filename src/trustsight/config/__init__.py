@@ -622,7 +622,7 @@ def configured_ioc_tag() -> str | None:
     Read from ``[baselines.ioc] tag`` without creating a config file, for the
     same reason as :func:`configured_baseline_tag`: this runs while a download
     URL is built.  An unset or empty value returns ``None``, which means
-    "resolve the newest ``ioc-*`` release, then the ``baseline-*`` fallback".
+    "resolve the newest ``ioc-*`` release".
     """
     path = CONFIG_DIR / "config.toml"
     try:

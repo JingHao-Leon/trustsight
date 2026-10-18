@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from trustsight.full_aur.export import verify_artifact
@@ -23,7 +24,8 @@ def _release_builder():
     return module
 
 
-def test_release_builder_emits_the_runtime_ioc_name_and_signed_manifest(tmp_path, monkeypatch):
+def test_release_builder_emits_only_the_baseline_family(tmp_path, monkeypatch):
+    """A baseline release is the seed, the corpus and the manifest: no IOC."""
     builder = _release_builder()
     key = Ed25519PrivateKey.generate()
     key_path = tmp_path / "signing-key"
@@ -32,22 +34,17 @@ def test_release_builder_emits_the_runtime_ioc_name_and_signed_manifest(tmp_path
     seed.write_bytes(b"canonical seed")
     corpus = tmp_path / "baseline-corpus.tar.zst"
     corpus.write_bytes(b"corpus artifact")
-    iocs = tmp_path / "incident.json"
-    iocs.write_text(json.dumps([{"type": "domain", "value": "evil.example"}]))
     out = tmp_path / "dist"
 
     monkeypatch.setattr("sys.argv", [
         "build_release_baselines.py", "--out", str(out), "--sign-key", str(key_path),
-        "--seed-archive", str(seed), "--corpus", str(corpus), "--ioc", str(iocs),
-        "--ioc-source", "curator", "--ioc-incident", "incident",
+        "--seed-archive", str(seed), "--corpus", str(corpus),
     ])
     assert builder.main() == 0
 
     expected = {
         "baseline-seed.tar.gz",
         "baseline-corpus.tar.zst",
-        "baseline-ioc-curator-incident-manifest.json",
-        "baseline-ioc-curator-incident-iocs.jsonl",
         "baseline-manifest.json",
     }
     assert {path.name for path in out.iterdir() if not path.name.endswith(".sig")} == expected
@@ -62,12 +59,32 @@ def test_release_builder_emits_the_runtime_ioc_name_and_signed_manifest(tmp_path
     assert {asset["name"] for asset in manifest["assets"]} == expected - {"baseline-manifest.json"}
 
 
+def test_release_builder_refuses_ioc_without_ioc_only(tmp_path, monkeypatch):
+    """The IOC pairs ship only on the ioc-* channel, never in the baseline family."""
+    builder = _release_builder()
+    key_path = tmp_path / "signing-key"
+    key_path.write_bytes(Ed25519PrivateKey.generate().private_bytes_raw())
+    iocs = tmp_path / "incident.json"
+    iocs.write_text(json.dumps([{"type": "domain", "value": "evil.example"}]))
+
+    monkeypatch.setattr("sys.argv", [
+        "build_release_baselines.py", "--out", str(tmp_path / "dist"),
+        "--sign-key", str(key_path),
+        "--ioc", str(iocs), "--ioc-source", "curator", "--ioc-incident", "incident",
+    ])
+    with pytest.raises(SystemExit):
+        builder.main()
+
+
 def test_baseline_workflow_requires_and_signs_the_corpus_family():
     workflow = (ROOT / ".github" / "workflows" / "baselines.yml").read_text()
     assert "gh release download \"$TAG\" --pattern baseline-corpus.tar.zst" in workflow
     assert "--corpus /tmp/release-assets/baseline-corpus.tar.zst" in workflow
     assert "--seed-archive /tmp/release-assets/baseline-seed.tar.gz" in workflow
     assert "if: steps.check_seed.outputs.needs_build" not in workflow
+    # The IOC pairs ship on the ioc-* channel, never in the baseline family.
+    assert "ioc_source" not in workflow
+    assert "--ioc " not in workflow
 
 
 def test_release_builder_ioc_only_emits_pairs_without_the_baseline_family(
