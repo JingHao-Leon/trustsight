@@ -169,13 +169,18 @@ Explanation = [
   {"Cross-File Consistency" = "explanation/cross-file-consistency.md"},
   {"The Typed Core" = "explanation/the-typed-core.md"},
   {"Kinds of Alerts" = "explanation/kinds-of-alerts.md"},
-  {"In the Wild" = "explanation/in-the-wild.md"},
   {"Alert Budget" = "explanation/alert-budget.md"},
   {"Campaign Alert Mode" = "explanation/campaign-alert-mode.md"},
   {"Neighborhood Elevation" = "explanation/neighborhood-elevation.md"},
   {"Reducing the H-Series" = "explanation/reducing-the-h-series.md"},
   {"Override Tolerance" = "explanation/override-tolerance.md"},
   {"Escalation Licensing" = "explanation/escalation-licensing.md"},
+]
+
+[[project.nav]]
+Reports = [
+  {"In the Wild" = "reports/in-the-wild.md"},
+  {"2026-10-14: AUR name-clone waves" = "reports/2026-10-14-aur-name-clone-waves.md"},
 ]
 
 [[project.nav]]

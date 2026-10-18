@@ -1,19 +1,5 @@
-<!-- description: Recorded AUR incidents whose diffs the watcher flagged, what fired on them, and what a flag does and does not claim. -->
-# In the Wild
-
-This page records AUR incidents whose diffs the TrustSight watcher raised, what
-the analysis reported, and how to read those reports. It is a record, not a
-receipt.
-
-**A flag is a direction to review.** TrustSight does not install packages, block
-builds, or clear anything. A finding names evidence and ends by asking the
-reader to look; it never establishes that a package is safe, and the absence of
-a finding never establishes it either. Everything below is written to that
-standard: what the watcher observed and reported, not what it prevented.
-
----
-
-## October 2026: AUR name-clone waves
+<!-- description: The 2026-10-14 AUR name-clone waves: fifteen yay clones, fifteen brave-beta-bin clones, one of them a hijacked package, and what the watcher reported. -->
+# 2026-10-14: AUR name-clone waves
 
 On 2026-10-14 the watcher raised two clusters of newly-published AUR packages:
 
@@ -26,7 +12,7 @@ The created names were published under a maintainer account impersonating an
 established one, each a near-miss spelling of a popular helper or browser
 package - the kind of name a hurried `yay -S` completes from muscle memory.
 
-### The delivery
+## The delivery
 
 The upstream recipe in each package was left byte-intact. The payload rode in a
 committed `<pkg>.install` file that the recipe's `install=` line named, so the
@@ -41,7 +27,7 @@ used as a redirector for a fresh origin, so the visible domain and the domain
 that serves the script are not the same. The `<pkg>.install` bytes were
 byte-identical across the clones in both waves.
 
-### One hijack among the clones
+## One hijack among the clones
 
 `firefox-git-bin` did not follow the clone pattern. It was a long-standing,
 legitimate package - its `PKGBUILD` is the real Mozilla-nightly recipe, with
@@ -54,7 +40,7 @@ what the correlation layer is for. Because it is a real package that will be
 cleaned up and restored, its name is deliberately *not* published as a `package`
 indicator; the carrier `hash` covers it instead (see `data/iocs/README.md`).
 
-### What fired, live
+## What fired, live
 
 What the watcher actually put on the feed that day was the *correlation* layer,
 not the payload: `G003` (one maintainer key adopting the batch), `H045` (mass
@@ -82,7 +68,7 @@ The same package-`hash` and a pinned archival URL are published as indicators in
 is committed under `tests/fixtures/malicious/campaign/`. The indicators match
 outside the score, as attribution, never as a number.
 
-### What a flag here did and did not mean
+## What a flag here did and did not mean
 
 - It meant a human should look at those packages before building them.
 - It did **not** mean the packages were safe to ignore once the names were
@@ -96,15 +82,3 @@ outside the score, as attribution, never as a number.
 
 The honest summary is the one the report itself gives: these packages were
 flagged for review.
-
----
-
-## Reading a record here
-
-Every entry follows the same shape: what the watcher observed, what the analysis
-reported and why, and the artifacts a reader can check the claim against. Where
-a claim rests on a fixture or an indicator set, the artifact is named so the
-reader can reproduce the analysis rather than take the prose on trust. None of
-these records is a recall claim; what the tool *has* caught is not what it *can*
-catch. See [Benchmarks and Methodology](benchmarks-and-methodology.md) for what
-the measured evidence does and does not support.
