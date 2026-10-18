@@ -2,6 +2,31 @@
 
 # Changelog
 
+## [0.21.0] - 2026-10-18
+
+### Added
+
+- **X034 archival-laundering crossfire.** A fetch through an archival host whose path embeds a second URL - the `web.archive.org` → real host hop both October 2026 typosquat waves used to hide their payload origin - is the indirection itself, so the rule is execution-scoped and stands down on a plain `curl`/`wget` fetch to a shell. See [In the Wild](reports/in-the-wild.md).
+- **C032 top-level scriptlet execution.** `pacman` sources an `.install` on every operation, so a bare top-level line runs as root on each install, yet `H017`/`C016` scope to hook bodies and the scope map omits top-level lines. The rule parses the committed scriptlet, stands down on an unparseable partial read, and matches command-position execution outside every function. The yay-campaign `.install` carried `bash <(curl -L URL)` at the top level, which nothing read.
+- **H090 reads the process-substitution carrier.** Its committed-carrier pattern was pipe-keyed, so a `bash <(curl ...)` process substitution in a manifest scan scored zero; two arms now reuse H075's group-free process-substitution patterns.
+- **The U-series is documented** in the README pipeline, the rule-nature taxonomy and the evidence-category table, where the dependency-manifest rules sit at L3.
+- **In-the-wild incident reports have their own section.** The record of incidents whose diffs the watcher raised moves out of Explanation into a top-level **Reports** section, indexed by [In the Wild](reports/in-the-wild.md), with one dated report per campaign so the index stays a map and each campaign keeps its own page.
+
+### Changed
+
+- **A FATAL finding contributes no weight.** `severity_weights.FATAL = 0`: the label carries the severity, and the arithmetic score no longer inflates on a parser refusal or an IOC-class finding. The refusal tier still notifies regardless of score, reported outside the arithmetic like an IOC hit.
+- **Rebaselined.** The printed-text and re-exec stand-downs drop four benign figures: zero-rate 70.7 → 71.2, flag rate 7.8 → 7.2, 20-point percentile 92.2 → 92.8, trigger rate 33.1 → 32.7. Benign p95 (35), malicious p5 (60) and the separation are unchanged; 18/18 gates pass.
+- **The corpus builder commits once per package, not once per writer.** Persisting a single package ran eight to twelve `commit()` calls, each a WAL append and each one a candidate for the default autocheckpoint to copy pages back, and on an encrypted volume that churn - not the analysis - dominated a full-AUR drain. A `write_batch` scope now defers the inner commits and writes the package as one transaction (rolled back as one on error); the writer connection defers its autocheckpoint to ~40 MB and caps the file with `journal_size_limit`; the end-of-cycle checkpoint is `PASSIVE` rather than an exclusive `TRUNCATE`; and the always-observed signing-key and maintainer-domain ledgers prune only when an insert actually added a row. Measured on a package-shaped write set: 8x fewer commits.
+- **The corpus fetcher drains through the GitHub AUR mirror.** The AUR's cgit snapshot endpoint rate-limits and, in practice, was returning empty bodies under a full bootstrap, holding the drain to about one package per second. A snapshot is now tried from the read-only GitHub AUR mirror (`codeload.github.com`, one branch per package, the same tip tree) first, with the cgit endpoint kept as the fallback so a package the mirror no longer carries still resolves. Rate limiting is per host, so the mirror is not throttled to the AUR's ~5 requests/second cap, and the fetch-worker default rises from 5 to 16.
+
+### Fixed
+
+- **Printed advisory text is not executed.** Ten 2026-10-18 live-feed alerts scored printed text as commands. `R001`/`R002`/`R003`/`R045` stand down on a pure printer line (`echo`/`printf`); `C016` masks printed heredocs, unwraps a literal `sh -c '<lit>'` wrapper and dedupes one effective body per file; `H017` strips a literal re-exec opener and scans the inner body; `H035` blanks quoted literals on a printer line; `X002` skips printed heredoc bodies; `C022` downgrades only when a strictly weaker array remains; `X033` treats a `bun`/`deno` subcommand as a non-file; `cli/lint` applies the same `C016` unwrap.
+- **A repeated-character checksum is a placeholder, not a pin (H083).** A digest of a single repeated character matches no real download, so treating it as a pin made H083 silent and reopened the replay corpus. A one-distinct-character digest is now handled like `SKIP` (unpinned); a real digest still pins and stays silent. Replay: 6299/6299 closed, 0 open.
+- **The watcher's false positives.** Dead-hook, heredoc and message-continuation stand-downs, and the alert document now carries `tool_version`.
+- **Legacy `pypi.python.org` is a canonical Python host**, so a source there is not a divergence.
+- **A signed corpus baseline imports into a fresh database.** The observation section carried each `source_urls` row's builder-local `first_seen_package_id`, a foreign key into a `packages` row the artifact does not ship, so importing the corpus on a fresh install failed with `FOREIGN KEY constraint failed`. The id is not portable across databases: the exporter now writes the sentinel, and the importer coerces an older artifact's id to it rather than trusting it.
+
 ## [0.20.2] - 2026-10-15
 
 ### Added
