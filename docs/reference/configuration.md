@@ -350,6 +350,16 @@ Each entry maps a rule id to `L1`-`L8`. A value outside that range is
 ignored (the set is closed), as is a rule id this build does not ship. The
 security gate `layer overrides stay within the closed set` pins that.
 
+### `[contacts]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `true` | Whether the Contact Ledger records first contacts (weight 0, warm-only). With `false` no first-contact fact is recorded and every report renders the standing `contact_ledger_unavailable` note in place of the "First contact" panel. This is the cold-replay lane: the determinism gate runs the corpus with it off and proves the score is identical. |
+
+The ledger itself lives in the database, append-only and versioned by cycle;
+`[thresholds] g010` sets the shared-first-seen-host plurality floor. Neither
+contributes to the score.
+
 ### `[limits]`
 
 | Key | Type | Default | Description |

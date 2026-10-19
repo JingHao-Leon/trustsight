@@ -354,6 +354,16 @@ class Report:
     _evaluated: dict = field(default_factory=dict, repr=False, compare=False)
 
     @property
+    def contacts(self) -> dict:
+        """The Contact Ledger panel: weight-0 first contacts, warm-only.
+
+        A dict with ``available``, ``note`` and ``records``.  ``available``
+        is False on a cold replay, where ``note`` carries the standing
+        ``contact_ledger_unavailable`` text instead of a silent empty panel.
+        """
+        return dict(self._evaluated.get("contacts", {}) or {})
+
+    @property
     def flagged(self) -> bool:
         """True when the score enters this report's configured review workload."""
         return self.score > self.review_threshold

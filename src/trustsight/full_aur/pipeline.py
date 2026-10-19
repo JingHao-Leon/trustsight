@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from collections import deque
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -95,7 +96,7 @@ _FLAGGED_REPORT_LIMIT = 10
 # H061 (a centrality hub) are weight-0 context, and a sweep emits hundreds of
 # H061 hubs at once.  Passing them to record_alerts made a routine sweep read
 # as "226 campaign cluster(s) ... 226 new alert(s)".
-_NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061", "G006", "G009"})
+_NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061", "G006", "G010"})
 
 #: Burst/share clusters that fire on legitimate variant families as readily
 #: as on a typosquat campaign.  They score and alert only when one of their
@@ -270,6 +271,11 @@ def _campaign_identity(finding: dict) -> tuple[str, dict[str, list[str]]] | None
         return None
     rule_id = str(finding.get("rule_id", ""))
     if not rule_id.startswith("G"):
+        return None
+    # G010 is a first-seen-host census, not a corroborated campaign: a host
+    # being new is not evidence, and priming campaign state from it would
+    # let a weight-0 contact event escalate through the neighbourhood (G006).
+    if rule_id == "G010":
         return None
     params = finding.get("params", {}) or {}
     if not isinstance(params, dict):
@@ -519,6 +525,39 @@ def _correlation_records(
     return records
 
 
+def _contacts_enabled(config) -> bool:
+    """Whether the Contact Ledger records this cycle (the cold-replay lane)."""
+    return bool(((config or {}).get("contacts", {}) or {}).get("enabled", True))
+
+
+def _record_contacts_and_g010(records: list[dict], config: dict) -> list[dict]:
+    """Write this cycle's contact-ledger entries, then run G010.
+
+    The ledger is warm-only state: ``[contacts] enabled = false`` is the cold
+    replay lane, where nothing is recorded and G010 stands down.  G010 joins
+    the first-seen hosts the ledger wrote across the window, so it is the
+    plurality join over strangers, never a per-package finding.
+    """
+    if not _contacts_enabled(config):
+        return []
+    from ..config import load_thresholds
+    from ..contacts import record_cycle_contacts, shared_first_seen_host
+    from ..db import first_seen_hosts_since
+
+    now = int(time.time())
+    observed_at = datetime.now(timezone.utc).isoformat()
+    record_cycle_contacts(records, now, observed_at)
+
+    g010 = (load_thresholds().get("g010", {}) or {})
+    min_packages = int(g010.get("min_packages", 5))
+    window_days = int(g010.get("window_days", 7))
+    window_start = datetime.fromtimestamp(
+        now - window_days * 86400, tz=timezone.utc).isoformat()
+    return shared_first_seen_host(
+        records, min_packages,
+        first_seen_hosts=first_seen_hosts_since(window_start))
+
+
 def _run_corpus_sweep(
     new_meta: dict,
     old_meta: Optional[dict],
@@ -571,6 +610,10 @@ def _run_corpus_sweep(
     # from an established one; it runs before campaign activation so a burst
     # primes campaign state like any other G-series cluster.
     findings.extend(first_seen_adoption_burst(records, config))
+    # The Contact Ledger records every first-contact this cycle introduced
+    # (weight 0, warm-only), then G010 joins the first-seen hosts across the
+    # window.  Nothing here scores: contact_ledger is state, not a rule.
+    findings.extend(_record_contacts_and_g010(records, config))
 
     refused = _activate_campaigns(findings, config, log=log)
     if refused:

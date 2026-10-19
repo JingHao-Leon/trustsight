@@ -183,6 +183,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `acknowledged_urls` | `list[dict]` | Source URLs explicitly acknowledged for this package (`trustsight override add-url`). Each entry has `url` and `reason`. They did not score SOURCE_BUCKET or NOVELTY; a different URL, or the same URL in another package, is judged as before. Reported rather than dropped: an acknowledgement the report does not show is indistinguishable from a URL that never existed. |
 | `ioc_matches` | `list[dict]` | IOC federation baseline hits. Attribution, not score: each entry names the curator (`source`) that flagged the artifact, its `type`/`value`, `confidence`, `provenance`, `campaign`, the `surface` it was found on and its `line`, and whether the indicator is `expired`. IOC matches never appear in `score_breakdown` and never change `final_score`. See [the IOC reference](ioc.md). |
 | `indicators` | `list[dict]` | The indicator tier, promoted from `ioc_matches`: the same rows, exposed as the first-class I-series surface. Additive for one release. Outside the heuristic score, at maximum alert priority. |
+| `contacts` | `dict` | The Contact Ledger panel: weight-0 first contacts (`host`, `maintainer_account`, `file_kind`, `upstream`) as `available`, `note` and `records`, each record carrying `kind`, `value`, `basis` (`ledger`/`matched`) and `first_seen_utc`. Warm-only and never a score component. On a cold replay `available` is `false` and `note` carries the standing `contact_ledger_unavailable` text, so an empty panel never reads as a clean one. |
 | `final_score` | `int` | Deterministic risk score, 0-100. Computed by `calculate_score()` in `src/trustsight/scoring.py`. |
 
 ### `diff_summary`
@@ -242,7 +243,7 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`/`T002`), the G-series correlation rules (`G001`-`G009`), the I-series indicator rules (H056, and future `I` ids), the U-series committed-manifest rules (`U001`-`U005`), and the A-series artifact rules (`A001`-`A008`, L9 only), plus `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W010` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`/`T002`), the G-series correlation rules (`G001`-`G010`), the I-series indicator rules (H056, and future `I` ids), the U-series committed-manifest rules (`U001`-`U005`), and the A-series artifact rules (`A001`-`A008`, L9 only), plus `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W010` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` and `W` finding. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. The full string is carried in both JSON and CLI display. |
@@ -299,7 +300,8 @@ There are two JSON shapes, and they are not the same object.
   `suppressed_rules`, `acknowledged_urls`,
   `ioc_matches`, `indicators`, `first_seen`, `comparison_base`, `is_trivial`, `diff_truncated`, `scan_truncated`, `failed`,
   `fully_vetted`, `dependencies`, `depth_truncated`, `required_by`, `review_profile`,
-  `review_threshold`, `flagged`, `config_fingerprint`, `cached`, `cached_at`.
+  `review_threshold`, `flagged`, `config_fingerprint`, `cached`, `cached_at`,
+  `contacts`.
 
   On request only:
 

@@ -542,6 +542,35 @@ def init_db():
                 FROM property_transitions pt
                 WHERE pt.property_key = 'maintainer'
                   AND COALESCE(json_extract(pt.new_value, '$'), '') <> '';
+
+            /* The Contact Ledger (spec: contact-ledger): the innate layer's
+               memory of first contact.  Append-only and cycle-versioned; one
+               row the first time a package is seen to introduce a given
+               (kind, value) to the corpus.  Weight 0 and warm-only by
+               construction: it is A13 state, never a rule, and never enters
+               the score or a replayable artifact.  Corrections are new rows. */
+            CREATE TABLE IF NOT EXISTS contact_ledger (
+                id INTEGER PRIMARY KEY,
+                package_name TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                value TEXT NOT NULL,
+                maintainer TEXT NOT NULL DEFAULT '',
+                cycle_time INTEGER NOT NULL,
+                observed_at TEXT NOT NULL,
+                UNIQUE(package_name, kind, value)
+            );
+            CREATE INDEX IF NOT EXISTS idx_contact_ledger_cycle
+                ON contact_ledger(cycle_time);
+            CREATE INDEX IF NOT EXISTS idx_contact_ledger_value
+                ON contact_ledger(kind, value);
+
+            /* The corpus-wide host-first-seen store G009 reads: one row the
+               first time a canonical source host is observed at all.  G001's
+               gained_hosts_window is the per-diff view; this is the ledger. */
+            CREATE TABLE IF NOT EXISTS observed_hosts (
+                host TEXT PRIMARY KEY,
+                first_seen TEXT NOT NULL
+            );
         """)
         _migrate(conn)
         conn.commit()

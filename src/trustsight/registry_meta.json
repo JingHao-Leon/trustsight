@@ -503,6 +503,15 @@
     "capability": "correlation",
     "target": "programmatic (cycle records)"
   },
+  "g010": {
+    "uid": "TS-0266",
+    "name": "Shared First-Seen Host",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
   "h001": {
     "uid": "TS-0057",
     "name": "Checksum Disabled",

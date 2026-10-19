@@ -431,6 +431,17 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
                 prefix = {"added": "+", "removed": "-", "modified": "~"}.get(status, " ")
                 typer.echo(f"  {prefix} {clean(path)}")
 
+        # The Contact Ledger panel: weight 0, warm-only (see the Rich render).
+        contacts = r.get("contacts") or {}
+        if contacts.get("available") is False:
+            typer.echo(f"  First contact: {clean(contacts.get('note', ''))}")
+        elif contacts.get("records"):
+            typer.echo("  First contact (weight 0):")
+            for c in contacts["records"]:
+                typer.echo(f"    {clean(c.get('kind', ''))} "
+                           f"{clean(c.get('value', ''))} "
+                           f"({clean(c.get('basis', ''))})")
+
         if show_score and not r.get("failed"):
             risk = r.get("risk_label") or r.get("risk", "")
             score_val = r.get("score", 0)
@@ -569,6 +580,18 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
                 path = fc.get("path", "")
                 prefix = {"added": "[green]+[/]", "removed": "[red]-[/]", "modified": "[yellow]~[/]"}.get(status, " ")
                 table.add_row("", f"  {prefix} {safe_markup(path)}")
+
+        # The Contact Ledger panel: weight 0, warm-only.  A cold replay shows
+        # the standing note so an empty panel is never read as a clean one.
+        contacts = r.get("contacts") or {}
+        if contacts.get("available") is False:
+            table.add_row("First contact", Text(clean(contacts.get("note", ""))))
+        elif contacts.get("records"):
+            table.add_row("First contact", "weight 0")
+            for c in contacts["records"]:
+                table.add_row("", Text(
+                    f"  {clean(c.get('kind', ''))} {clean(c.get('value', ''))} "
+                    f"({clean(c.get('basis', ''))})"))
 
         changes = r.get("changes", [])
         if changes:

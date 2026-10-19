@@ -145,10 +145,12 @@ def forget_package(name: str) -> dict[str, int]:
             return {}
         pkg_id = pkg["id"]
 
-        # alert_state, pkgbuild_snapshots, package_profiles, package_properties
-        # and property_transitions are keyed by package_name directly.
+        # alert_state, pkgbuild_snapshots, package_profiles, package_properties,
+        # property_transitions and contact_ledger are keyed by package_name
+        # directly.  observed_hosts is corpus-wide, not owned by a package.
         for table in ("alert_state", "pkgbuild_snapshots", "package_profiles",
-                      "package_properties", "property_transitions"):
+                      "package_properties", "property_transitions",
+                      "contact_ledger"):
             cur = conn.execute(f"DELETE FROM {table} WHERE package_name = ?", (name,))
             counts[table] = cur.rowcount
 

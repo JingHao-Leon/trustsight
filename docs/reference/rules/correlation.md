@@ -51,6 +51,7 @@ This is a reference page. For how weight and scope work, see
 | [G007](#g007) | Campaign Corroboration | INFO |
 | [G008](#g008) | First-Seen Account Adoption Burst | HIGH |
 | [G009](#g009) | Watchlisted Maintainer | INFO |
+| [G010](#g010) | Shared First-Seen Host | INFO |
 <!-- /generated: page-index -->
 
 ### G001: Shared Gained Host {#g001}
@@ -152,3 +153,13 @@ The dormant-target clause is the FP killer. A legitimate new maintainer adopts a
 Report-only, weight 0, like G006. Registration date, "Inactive since" and suspension state are AUR profile-page facts the pipeline never fetches, so no machine rule can compute them. Where a human has established such a fact - the pattern a triager reads by hand, "Inactive-since ~ Last Updated and Last Packager = Package Maintainer" - the watchlist records it and this rule names the package instead of guessing from RPC metadata.
 
 Entries are keyed by the same salted SHA-256 the `maintainers_hashed` table uses, so no plaintext identity is stored; the salt is per-installation and the file is absent by default, so G009 is silent until an operator curates a list. Add an entry with `python -c "from trustsight.watchlist import add_entry; add_entry('name', 'note')"`.
+
+### G010: Shared First-Seen Host {#g010}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** INFO (weight 0)
+- **Category:** `correlation`
+
+- **Condition:** The same canonical source host, first seen in the corpus at or after `[thresholds] g010.window_days` (default 7) days ago, is gained by at least `[thresholds] g010.min_packages` (default 5) packages within the window.
+
+The G001 shape with the novelty join instead of the gained-host join: only a host the corpus has not met before counts, so one honest newcomer per window is the AUR being the AUR and five is a distribution infrastructure. Weight 0 and never campaign-priming: a first contact is a statement about newness, never about intent, so G010 names the coordination and never scores, gates, or escalates a member (the Contact Ledger's plural-contact rule: strangers in company are a signal, strangers alone are a census).

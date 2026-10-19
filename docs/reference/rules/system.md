@@ -1308,6 +1308,10 @@ See [G008: First-Seen Account Adoption Burst](correlation.md#g008).
 
 See [G009: Watchlisted Maintainer](correlation.md#g009).
 
+### G010 {#g010}
+
+See [G010: Shared First-Seen Host](correlation.md#g010).
+
 ### A001 {#a001}
 
 See [A001: Setuid File In Artifact](artifact.md#a001).

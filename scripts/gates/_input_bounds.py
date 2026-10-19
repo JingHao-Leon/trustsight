@@ -247,14 +247,30 @@ def gate_terminal_output_is_inert() -> Gate:
     check pointed at a covered one.
     """
 
+    from unittest.mock import patch
+
     from rich.console import Console
 
     import trustsight.cli.corpus as corpus_cli
     import trustsight.cli.display as display
     import trustsight.cli.inspect as inspect_cli
     import trustsight.cli.review as review
+    from trustsight.cli.inspect import _render as inspect_render
 
     fact, result = _hostile_fact(), _hostile_result()
+
+    # The first-contact panel is DB-backed, so on a cold database it renders
+    # empty and the hostile value never reaches the renderer - the gate would
+    # pass without ever exercising the path.  Pin a hostile record so the
+    # panel is covered on every run, warm or cold.
+    hostile_panel = {
+        "available": True, "note": "",
+        "records": [{"kind": "host", "value": HOSTILE, "basis": "ledger"}],
+    }
+
+    def with_hostile_panel(fn) -> str:
+        with patch.object(inspect_render, "contact_panel", return_value=hostile_panel):
+            return fn()
 
     def rich(fn) -> str:
         buffer = io.StringIO()
@@ -275,10 +291,10 @@ def gate_terminal_output_is_inert() -> Gate:
     renders = {
         "review rich": lambda: rich(
             lambda: review._render_results_rich([result], 1, False, True, True, False)),
-        "inspect rich": lambda: rich(
-            lambda: inspect_cli._inspect_rich(fact, show_score=True, show_risk=True)),
-        "inspect plain": lambda: plain(
-            lambda: inspect_cli._inspect_plain(fact, show_score=True, show_risk=True)),
+        "inspect rich": lambda: with_hostile_panel(lambda: rich(
+            lambda: inspect_cli._inspect_rich(fact, show_score=True, show_risk=True))),
+        "inspect plain": lambda: with_hostile_panel(lambda: plain(
+            lambda: inspect_cli._inspect_plain(fact, show_score=True, show_risk=True))),
         # forget/history/list were outside this gate entirely, and
         # forget echoed DB-stored package names raw.  Every surface that
         # prints attacker-influenced text belongs here, not the three that

@@ -319,6 +319,14 @@ allow = [
     # (repo.secureblue.dev), the download named by the project's own docs.
     "secureblue.dev",
 ]
+
+[contacts]
+# The Contact Ledger (weight 0, warm-only).  enabled = false is the cold
+# replay lane: no first-contact fact is recorded and the report renders the
+# standing contact_ledger_unavailable note instead of the panel.  The
+# determinism gate runs the corpus with this off and proves the score is
+# identical.
+enabled = true
 """
 
 DEFAULT_NOVELTY_WEIGHTS = tomllib.loads(DEFAULT_CONFIG)["novelty_weights"]
@@ -648,6 +656,15 @@ DEFAULT_THRESHOLDS = (
     "# Set enabled = false to silence it, or path to another watchlist file.\n"
     "enabled = true\n"
     "path = \"\"\n"
+    "\n"
+    "[g010]\n"
+    "# G010 (shared first-seen host) fires when a canonical source host new\n"
+    "# to the corpus at or after this window start is gained by at least\n"
+    "# this many packages.  The G001 shape with the first-seen join: one\n"
+    "# honest newcomer per window is the AUR being the AUR, five is a\n"
+    "# distribution infrastructure.  Weight 0, always.\n"
+    "min_packages = 5\n"
+    "window_days = 7\n"
     "\n"
     "[t006]\n"
     "# T006 (metadata-git divergence) fires when the AUR LastModified timestamp\n"

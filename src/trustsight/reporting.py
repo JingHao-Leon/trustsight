@@ -117,6 +117,7 @@ def evaluate_fact(fact) -> dict[str, Any]:
     """
     from .boundaries import boundaries_from_fact
     from .config import load_config
+    from .contacts import contact_panel
     from .coverage import describe as describe_coverage
     from .layers import layer_profile, parse_overrides
     from .review_policy import review_policy
@@ -204,8 +205,12 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "indicators": list(fact.ioc_matches),
         "dependencies": list(getattr(fact, "dependencies", ())),
         "depth_truncated": bool(getattr(fact, "depth_truncated", False)),
+        # The Contact Ledger panel: weight-0 first contacts, warm-only.  A
+        # dict so a cold replay carries the standing
+        # `contact_ledger_unavailable` note rather than a silent empty list.
+        "contacts": contact_panel(fact),
         # Served from the recorded analysis rather than freshly computed
-        # (#20); both False/"" on a fresh run.
+        # (#20); both False/"" on a fresh run. 
         "cached": bool(getattr(fact, "cached", False)),
         "cached_at": getattr(fact, "cached_at", "") or "",
         # `review --deps` reverses the relationship this report describes:
@@ -264,6 +269,7 @@ REPORT_KEYS = (
     "flagged",
     "cached",
     "cached_at",
+    "contacts",
 )
 
 #: The aggregate verdict numbers.  Withheld unless the caller asks, because
@@ -416,6 +422,10 @@ def report_body(
         # #20: true when the recorded analysis was served unchanged.
         "cached": bool(evaluated.get("cached", False)),
         "cached_at": evaluated.get("cached_at", "") or "",
+        # The Contact Ledger panel: weight-0, warm-only.  `available: false`
+        # carries the standing cold-replay note, so an empty panel is never
+        # read as a panel that found nothing.
+        "contacts": dict(evaluated.get("contacts", {}) or {}),
     }
     if include_score:
         body["score"] = evaluated.get("score", 0)

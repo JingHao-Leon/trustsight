@@ -141,6 +141,10 @@ def _hostile_result():
         }],
         "file_changes": [{"path": HOSTILE, "status": "added"}],
         "is_trivial": False,
+        "contacts": {
+            "available": True, "note": "",
+            "records": [{"kind": "host", "value": HOSTILE, "basis": "ledger"}],
+        },
     }
 
 def _render_forget_list(names: list[str]) -> None:

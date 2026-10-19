@@ -1,6 +1,7 @@
 """Extracted from inspect.py: _render."""
 
 from ...config import load_config
+from ...contacts import contact_panel, panel_lines
 from ...coverage import GAP_REASONS
 from ...scoring import (
     DECLARED_CAVEAT,
@@ -277,6 +278,12 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         layer_line = _layers_and_boundaries_line(fact)
         if layer_line:
             con.print("  " + layer_line, style="dim")
+    # The Contact Ledger panel: weight 0, warm-only.  Shown on every run so a
+    # cold replay's standing note is visible rather than silently absent.
+    # Wrapped in Text() so a package-derived value is printed, not parsed as
+    # Rich markup (panel_lines cleans control characters but keeps brackets).
+    for line in panel_lines(contact_panel(fact)):
+        con.print(Text(line), style="dim")
 
 def _status_text(fact) -> str:
     note = no_aur_change_note(fact)
@@ -396,6 +403,9 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         layer_line = _layers_and_boundaries_line(fact)
         if layer_line:
             print("  " + layer_line)
+    # The Contact Ledger panel: weight 0, warm-only (see the Rich render).
+    for line in panel_lines(contact_panel(fact)):
+        print(line)
     if fact.ioc_matches:
         print("  IOC baseline matches:")
         for m in fact.ioc_matches:
