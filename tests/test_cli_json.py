@@ -36,6 +36,7 @@ CASES = [
     ("verify-build", ["verify-build", "pkg"]),
     ("history", ["history", "pkg"]),
     ("list", ["list"]),
+    ("rules", ["rules"]),
     ("forget", ["forget", "pkg", "--yes"]),
     ("import-baseline", ["import-baseline", "/nonexistent"]),
     ("seed-db", ["seed-db"]),

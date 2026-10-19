@@ -263,6 +263,29 @@ With `--json`, each row also carries a **verdict** field: the stored risk band (
 
 ---
 
+## trustsight rules
+
+List every detection rule, in the one registry order.
+
+```
+trustsight rules [--category SLUG] [--json]
+```
+
+Every rule carries a permanent, opaque **uid** (`TS-####`) that never changes, so a stored report or baseline stays joinable to its rule across a rename. This command is the CLI face of the registry the reference pages and the catalog are also generated from, so it cannot disagree with them about what exists or where it sits.
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--category` | `str` | all | Only rules whose `RuleCategory` slug matches (e.g. `correlation`, `integrity`). An unknown slug exits 2 and lists the valid ones. |
+| `--json` | flag | `false` | Emit the rules as JSON, one object per rule with `id`, `uid`, `series`, `category`, `status` and the `aliases` it was renamed from. |
+
+### Output
+
+Table with columns: **Rule**, **UID**, **Category**, **Status**. `status` is `live` for a rule a code path emits, and `anchor` for one kept only so its reference anchor and citations still resolve. Rows are ordered series-major (`C001` before `H026` before `R001`).
+
+---
+
 ## trustsight forget
 
 Remove a tracked package and all associated history (analysis history, triggered rules, snapshots, profiles, alert state).  Package data is removed permanently; source URL rows and the legacy maintainer table are reassigned to the internal sentinel rather than deleted, while the per-package hashed maintainer rows are deleted with the package.
