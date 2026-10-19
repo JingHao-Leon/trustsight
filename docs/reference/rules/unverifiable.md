@@ -273,6 +273,13 @@ When the recipe declares no forge upstream there is nothing to read and it
 does not fire. See [W012](unverifiable.md#w012) for the case where the
 channel that could stand in is cold.
 
+Measured on the locked benign corpus: 1,940/3,739 (51.9%). That rate is the
+standing boundary made visible: it fires wherever a benign update's diff
+reaches the declared `url=`, which is common, so the reader meets the limit
+on most reports rather than only when an upstream changed. The finding is
+weight 0, so the breadth is a statement about the analysis, not about any
+package.
+
 ### W012: Federation Not Consulted {#w012}
 
 **INFO** (weight 0) · category `unverifiable`
@@ -289,3 +296,8 @@ A consulted channel that simply holds no entry for the declared repo is a
 
 Weight 0, reported once, never forbids a clean verdict (`forbids_clean` is
 false).
+
+Measured on the locked benign corpus: 1,940/3,739 (51.9%), identical to
+W011 because the shipped channel carries no `upstream_repo` entries, so
+every declared upstream is cold. A populated federation channel lowers this
+rate: a consulted channel that misses returns to W011 alone.
