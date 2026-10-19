@@ -1,22 +1,25 @@
-"""Regenerate ``docs/reference/rules/index.md`` from the category pages.
+"""Regenerate the rule reference pages and ``index.md`` from their sources.
 
-The index is a map, not content: its legend counts the members of
-:class:`~trustsight.categories.RuleCategory`, and its quick-reference table
-is one row per ``### Rxxx:`` heading found on the category pages. Both are
-derived, so writing them by hand means two places to update and one of them
-silently going stale.
+The rule bodies are no longer hand-maintained in ``docs/reference/rules/``:
+each ``###`` section lives in ``docs_src/sections/<anchor>.md``, the prose
+above a page's index in ``docs_src/pages/<page>.md``, and the order the
+sections appear in ``docs_src/layout.json``.  This script reassembles the
+pages, writes each heading from the section's *current* id (resolved from
+its permanent ``uid``), and derives ``index.md``'s legend and catalog.  A
+display-id rename (Phase 5) therefore rewrites every heading from the
+registry instead of 266 hand edits.
 
-``tests/test_docs.py`` fails if a rule is missing from the table, so this
-script is what a rule author runs after adding the rule's section:
+``tests/test_generated_docs.py`` fails if a page or the index is stale, so a
+rule author runs this after editing a section:
 
-    python scripts/build_rules_index.py
+    uv run python scripts/build_rules_index.py
 
-The prose above the table is hand-written and is preserved verbatim between
-the markers below.
+The recorded ``docs_src`` is produced once by ``scripts/split_rule_sources.py``.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -30,12 +33,22 @@ from trustsight.registry import resolve  # noqa: E402
 RULES_DIR = ROOT / "docs" / "reference" / "rules"
 INDEX = RULES_DIR / "index.md"
 
+SRC = ROOT / "docs_src"
+PAGES = SRC / "pages"
+SECTIONS = SRC / "sections"
+LAYOUT = SRC / "layout.json"
+
 LEGEND_START = "<!-- generated: legend -->"
 LEGEND_END = "<!-- /generated: legend -->"
 TABLE_START = "<!-- generated: catalog -->"
 TABLE_END = "<!-- /generated: catalog -->"
+PAGE_START = "<!-- generated: page-index -->"
+PAGE_END = "<!-- /generated: page-index -->"
+PAGE_INDEX_RE = re.compile(
+    rf"{re.escape(PAGE_START)}\n.*?\n{re.escape(PAGE_END)}", re.S
+)
 
-HEADING = re.compile(r"^### ([A-Z]\d{3}):\s*(.*?)\s*(?:\{#([^}]+)\})?\s*$")
+META = re.compile(r"^<!-- (uid|name|anchor): (.*) -->$")
 SEVERITY = re.compile(r"\b(FATAL|CRITICAL|HIGH|MEDIUM|LOW|INFO)\b")
 
 SERIES_NAMES = {
@@ -56,61 +69,28 @@ SERIES_NAMES = {
 }
 
 
-def _catalog() -> list[tuple[str, str, str, str, RuleCategory, str]]:
-    """Every documented rule section, as (id, name, severity, series, category, anchor).
-
-    One row per rule, not per heading: ``H026`` is documented twice (the
-    per-package path and the corpus path), and the catalog is a list of
-    rules, so the second section does not add a row.
-    """
-    rows = []
-    seen: set[str] = set()
-    for category in RuleCategory:
-        page = RULES_DIR / category.doc_page
-        if not page.exists():
-            continue
-        lines = page.read_text().split("\n")
-        for index, line in enumerate(lines):
-            match = HEADING.match(line)
-            if not match:
-                continue
-            rule_id, name, anchor = match.group(1), match.group(2), match.group(3)
-            if rule_id in seen:
-                continue
-            seen.add(rule_id)
-            prefix = rule_id[0]
-            series = SERIES_NAMES.get(prefix, prefix)
-            rows.append(
-                (rule_id, name, _severity(lines[index:]),
-                 series, category, anchor or rule_id.lower())
-            )
-    # Series then number, from the one registry ordering, so the catalog and
-    # every page index cannot disagree about where a rule sits.
-    rows.sort(key=_order)
-    return rows
+def _section(anchor: str) -> tuple[dict[str, str], str]:
+    """(metadata, body) for one section source file."""
+    text = (SECTIONS / f"{anchor}.md").read_text()
+    lines = text.split("\n")
+    meta: dict[str, str] = {}
+    for index, line in enumerate(lines):
+        found = META.match(line)
+        if not found:
+            body = "\n".join(lines[index:]).strip("\n")
+            return meta, body
+        meta[found.group(1)] = found.group(2)
+    return meta, ""
 
 
-def _order(row: tuple[str, str, str, str, RuleCategory, str]):
-    """The registry sort key for a catalog row, anchor breaking ties."""
-    rule = resolve(row[0])
-    series, number, rule_id = rule.sort_key if rule else (row[3], int(row[0][1:]), row[0])
-    return (series, number, rule_id, row[5])
-
-
-def _severity(section: list[str]) -> str:
+def _severity(body: str) -> str:
     """The severity a section declares, as a single word.
 
     Several rules carry a per-branch severity ("HIGH on replacement, MEDIUM
     on addition"); the table shows the worst one it opens with, which is
     what the full entry then qualifies.
     """
-    for index, line in enumerate(section):
-        # Stop at the next rule heading. A section with no severity line of
-        # its own (a retired or reserved anchor) would otherwise inherit the
-        # severity of whichever rule follows it, which is how H005 once
-        # rendered as H008's MEDIUM.
-        if index and line.startswith("### "):
-            break
+    for line in body.split("\n"):
         # Two spellings: the list form (`- **Severity:** HIGH (weight 25)`)
         # and the reference form, where the severity opens the entry
         # (`**HIGH** (weight 25) - category evasion`).
@@ -122,32 +102,43 @@ def _severity(section: list[str]) -> str:
     return "-"
 
 
+def _catalog() -> list[tuple[str, str, str, str, RuleCategory, str]]:
+    """Every documented rule, as (id, name, severity, series, category, anchor).
+
+    One row per rule, not per heading: ``H026`` is documented twice (the
+    per-package path and the corpus path), and the catalog is a list of
+    rules, so the second section does not add a row.
+    """
+    layout = json.loads(LAYOUT.read_text())
+    by_page = {category.doc_page: category for category in RuleCategory}
+    rows = []
+    seen: set[str] = set()
+    for page_name, anchors in layout.items():
+        category = by_page[page_name]
+        for anchor in anchors:
+            meta, body = _section(anchor)
+            rule = resolve(meta["uid"])
+            if rule is None:
+                raise SystemExit(f"{anchor}: uid {meta['uid']} is unknown")
+            if rule.id in seen:
+                continue
+            seen.add(rule.id)
+            series = SERIES_NAMES.get(rule.series, rule.series)
+            rows.append((rule.id, meta["name"], _severity(body), series, category, anchor))
+    rows.sort(key=lambda row: (*resolve(row[0]).sort_key, row[5]))
+    return rows
+
+
 def _replace(text: str, start: str, end: str, body: str) -> str:
-    pattern = re.compile(
-        rf"{re.escape(start)}\n.*?\n{re.escape(end)}", re.S
-    )
-    replacement = f"{start}\n{body}\n{end}"
-    updated, count = pattern.subn(lambda _: replacement, text, count=1)
+    pattern = re.compile(rf"{re.escape(start)}\n.*?\n{re.escape(end)}", re.S)
+    updated, count = pattern.subn(lambda _: f"{start}\n{body}\n{end}", text, count=1)
     if count != 1:
         raise SystemExit(f"marker {start} not found in {INDEX}")
     return updated
 
 
-PAGE_START = "<!-- generated: page-index -->"
-PAGE_END = "<!-- /generated: page-index -->"
-PAGE_INDEX_RE = re.compile(
-    rf"{re.escape(PAGE_START)}\n.*?\n{re.escape(PAGE_END)}", re.S
-)
-
-
 def _page_blocks(catalog) -> dict[str, str]:
-    """Page filename -> its generated index block, in catalog order.
-
-    A category page is a flat run of `###` sections, so its table of
-    contents is one long unstructured list and a reader looking for a
-    specific rule has to scroll. The list below is an `##` section, which
-    gives the page a second level, and it links straight to each anchor.
-    """
+    """Page filename -> its generated index block, in catalog order."""
     by_page: dict[str, list] = {}
     for rid, name, sev, _series, cat, anchor in catalog:
         by_page.setdefault(cat.doc_page, []).append((rid, name, sev, anchor))
@@ -166,18 +157,15 @@ def _page_blocks(catalog) -> dict[str, str]:
     return blocks
 
 
-def render_page(text: str, block: str) -> str:
-    """*text* with its generated index replaced by *block*.
-
-    A page with no marker yet gets the block inserted before its first
-    section, so the writer and the freshness check share one code path.
-    """
-    if PAGE_START in text:
-        return PAGE_INDEX_RE.sub(lambda _: block, text, count=1)
-    first = text.find("\n### ")
-    if first == -1:
-        return text
-    return text[:first] + "\n" + block + "\n" + text[first:]
+def render_page(page_name: str, layout, blocks) -> str:
+    """The complete page text, rebuilt from its header, index and sections."""
+    header = (PAGES / page_name).read_text().rstrip()
+    parts = [header, blocks[page_name]]
+    for anchor in layout[page_name]:
+        meta, body = _section(anchor)
+        rule = resolve(meta["uid"])
+        parts.append(f"### {rule.id}: {meta['name']} {{#{anchor}}}\n\n{body}")
+    return "\n\n".join(parts) + "\n"
 
 
 def render_index(text: str, catalog) -> str:
@@ -207,13 +195,11 @@ def render_index(text: str, catalog) -> str:
 
 def main() -> None:
     catalog = _catalog()
+    layout = json.loads(LAYOUT.read_text())
     blocks = _page_blocks(catalog)
 
-    for page_name, block in blocks.items():
-        page = RULES_DIR / page_name
-        if page.exists():
-            page.write_text(render_page(page.read_text(), block))
-
+    for page_name in layout:
+        (RULES_DIR / page_name).write_text(render_page(page_name, layout, blocks))
     INDEX.write_text(render_index(INDEX.read_text(), catalog))
 
     print(f"{INDEX.relative_to(ROOT)}: {len(catalog)} rules across "

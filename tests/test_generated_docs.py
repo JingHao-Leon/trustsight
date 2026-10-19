@@ -1,15 +1,17 @@
-"""The generated docs tables cannot go stale.
+"""The generated rule pages cannot drift from their sources.
 
-``index.md``'s legend and catalog and every category page's on-page index are
-written by ``scripts/build_rules_index.py``.  These render them from the pages
-on disk and assert the files already match, so a rule added without running
-the generator fails here instead of shipping a table that disagrees with the
-pages.
+Every rule page and ``index.md`` is assembled by
+``scripts/build_rules_index.py`` from ``docs_src/sections/``,
+``docs_src/pages/`` and ``docs_src/layout.json``.  These render from those
+sources and assert the committed pages already match, so a section edited
+without rebuilding fails here instead of shipping a page that disagrees with
+its source.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 from trustsight.categories import RULE_CATEGORIES
@@ -31,6 +33,17 @@ def test_catalog_lists_each_registered_rule_once():
     assert set(ids) == set(RULE_CATEGORIES)
 
 
+def test_every_section_source_is_laid_out_and_resolves():
+    build = _generator()
+    layout = json.loads(build.LAYOUT.read_text())
+    placed = [anchor for anchors in layout.values() for anchor in anchors]
+    on_disk = sorted(p.stem for p in build.SECTIONS.glob("*.md"))
+    assert sorted(placed) == on_disk, "a section is on disk but not laid out, or vice versa"
+    for anchor in placed:
+        meta, _body = build._section(anchor)
+        assert build.resolve(meta["uid"]) is not None, f"{anchor}: unknown uid"
+
+
 def test_index_matches_the_generator():
     build = _generator()
     on_disk = build.INDEX.read_text()
@@ -40,15 +53,16 @@ def test_index_matches_the_generator():
     )
 
 
-def test_every_page_index_matches_the_generator():
+def test_every_page_matches_its_sources():
     build = _generator()
+    layout = json.loads(build.LAYOUT.read_text())
     blocks = build._page_blocks(build._catalog())
-    stale = []
-    for page_name, block in blocks.items():
-        text = (build.RULES_DIR / page_name).read_text()
-        if text != build.render_page(text, block):
-            stale.append(page_name)
+    stale = [
+        page_name
+        for page_name in layout
+        if (build.RULES_DIR / page_name).read_text()
+        != build.render_page(page_name, layout, blocks)
+    ]
     assert stale == [], (
-        f"stale on-page indexes: {stale}; "
-        "run python scripts/build_rules_index.py"
+        f"stale pages: {stale}; run python scripts/build_rules_index.py"
     )

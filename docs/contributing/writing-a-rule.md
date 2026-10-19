@@ -129,8 +129,27 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
 }
 ```
 
-Then write the `### H086: Name {#h086}` section on that category's page,
-and add a stub to `docs/reference/rules/system.md`:
+Give the rule a permanent uid, which the registry refuses to load without:
+
+```bash
+uv run python scripts/build_registry_uids.py
+```
+
+Then add the section as `docs_src/sections/<anchor>.md`, with the identity in
+a header and the body below it. The `###` heading is generated, so it is not
+in the file:
+
+```markdown
+<!-- uid: TS-0999 -->
+<!-- name: Name -->
+<!-- anchor: h086 -->
+
+- **Severity:** ...
+- **Condition:** ...
+```
+
+Add the anchor to the page's list in `docs_src/layout.json`, and a stub to
+`docs/reference/rules/system.md`:
 
 ```markdown
 ### H086 {#h086}
@@ -146,8 +165,7 @@ introduces a new *kind* of claim the page does not yet cover. The two tabs are
 kept in step by the navigation check in `tests/test_docs.py`, which requires
 every page on disk to appear in the nav.
 
-Then regenerate the index, whose legend and quick-reference table are both
-derived rather than hand-maintained:
+Then rebuild the pages and the index, both assembled from `docs_src`:
 
 ```bash
 uv run python scripts/build_rules_index.py
@@ -156,6 +174,7 @@ uv run python scripts/build_rules_index.py
 `tests/test_docs.py` fails if any of those is missing, if the section lands
 on a page the category does not own, if a quoted pattern has drifted from
 the shipped one, or if the id is absent from the quick-reference table.
+`tests/test_generated_docs.py` fails if a page or the index was not rebuilt.
 
 ## When to use each
 
