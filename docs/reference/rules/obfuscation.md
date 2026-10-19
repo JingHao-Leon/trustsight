@@ -44,6 +44,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `obfuscation`
+
 - **Pattern:** `base64(?:(?![|;&]).)*?(?:\-d|\-\-decode)\b.*(?<!\\)\|`
 - **Description:** Detects `base64 -d |` and `base64 --decode |` piped to execution. Base64-encoded scripts are a common obfuscation technique to hide malicious commands from casual review.
 - **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
@@ -60,6 +61,7 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
+
 - **Pattern:** `` \beval\s+(?:"|\$\(|\$\{|`|\$[a-zA-Z_]) ``
 - **Description:** Detects `eval` applied to a variable, command substitution, or backtick expression. The payload is assembled at runtime, so no static pattern can see what will execute.
 
@@ -68,6 +70,7 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
+
 - **Pattern:** `` \b(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh))\s+-c\s+(?:\$\(|`|\$\{|["\x27]?\$[A-Za-z_]|"[^"]*\$) ``
 - **Description:** Detects `sh -c` / `bash -c` whose argument contains a variable or substitution rather than a literal command.
 
@@ -76,6 +79,7 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `obfuscation`
+
 - **Pattern:** `base64\s+(?:-d|--decode)\s*(?:<<<|<<\w*|\$\{?[a-zA-Z_])`
 - **Description:** Detects `base64 -d` fed from a here-string or a variable, as opposed to decoding a file that is itself part of the source array.
 
@@ -84,6 +88,7 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 - **Target:** `resolved`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `obfuscation`
+
 - **Pattern:** `\b(?:xxd|uudecode)\s+[^|]*(?<!\\)\|`
 - **Description:** Detects `xxd` or `uudecode` piped onward. Both reconstruct binary content from a text representation, a way to carry a payload past text review.
 - **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
@@ -93,6 +98,7 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 
 - **Severity:** INFO (weight 0)
 - **Category:** `obfuscation`
+
 - **Condition:** An added line changes under literal reconstruction (ANSI-C hex `$'\x62\x75\x6e'`, ANSI-C octal, empty-quote concatenation `b''u''n`, `$(printf '\x62...')`) and the reconstruction reveals a word the raw line did not carry, or an ANSI-C quote survives reconstruction.
 
 The tokenizer rebuilds these forms so that H035, R003 and R039 match on what a
@@ -110,6 +116,7 @@ Fire rate: 58 of 3739 (1.55 %), all weight-0 reconstruction notes.
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `obfuscation`
+
 - **Condition:** An added line contains the indirect-expansion form `${!name}` where `name` is a plain (non-subscripted) variable name. The rule flags the form itself, on any added line, without requiring the expanded fragment to reach a shell.
 
 `${!C}` expands to the *value of the variable whose name is held in `C`*, so

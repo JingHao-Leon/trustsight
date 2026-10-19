@@ -24,6 +24,9 @@ This module separates the jobs:
 * :attr:`Rule.sort_key` is the single ordering used by every view (docs
   bodies, page indexes, the catalog, the CLI listing), so those views cannot
   disagree the way the hand-ordered documentation currently does.
+* The display metadata (:attr:`Rule.name`, ``severity``, ``capability``,
+  ``target``) comes from ``registry_meta.json``, so the reference pages and
+  the catalog are rendered from one record instead of the section prose.
 
 Nothing here changes what a finding contains or how a rule scores; it is a
 lookup layer over data that already ships.
@@ -47,6 +50,7 @@ __all__ = [
     "Rule",
     "Registry",
     "REGISTRY",
+    "SECTION_META",
     "resolve",
     "uid_of",
     "sort_key",
@@ -58,6 +62,18 @@ STATUS_LIVE = "live"
 STATUS_ANCHOR = "anchor"
 
 _UIDS_FILE = "registry_uids.json"
+_META_FILE = "registry_meta.json"
+
+
+def _load_section_meta() -> dict[str, dict]:
+    data = files("trustsight").joinpath(_META_FILE).read_text(encoding="utf-8")
+    return json.loads(data)
+
+
+#: anchor -> the section's display metadata.  Two sections can share a rule
+#: (H026 has a per-package and a corpus path); exactly one is ``canonical``
+#: and names the rule itself.
+SECTION_META: dict[str, dict] = _load_section_meta()
 
 
 def _series_of(rule_id: str) -> str:
@@ -81,6 +97,14 @@ class Rule:
     series: str
     status: str
     aliases: tuple[str, ...] = ()
+    #: Display metadata (from ``registry_meta.json``): the name the reference
+    #: and catalog show, the documented severity (its text and worst word),
+    #: the capability a finding carries, and where the rule is configured.
+    name: str | None = None
+    severity: str | None = None
+    severity_text: str | None = None
+    capability: str | None = None
+    target: str | None = None
 
     @property
     def sort_key(self) -> tuple[str, int, str]:
@@ -105,6 +129,8 @@ class Registry:
         aliases.update(RETIRED_RULE_IDS)
         aliases.update(RENAMED_RULE_IDS)
 
+        named = {e["uid"]: e for e in SECTION_META.values() if e.get("canonical")}
+
         self._rules: dict[str, Rule] = {}
         self._by_uid: dict[str, Rule] = {}
         for rule_id, category in RULE_CATEGORIES.items():
@@ -114,6 +140,7 @@ class Registry:
                     f"{rule_id} has no uid; run scripts/build_registry_uids.py"
                 )
             status = STATUS_ANCHOR if rule_id in ANCHOR_RULE_IDS else STATUS_LIVE
+            entry = named.get(uid, {})
             rule = Rule(
                 uid=uid,
                 id=rule_id,
@@ -121,6 +148,11 @@ class Registry:
                 series=_series_of(rule_id),
                 status=status,
                 aliases=tuple(sorted(a for a, target in aliases.items() if target == rule_id)),
+                name=entry.get("name"),
+                severity=entry.get("severity"),
+                severity_text=entry.get("severity_text"),
+                capability=entry.get("capability"),
+                target=entry.get("target"),
             )
             self._rules[rule_id] = rule
             self._by_uid[uid] = rule

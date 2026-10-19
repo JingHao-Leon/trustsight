@@ -1,0 +1,2396 @@
+{
+  "a001": {
+    "uid": "TS-0001",
+    "name": "Setuid File In Artifact",
+    "canonical": true,
+    "severity_text": "HIGH",
+    "severity": "HIGH",
+    "capability": "artifact",
+    "target": "programmatic (built package manifest)"
+  },
+  "a002": {
+    "uid": "TS-0002",
+    "name": "Undeclared Unit In Artifact",
+    "canonical": true,
+    "severity_text": "MEDIUM",
+    "severity": "MEDIUM",
+    "capability": "artifact",
+    "target": "programmatic (built package manifest)"
+  },
+  "a003": {
+    "uid": "TS-0003",
+    "name": "Library Outside Depends",
+    "canonical": true,
+    "severity_text": "MEDIUM",
+    "severity": "MEDIUM",
+    "capability": "artifact",
+    "target": "programmatic (built package manifest)"
+  },
+  "a004": {
+    "uid": "TS-0004",
+    "name": "Install Hook Diverges From Declaration",
+    "canonical": true,
+    "severity_text": "HIGH",
+    "severity": "HIGH",
+    "capability": "artifact",
+    "target": "programmatic (built package manifest)"
+  },
+  "a005": {
+    "uid": "TS-0005",
+    "name": "Unusual Artifact Mode",
+    "canonical": true,
+    "severity_text": "INFO",
+    "severity": "INFO",
+    "capability": "artifact",
+    "target": "programmatic (built package manifest)"
+  },
+  "a006": {
+    "uid": "TS-0006",
+    "name": "File Capabilities In Artifact",
+    "canonical": true,
+    "severity_text": "HIGH",
+    "severity": "HIGH",
+    "capability": "artifact",
+    "target": "programmatic (built package manifest)"
+  },
+  "a007": {
+    "uid": "TS-0007",
+    "name": "Privileged Surface In Artifact",
+    "canonical": true,
+    "severity_text": "MEDIUM",
+    "severity": "MEDIUM",
+    "capability": "artifact",
+    "target": "programmatic (built package manifest)"
+  },
+  "a008": {
+    "uid": "TS-0008",
+    "name": "eBPF Artifact In Package",
+    "canonical": true,
+    "severity_text": "HIGH",
+    "severity": "HIGH",
+    "capability": "artifact",
+    "target": "programmatic (built package manifest)"
+  },
+  "c001": {
+    "uid": "TS-0009",
+    "name": "Checksum Changed Without Source Change With Stable Version",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": null,
+    "target": null
+  },
+  "c002": {
+    "uid": "TS-0010",
+    "name": "Checksum Updated With Version Bump",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": null,
+    "target": null
+  },
+  "c003": {
+    "uid": "TS-0011",
+    "name": "Source URL Changed Without Version Bump",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": null,
+    "target": null
+  },
+  "c004": {
+    "uid": "TS-0012",
+    "name": "Checksum Removed For Unchanged Source",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": null,
+    "target": null
+  },
+  "c005": {
+    "uid": "TS-0013",
+    "name": "Binary Artifact From Untrusted Source",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": null,
+    "target": null
+  },
+  "c006": {
+    "uid": "TS-0014",
+    "name": "Maintainer Change With New Source Domain",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": null,
+    "target": null
+  },
+  "c007": {
+    "uid": "TS-0015",
+    "name": "Command Substitution In Source Array",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": null,
+    "target": null
+  },
+  "c008": {
+    "uid": "TS-0016",
+    "name": "Unread Content Moved Under A Stable Version",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": null,
+    "target": null
+  },
+  "c009": {
+    "uid": "TS-0017",
+    "name": "Unread Content Moved With The Version",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": null,
+    "target": null
+  },
+  "c010": {
+    "uid": "TS-0018",
+    "name": "Binary Metadata File",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": null,
+    "target": null
+  },
+  "c011": {
+    "uid": "TS-0019",
+    "name": "Prebuilt Binary From Non-Upstream Host",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "source",
+    "target": null
+  },
+  "c012": {
+    "uid": "TS-0020",
+    "name": "Source Domain Resembles Declared Upstream",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "deception",
+    "target": null
+  },
+  "c013": {
+    "uid": "TS-0021",
+    "name": "Source Fork Diverges From Declared Upstream",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "source",
+    "target": null
+  },
+  "c014": {
+    "uid": "TS-0022",
+    "name": "Array Order Manipulation",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15) when an array's entries change order and the array also gains or loses an entry; LOW for an insertion at a different index",
+    "severity": "MEDIUM",
+    "capability": "integrity",
+    "target": null
+  },
+  "c015": {
+    "uid": "TS-0023",
+    "name": "Fetch In package()",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "network",
+    "target": null
+  },
+  "c016": {
+    "uid": "TS-0024",
+    "name": "Interpreter Invocation In Install Hook",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "execution",
+    "target": null
+  },
+  "c017": {
+    "uid": "TS-0025",
+    "name": "Install Hook Writes To A User-Writable Location",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "c018": {
+    "uid": "TS-0026",
+    "name": "Executable File Committed",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "integrity",
+    "target": null
+  },
+  "c019": {
+    "uid": "TS-0027",
+    "name": "File Renamed",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "integrity",
+    "target": null
+  },
+  "c020": {
+    "uid": "TS-0028",
+    "name": "Credentials In A Source URL",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "source",
+    "target": null
+  },
+  "c021": {
+    "uid": "TS-0029",
+    "name": "Dependency Removal During A Build Change",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) when `checkdepends` loses an entry;\n  MEDIUM (weight 15) when `optdepends` does.",
+    "severity": "HIGH",
+    "capability": "composition",
+    "target": null
+  },
+  "c022": {
+    "uid": "TS-0030",
+    "name": "Checksum Strength Downgraded",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "c023": {
+    "uid": "TS-0031",
+    "name": "IP-Literal Source Host",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "source",
+    "target": null
+  },
+  "c024": {
+    "uid": "TS-0032",
+    "name": "Install Script Not Declared",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "composition",
+    "target": null
+  },
+  "c025": {
+    "uid": "TS-0033",
+    "name": "Hardening Option Disabled",
+    "canonical": true,
+    "severity_text": "LOW (weight 5)",
+    "severity": "LOW",
+    "capability": "build",
+    "target": null
+  },
+  "c026": {
+    "uid": "TS-0034",
+    "name": "Empty File Added",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "integrity",
+    "target": null
+  },
+  "c027": {
+    "uid": "TS-0035",
+    "name": "Declared Install Script Is Absent",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "integrity",
+    "target": null
+  },
+  "c028": {
+    "uid": "TS-0036",
+    "name": "Build Cache Outside The Build Trees",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "c029": {
+    "uid": "TS-0037",
+    "name": "Backup Array Gains Entries",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "persistence",
+    "target": null
+  },
+  "c030": {
+    "uid": "TS-0038",
+    "name": "Epoch Removed With Version Unchanged",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "version",
+    "target": null
+  },
+  "c031": {
+    "uid": "TS-0039",
+    "name": "Boot Or System Image Tool Run During Build",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "c032": {
+    "uid": "TS-0040",
+    "name": "Scriptlet Executes Commands At Top Level",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "install-and-persist",
+    "target": null
+  },
+  "d001": {
+    "uid": "TS-0041",
+    "name": "Novel Dependency Added",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "dependency",
+    "target": null
+  },
+  "d002": {
+    "uid": "TS-0042",
+    "name": "Typosquatted Dependency",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "dependency",
+    "target": null
+  },
+  "d003": {
+    "uid": "TS-0043",
+    "name": "New Network-Using Makedepends",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "dependency",
+    "target": null
+  },
+  "d004": {
+    "uid": "TS-0044",
+    "name": "Dependency Hijack Via Provides",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "dependency",
+    "target": null
+  },
+  "e001": {
+    "uid": "TS-0045",
+    "name": "Added-Text Compression Ratio",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "entropy",
+    "target": "programmatic (added-text distribution)"
+  },
+  "e002": {
+    "uid": "TS-0046",
+    "name": "Encoded-Alphabet Fraction",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "entropy",
+    "target": "programmatic (added-text distribution)"
+  },
+  "e003": {
+    "uid": "TS-0047",
+    "name": "Identifier Entropy",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "entropy",
+    "target": "programmatic (added-text distribution)"
+  },
+  "g001": {
+    "uid": "TS-0048",
+    "name": "Shared Gained Host",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "g002": {
+    "uid": "TS-0049",
+    "name": "Shared Added Literal",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "g003": {
+    "uid": "TS-0050",
+    "name": "Coordinated Adoption",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15); HIGH (weight 25) when escalated",
+    "severity": "MEDIUM",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "g004": {
+    "uid": "TS-0051",
+    "name": "Shared Upstream Dependency",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "g005": {
+    "uid": "TS-0052",
+    "name": "Impersonation Campaign",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "g006": {
+    "uid": "TS-0053",
+    "name": "Neighborhood Under Campaign Alert",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "g007": {
+    "uid": "TS-0054",
+    "name": "Campaign Corroboration",
+    "canonical": true,
+    "severity_text": "INFO, weight 0 (report-only)",
+    "severity": "INFO",
+    "capability": "correlation",
+    "target": "programmatic (a run inside an active campaign)"
+  },
+  "g008": {
+    "uid": "TS-0055",
+    "name": "First-Seen Account Adoption Burst",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "g009": {
+    "uid": "TS-0056",
+    "name": "Watchlisted Maintainer",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "h001": {
+    "uid": "TS-0057",
+    "name": "Checksum Disabled",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25), downgraded to INFO (weight 0) if justified",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": "programmatic (not TOML-configurable)"
+  },
+  "h002": {
+    "uid": "TS-0058",
+    "name": "Checksum Emptied",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": "programmatic (not TOML-configurable)"
+  },
+  "h003": {
+    "uid": "TS-0059",
+    "name": "Insecure Download Protocol",
+    "canonical": true,
+    "severity_text": "LOW (weight 5)",
+    "severity": "LOW",
+    "capability": "integrity",
+    "target": "programmatic (diff-aware)"
+  },
+  "h004": {
+    "uid": "TS-0060",
+    "name": "Privilege Escalation",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "privilege",
+    "target": "programmatic (`analysis/build.py`)"
+  },
+  "h005": {
+    "uid": "TS-0061",
+    "name": "validpgpkeys Added",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h006": {
+    "uid": "TS-0062",
+    "name": "New Make/Opt/Check Dependency",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h007": {
+    "uid": "TS-0063",
+    "name": "Symlink Redirect",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h008": {
+    "uid": "TS-0064",
+    "name": "Suspicious Environment Variable",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h009": {
+    "uid": "TS-0065",
+    "name": "Network connection attempt",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h010": {
+    "uid": "TS-0066",
+    "name": "Suspicious file write",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h011": {
+    "uid": "TS-0067",
+    "name": "Sensitive binary execution",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h012": {
+    "uid": "TS-0068",
+    "name": "Strace detection attempt (TracerPid check)",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h013": {
+    "uid": "TS-0069",
+    "name": "Strace log truncated (possible flood evasion)",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h014": {
+    "uid": "TS-0070",
+    "name": "Eval or Exec Usage",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h015": {
+    "uid": "TS-0071",
+    "name": "Critical Build Function Modified",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "build",
+    "target": "programmatic (diff-aware, defined in `src/trustsight/analysis/build.py`)"
+  },
+  "h016": {
+    "uid": "TS-0072",
+    "name": "Hidden Network Fetch In Build",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "network",
+    "target": "programmatic (resolved command lines)"
+  },
+  "h017": {
+    "uid": "TS-0073",
+    "name": "Install Hook Fetches Or Executes",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) for a fetch or dynamic execution; MEDIUM (weight 15) for privileged setup (service enable, account change, sudoers, setuid)",
+    "severity": "HIGH",
+    "capability": "installer",
+    "target": "programmatic (defined in `src/trustsight/analysis/build.py`)"
+  },
+  "h018": {
+    "uid": "TS-0074",
+    "name": "Patch Applied From Outside The Build Tree",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": "programmatic (resolved command lines)"
+  },
+  "h019": {
+    "uid": "TS-0075",
+    "name": "Source URL Downgraded To HTTP",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "network",
+    "target": "programmatic (diff-aware)"
+  },
+  "h020": {
+    "uid": "TS-0076",
+    "name": "Very Recent Update",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "temporal",
+    "target": "programmatic (commit timestamp)"
+  },
+  "h021": {
+    "uid": "TS-0077",
+    "name": "Brand New Package",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "temporal",
+    "target": "programmatic (root commit timestamp)"
+  },
+  "h022": {
+    "uid": "TS-0078",
+    "name": "Stale Package Revived",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "temporal",
+    "target": "programmatic (commit timestamp gap)"
+  },
+  "h023": {
+    "uid": "TS-0079",
+    "name": "Install Hook Present",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "context",
+    "target": "programmatic (diff-aware)"
+  },
+  "h024": {
+    "uid": "TS-0080",
+    "name": "GPG Verification Removed",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) - corpus rate 0.03 %",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": "programmatic (diff-aware)"
+  },
+  "h025": {
+    "uid": "TS-0081",
+    "name": "Build Environment Subversion",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) for `LD_PRELOAD`/`LD_LIBRARY_PATH`;\n  MEDIUM (weight 15) for `CFLAGS`/`LDFLAGS`/`MAKEFLAGS`/`PATH` -\n  corpus rate 0.25 % (all HIGH; MEDIUM not observed)",
+    "severity": "HIGH",
+    "capability": "build",
+    "target": "programmatic (resolved lines, position-scoped)"
+  },
+  "h026": {
+    "uid": "TS-0082",
+    "name": "Untrusted Maintainer Takeover",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) - always on; corpus rate TBD (requires live git history)",
+    "severity": "HIGH",
+    "capability": "maintainer",
+    "target": "programmatic (maintainer delta + global novelty)"
+  },
+  "h026-corpus": {
+    "uid": "TS-0082",
+    "name": "Untrusted Maintainer Takeover (corpus path)",
+    "canonical": false,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "maintainer",
+    "target": null
+  },
+  "h027": {
+    "uid": "TS-0083",
+    "name": "Capability Density Anomaly",
+    "canonical": true,
+    "severity_text": "INFO (weight 0) - report-only co-occurrence flag",
+    "severity": "INFO",
+    "capability": "meta",
+    "target": "programmatic (existing `triggered_rules`, no new detection)"
+  },
+  "h028": {
+    "uid": "TS-0084",
+    "name": "Accelerated Release Cadence",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "h029-rule": {
+    "uid": "TS-0085",
+    "name": "Package-Name Typosquat",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) - corpus rate 0.00 % (0/202, package-name scan)",
+    "severity": "HIGH",
+    "capability": "naming",
+    "target": "programmatic (package name against seeded candidate list)"
+  },
+  "h030-rule": {
+    "uid": "TS-0086",
+    "name": "Dependency-Set Expansion",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15) - corpus rate 0.13 % (published dependency seed)",
+    "severity": "MEDIUM",
+    "capability": "dependency",
+    "target": "programmatic (delta over dependency arrays \u00d7 per-dep novelty)"
+  },
+  "h031": {
+    "uid": "TS-0087",
+    "name": "Version-In-URL Injection",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "network",
+    "target": "programmatic (`analysis/network.py`)"
+  },
+  "h032": {
+    "uid": "TS-0088",
+    "name": "Write To User Home Or RC",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "h033": {
+    "uid": "TS-0089",
+    "name": "Moved Git Ref",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) when a tag anchor is unchanged, MEDIUM (weight 15) otherwise",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": "programmatic (`analysis/network.py`)"
+  },
+  "h034": {
+    "uid": "TS-0090",
+    "name": "Exotic Source Protocol",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "network",
+    "target": "programmatic (`analysis/network.py`)"
+  },
+  "h035": {
+    "uid": "TS-0091",
+    "name": "Foreign Package Manager In Install Hook",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "installer",
+    "target": "programmatic (resolved install hook lines, position-scoped)"
+  },
+  "h036": {
+    "uid": "TS-0092",
+    "name": "Shell Obfuscation Density",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15), or HIGH (weight 25) when the reconstructed line reveals an executable action",
+    "severity": "MEDIUM",
+    "capability": "obfuscation",
+    "target": "programmatic (resolved build-function lines, position-scoped)"
+  },
+  "h037": {
+    "uid": "TS-0093",
+    "name": "Long-Stable Property Changed",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "temporal",
+    "target": null
+  },
+  "h038": {
+    "uid": "TS-0094",
+    "name": "World-Writable Staging",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "h039": {
+    "uid": "TS-0095",
+    "name": "Systemd ExecStart From Runtime-Writable Path",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "h040": {
+    "uid": "TS-0096",
+    "name": "Host Reconnaissance",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "recon",
+    "target": null
+  },
+  "h041": {
+    "uid": "TS-0097",
+    "name": "Upload To Paste Or File-Drop Host",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "exfil",
+    "target": "programmatic (`analysis/network.py`)"
+  },
+  "h042": {
+    "uid": "TS-0098",
+    "name": "Hidden Drop",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "h043": {
+    "uid": "TS-0099",
+    "name": "Attack-Chain Composition",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "meta",
+    "target": null
+  },
+  "h044": {
+    "uid": "TS-0100",
+    "name": "Ownership Transition",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "maintainer",
+    "target": null
+  },
+  "h045": {
+    "uid": "TS-0101",
+    "name": "Mass Adoption",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "adoption",
+    "target": null
+  },
+  "h046": {
+    "uid": "TS-0102",
+    "name": "Orphan/Adoption Dependency",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "dependency",
+    "target": null
+  },
+  "h047": {
+    "uid": "TS-0103",
+    "name": "Security-Relevant Build Flag Change",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) when a flag was dropped, MEDIUM (weight 15) when one appeared",
+    "severity": "HIGH",
+    "capability": "build",
+    "target": null
+  },
+  "h048": {
+    "uid": "TS-0104",
+    "name": "Dependency Vendored Into Source",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) for a security-relevant library, MEDIUM (weight 15) otherwise",
+    "severity": "HIGH",
+    "capability": "dependency",
+    "target": null
+  },
+  "h049": {
+    "uid": "TS-0105",
+    "name": "Source Host Changed",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "source",
+    "target": null
+  },
+  "h050": {
+    "uid": "TS-0106",
+    "name": "Version Scheme Changed",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "context",
+    "target": null
+  },
+  "h051": {
+    "uid": "TS-0107",
+    "name": "Package Description Changed",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "integrity",
+    "target": null
+  },
+  "h052": {
+    "uid": "TS-0108",
+    "name": "Shared Source Repository",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "adoption",
+    "target": null
+  },
+  "h053": {
+    "uid": "TS-0109",
+    "name": "Name/Host Consensus Divergence",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "source",
+    "target": null
+  },
+  "h054": {
+    "uid": "TS-0110",
+    "name": "Build System Changed",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "build",
+    "target": null
+  },
+  "h055": {
+    "uid": "TS-0111",
+    "name": "Attribute Burst",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "adoption",
+    "target": null
+  },
+  "h056": {
+    "uid": "TS-0112",
+    "name": "Known Indicator of Compromise",
+    "canonical": true,
+    "severity_text": "tiered by the indicator's confidence: `confirmed` is FATAL, `high` is CRITICAL, `medium` is HIGH, an untiered entry is MEDIUM. A `pkgbuild_pattern` entry is capped at CRITICAL whatever its tier, because a regex names a shape rather than an exact artefact.",
+    "severity": "FATAL",
+    "capability": "ioc",
+    "target": null
+  },
+  "h057": {
+    "uid": "TS-0113",
+    "name": "Transitive Exposure",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "dependency",
+    "target": null
+  },
+  "h058": {
+    "uid": "TS-0114",
+    "name": "Maintainer Baseline Deviation",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "adoption",
+    "target": null
+  },
+  "h059": {
+    "uid": "TS-0115",
+    "name": "Name/Repo Divergence",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "source",
+    "target": null
+  },
+  "h060": {
+    "uid": "TS-0116",
+    "name": "Transitive Orphan Risk",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "dependency",
+    "target": null
+  },
+  "h061": {
+    "uid": "TS-0117",
+    "name": "Dependency Centrality",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "dependency",
+    "target": null
+  },
+  "h062": {
+    "uid": "TS-0118",
+    "name": "Pacman Hook Installed",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "persistence",
+    "target": null
+  },
+  "h063": {
+    "uid": "TS-0119",
+    "name": "Epoch Introduced",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15), INFO for a bare `epoch=0`",
+    "severity": "MEDIUM",
+    "capability": "version",
+    "target": null
+  },
+  "h064": {
+    "uid": "TS-0120",
+    "name": "Provides/Replaces Scope Expansion",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one",
+    "severity": "HIGH",
+    "capability": "dependency",
+    "target": null
+  },
+  "h065": {
+    "uid": "TS-0121",
+    "name": "Obfuscated Literal Reconstructed",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "obfuscation",
+    "target": null
+  },
+  "h066": {
+    "uid": "TS-0122",
+    "name": "Embedded Binary In Tree",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "h067": {
+    "uid": "TS-0123",
+    "name": "Anti-Analysis Check",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "anti_analysis",
+    "target": null
+  },
+  "h068": {
+    "uid": "TS-0124",
+    "name": "Reconstructed Executable Payload",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "execution",
+    "target": null
+  },
+  "h069": {
+    "uid": "TS-0125",
+    "name": "Build-time Generation Then Execution",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "execution",
+    "target": null
+  },
+  "h070": {
+    "uid": "TS-0126",
+    "name": "Archive Trailer Anomaly",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "h071": {
+    "uid": "TS-0127",
+    "name": "Covert Egress",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "network",
+    "target": "programmatic (`analysis/network.py`)"
+  },
+  "h072": {
+    "uid": "TS-0128",
+    "name": "Write Then Execute",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "execution",
+    "target": null
+  },
+  "h073": {
+    "uid": "TS-0129",
+    "name": "Introduction Rate Deviation",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "adoption",
+    "target": null
+  },
+  "h074": {
+    "uid": "TS-0130",
+    "name": "Adopt-then-Modify",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "maintainer",
+    "target": null
+  },
+  "h075": {
+    "uid": "TS-0131",
+    "name": "Remote Script Via Process Substitution",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "execution",
+    "target": null
+  },
+  "h076": {
+    "uid": "TS-0132",
+    "name": "Build Writes Outside Staging Root",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "h077": {
+    "uid": "TS-0133",
+    "name": "Parse-time Network Fetch",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "network",
+    "target": "programmatic (`analysis/network.py`)"
+  },
+  "h078": {
+    "uid": "TS-0134",
+    "name": "Signing Key Set Changed",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) on replacement, MEDIUM (weight 15) on addition, INFO (weight 0) on introduction",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "h079": {
+    "uid": "TS-0135",
+    "name": "Build Flags Weakened",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) when a mitigation is switched off, MEDIUM (weight 15) on a top-level replacement",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "h080": {
+    "uid": "TS-0136",
+    "name": "Indirect Command Expansion",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "obfuscation",
+    "target": null
+  },
+  "h081": {
+    "uid": "TS-0137",
+    "name": "Committed File Executed Without Declaration",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "execution",
+    "target": null
+  },
+  "h082": {
+    "uid": "TS-0138",
+    "name": "Fetch Then Execute",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "network_execution",
+    "target": null
+  },
+  "h083": {
+    "uid": "TS-0139",
+    "name": "Downloaded Source File Executed",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "execution",
+    "target": null
+  },
+  "h084": {
+    "uid": "TS-0140",
+    "name": "Service ExecStart Targets Undeclared Binary",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "h085": {
+    "uid": "TS-0141",
+    "name": "PATH Injection With Undeclared Directory",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "build",
+    "target": null
+  },
+  "h086": {
+    "uid": "TS-0142",
+    "name": "Adopted From Orphan",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "maintainer",
+    "target": null
+  },
+  "h087": {
+    "uid": "TS-0143",
+    "name": "Recipe Changed Without Upstream",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "integrity",
+    "target": null
+  },
+  "h088": {
+    "uid": "TS-0144",
+    "name": "Adopted, Recipe Rewritten, Unpinned Fetch",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "takeover",
+    "target": null
+  },
+  "h089": {
+    "uid": "TS-0145",
+    "name": "Packaged File Names A Build-Only Path",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "h090": {
+    "uid": "TS-0146",
+    "name": "Committed Companion Carries A Fetch-Execute Payload",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "delivery",
+    "target": null
+  },
+  "h091": {
+    "uid": "TS-0147",
+    "name": "Checksum Array Shorter Than Source Array",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "h092": {
+    "uid": "TS-0148",
+    "name": "Metadata Names A Source The Recipe Does Not",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "h093": {
+    "uid": "TS-0149",
+    "name": "Committed Config Points At A Build-Only Path",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "h094": {
+    "uid": "TS-0150",
+    "name": "Unread Script Executed During Packaging",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "execution",
+    "target": null
+  },
+  "h095": {
+    "uid": "TS-0151",
+    "name": "Boot Or Image Artifact Built From The Source Tree",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": null
+  },
+  "h096": {
+    "uid": "TS-0152",
+    "name": "Download Agent Override",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "network",
+    "target": null
+  },
+  "h097": {
+    "uid": "TS-0153",
+    "name": "Function Shadowing",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "h098": {
+    "uid": "TS-0154",
+    "name": "Naming/Deception Cluster",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "meta",
+    "target": "programmatic (the package's own findings, no new detection)"
+  },
+  "h099": {
+    "uid": "TS-0155",
+    "name": "Source Host Swapped Under A Kept Local Name",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "h100": {
+    "uid": "TS-0156",
+    "name": "Install Hook Added Or Retargeted",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) when the hook script ships in the same\n  diff; MEDIUM (weight 15) when only the declaration moves.",
+    "severity": "HIGH",
+    "capability": "install-and-persist",
+    "target": null
+  },
+  "h101": {
+    "uid": "TS-0157",
+    "name": "Source Pinning Lost",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "integrity",
+    "target": null
+  },
+  "h102": {
+    "uid": "TS-0158",
+    "name": "Maintainer Change With Signing Key Change",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "meta",
+    "target": null
+  },
+  "h103": {
+    "uid": "TS-0159",
+    "name": "Metadata And Recipe Disagree",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25) for a field divergence or a source the\n  PKGBUILD fetches but `.SRCINFO` never names; INFO (weight 0) for a source\n  `.SRCINFO` names but the PKGBUILD does not (stale metadata).",
+    "severity": "HIGH",
+    "capability": "integrity",
+    "target": null
+  },
+  "m001": {
+    "uid": "TS-0160",
+    "name": "Claim Contradicted By Structure",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "meta",
+    "target": "programmatic (finding set)"
+  },
+  "m002": {
+    "uid": "TS-0161",
+    "name": "Weak Signal Across Layers",
+    "canonical": true,
+    "severity_text": "MEDIUM, weight 0 (annotation)",
+    "severity": "MEDIUM",
+    "capability": "meta",
+    "target": "programmatic (finding set)"
+  },
+  "m003": {
+    "uid": "TS-0162",
+    "name": "Composition Not Owned Elsewhere",
+    "canonical": true,
+    "severity_text": "MEDIUM, weight 0 (annotation)",
+    "severity": "MEDIUM",
+    "capability": "meta",
+    "target": "programmatic (finding set)"
+  },
+  "m004": {
+    "uid": "TS-0163",
+    "name": "Expected Co-fire Absent",
+    "canonical": true,
+    "severity_text": "INFO, weight 0",
+    "severity": "INFO",
+    "capability": "meta",
+    "target": "programmatic (tool health)"
+  },
+  "m005": {
+    "uid": "TS-0164",
+    "name": "Licensor Absent On Licensed Shape",
+    "canonical": true,
+    "severity_text": "INFO, weight 0",
+    "severity": "INFO",
+    "capability": "meta",
+    "target": "programmatic (tool health)"
+  },
+  "m006": {
+    "uid": "TS-0165",
+    "name": "Campaign Re-armed Too Often",
+    "canonical": true,
+    "severity_text": "INFO, weight 0",
+    "severity": "INFO",
+    "capability": "meta",
+    "target": "programmatic (tool health)"
+  },
+  "r001": {
+    "uid": "TS-0166",
+    "name": "Remote Script Execution",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "network_execution",
+    "target": "`resolved`"
+  },
+  "r002": {
+    "uid": "TS-0167",
+    "name": "Wget Pipe to Shell",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "network_execution",
+    "target": "`resolved`"
+  },
+  "r003": {
+    "uid": "TS-0168",
+    "name": "Base64 Decode and Execute",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "obfuscation",
+    "target": "`resolved`"
+  },
+  "r007": {
+    "uid": "TS-0169",
+    "name": "Install File Modification",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "installer",
+    "target": "`raw_line`"
+  },
+  "r008": {
+    "uid": "TS-0170",
+    "name": "Unexpected File Download",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "network_execution",
+    "target": "`resolved`"
+  },
+  "r010": {
+    "uid": "TS-0171",
+    "name": "Uses curl in PKGBUILD",
+    "canonical": true,
+    "severity_text": "LOW (weight 5)",
+    "severity": "LOW",
+    "capability": "network_usage",
+    "target": "`raw_line`"
+  },
+  "r011": {
+    "uid": "TS-0172",
+    "name": "Uses wget in PKGBUILD",
+    "canonical": true,
+    "severity_text": "LOW (weight 5)",
+    "severity": "LOW",
+    "capability": "network_usage",
+    "target": "`raw_line`"
+  },
+  "r012": {
+    "uid": "TS-0173",
+    "name": "LLM Prompt Injection",
+    "canonical": true,
+    "severity_text": "FATAL (weight 0; names itself in the verdict label, e.g. `Low (FATAL: R012)`)",
+    "severity": "FATAL",
+    "capability": "injection",
+    "target": "`resolved`"
+  },
+  "r013": {
+    "uid": "TS-0174",
+    "name": "Unicode Bidi Override",
+    "canonical": true,
+    "severity_text": "FATAL (weight 0; names itself in the verdict label, e.g. `Low (FATAL: R012)`)",
+    "severity": "FATAL",
+    "capability": "unicode",
+    "target": "`raw_line`"
+  },
+  "r017": {
+    "uid": "TS-0175",
+    "name": "Setuid/Setgid Permission",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "privilege",
+    "target": "`raw_line`"
+  },
+  "r039": {
+    "uid": "TS-0176",
+    "name": "Eval With Dynamic Content",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "execution",
+    "target": "`resolved`"
+  },
+  "r040": {
+    "uid": "TS-0177",
+    "name": "Shell -c With Dynamic Payload",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "execution",
+    "target": "`resolved`"
+  },
+  "r041": {
+    "uid": "TS-0178",
+    "name": "Shell Network Redirection",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "network_execution",
+    "target": "`resolved`"
+  },
+  "r042": {
+    "uid": "TS-0179",
+    "name": "Download Then Execute",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "execution",
+    "target": "`resolved`"
+  },
+  "r043": {
+    "uid": "TS-0180",
+    "name": "Base64 Blob Decode",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "obfuscation",
+    "target": "`resolved`"
+  },
+  "r044": {
+    "uid": "TS-0181",
+    "name": "Interpreter One-Liner With Network",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "network_execution",
+    "target": "`resolved`"
+  },
+  "r045": {
+    "uid": "TS-0182",
+    "name": "Binary Encoding Pipe",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "obfuscation",
+    "target": "`resolved`"
+  },
+  "r046": {
+    "uid": "TS-0183",
+    "name": "Source URL Uses IP Address",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "network",
+    "target": "`raw_line`"
+  },
+  "r047": {
+    "uid": "TS-0184",
+    "name": "Source URL Uses Non-Standard Port",
+    "canonical": true,
+    "severity_text": "LOW (weight 5)",
+    "severity": "LOW",
+    "capability": "network",
+    "target": "`raw_line`"
+  },
+  "r048": {
+    "uid": "TS-0185",
+    "name": "Source URL On Free Registrar TLD",
+    "canonical": true,
+    "severity_text": "LOW (weight 5)",
+    "severity": "LOW",
+    "capability": "network",
+    "target": "`raw_line`"
+  },
+  "r049": {
+    "uid": "TS-0186",
+    "name": "Compiler Plugin Or Loader Override",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "build",
+    "target": "`raw_line`"
+  },
+  "r050": {
+    "uid": "TS-0187",
+    "name": "Compiler Hardening Disabled",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "build",
+    "target": "`raw_line`"
+  },
+  "r051": {
+    "uid": "TS-0188",
+    "name": "Network Access In pkgver",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "packaging",
+    "target": "`raw_line`"
+  },
+  "r052": {
+    "uid": "TS-0189",
+    "name": "Dotfile Written To User Profile",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": "`raw_line`"
+  },
+  "r053": {
+    "uid": "TS-0190",
+    "name": "Setuid Or Setgid Bit Set In Package Root",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "privilege",
+    "target": "`raw_line`"
+  },
+  "r054": {
+    "uid": "TS-0191",
+    "name": "Persistence Unit Outside Package Root",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": "`raw_line`"
+  },
+  "r055": {
+    "uid": "TS-0192",
+    "name": "Git Clone With Variable Branch",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "source",
+    "target": "`resolved`"
+  },
+  "r056": {
+    "uid": "TS-0193",
+    "name": "Download Then Source",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "execution",
+    "target": "`resolved`"
+  },
+  "r057": {
+    "uid": "TS-0194",
+    "name": "TLS Verification Disabled",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "network",
+    "target": "`resolved`"
+  },
+  "r058": {
+    "uid": "TS-0195",
+    "name": "Write Outside Package Root",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "system",
+    "target": "`raw_line`"
+  },
+  "r059": {
+    "uid": "TS-0196",
+    "name": "Setuid Or Setgid Bit Set Outside Package Root",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "privilege",
+    "target": "`raw_line`"
+  },
+  "r078": {
+    "uid": "TS-0197",
+    "name": "Compression Command Override",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "build",
+    "target": null
+  },
+  "r091": {
+    "uid": "TS-0198",
+    "name": "Privilege Escalation Override",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "build",
+    "target": null
+  },
+  "r099": {
+    "uid": "TS-0199",
+    "name": "Trap Statement",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "build",
+    "target": null
+  },
+  "r104": {
+    "uid": "TS-0200",
+    "name": "Error Handling Suppressed",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "build",
+    "target": null
+  },
+  "r144": {
+    "uid": "TS-0201",
+    "name": "Packaged File Points At A World-Writable Path",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "persistence",
+    "target": "`raw_line`"
+  },
+  "r152": {
+    "uid": "TS-0202",
+    "name": "Source URL On Free-Hosting Or Dynamic-DNS Host",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "network",
+    "target": "`raw_line`"
+  },
+  "s001": {
+    "uid": "TS-0203",
+    "name": "Recursive Self-Spawn",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "sabotage",
+    "target": null
+  },
+  "s002": {
+    "uid": "TS-0204",
+    "name": "Recursive Deletion Outside The Build Tree",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "sabotage",
+    "target": null
+  },
+  "s003": {
+    "uid": "TS-0205",
+    "name": "Raw Block Device Write",
+    "canonical": true,
+    "severity_text": "CRITICAL (weight 40)",
+    "severity": "CRITICAL",
+    "capability": "sabotage",
+    "target": null
+  },
+  "s004": {
+    "uid": "TS-0206",
+    "name": "Secure Deletion Of User Data",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "sabotage",
+    "target": null
+  },
+  "s005": {
+    "uid": "TS-0207",
+    "name": "Permission Change On A System Path",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "sabotage",
+    "target": null
+  },
+  "s006": {
+    "uid": "TS-0208",
+    "name": "System Service Disruption",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "sabotage",
+    "target": null
+  },
+  "s007": {
+    "uid": "TS-0209",
+    "name": "Cryptocurrency Miner",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "sabotage",
+    "target": null
+  },
+  "s008": {
+    "uid": "TS-0210",
+    "name": "Shell History Or Log Destruction",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "sabotage",
+    "target": null
+  },
+  "t001": {
+    "uid": "TS-0211",
+    "name": "Signing-Key Novelty",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "temporal",
+    "target": "programmatic (ecosystem signing-key ledger)"
+  },
+  "t002": {
+    "uid": "TS-0212",
+    "name": "Maintainer Domain Novelty",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "temporal",
+    "target": "programmatic (ecosystem maintainer-domain ledger)"
+  },
+  "t003": {
+    "uid": "TS-0213",
+    "name": "Signing Key Rotated",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "temporal",
+    "target": "programmatic (`validpgpkeys` pre/post)"
+  },
+  "t006": {
+    "uid": "TS-0214",
+    "name": "Metadata-Git Divergence",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "temporal",
+    "target": "programmatic (AUR LastModified vs git tip commit date)"
+  },
+  "t007": {
+    "uid": "TS-0215",
+    "name": "Packager Not In History",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "temporal",
+    "target": "programmatic (AUR maintainer vs git commit messages)"
+  },
+  "u001": {
+    "uid": "TS-0216",
+    "name": "Manifest Added Or Removed",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "dependency-manifest",
+    "target": "committed manifest files"
+  },
+  "u002": {
+    "uid": "TS-0217",
+    "name": "Upstream Dependency Delta",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "dependency-manifest",
+    "target": "committed manifest files"
+  },
+  "u003": {
+    "uid": "TS-0218",
+    "name": "New Remote Source In Manifest",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "dependency-manifest",
+    "target": "committed manifest files"
+  },
+  "u004": {
+    "uid": "TS-0219",
+    "name": "Registry Redirect",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 15)",
+    "severity": "MEDIUM",
+    "capability": "dependency-manifest",
+    "target": "committed manifest files"
+  },
+  "u005": {
+    "uid": "TS-0220",
+    "name": "Dependency Surface Jump",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "dependency-manifest",
+    "target": "committed manifest files"
+  },
+  "u006": {
+    "uid": "TS-0221",
+    "name": "Manifest Changed Without Its Lockfile",
+    "canonical": true,
+    "severity_text": "INFO (weight 0)",
+    "severity": "INFO",
+    "capability": "dependency-manifest",
+    "target": "committed manifest files"
+  },
+  "w001": {
+    "uid": "TS-0222",
+    "name": "Executes Code This Analysis Did Not Read",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w002": {
+    "uid": "TS-0223",
+    "name": "Build Resolves Dependencies From A Registry",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w003": {
+    "uid": "TS-0224",
+    "name": "Applies A Patch This Analysis Did Not Read",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w004": {
+    "uid": "TS-0225",
+    "name": "Build Engine Runs A Manifest This Analysis Did Not Read",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w005": {
+    "uid": "TS-0226",
+    "name": "Build Runs A Target Whose Recipe Was Not Read",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w006": {
+    "uid": "TS-0227",
+    "name": "Generated File Names A Build-Only Path",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w007": {
+    "uid": "TS-0228",
+    "name": "Dependency Novelty Declined For Insufficient Observations",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w008": {
+    "uid": "TS-0229",
+    "name": "Unresolved Construct In A Recipe",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w009": {
+    "uid": "TS-0230",
+    "name": "Upstream Manifests Not Examined",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w010": {
+    "uid": "TS-0231",
+    "name": "Alert Volume Capped",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x001": {
+    "uid": "TS-0232",
+    "name": "Encoded Payload Decoded And Executed",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x002": {
+    "uid": "TS-0233",
+    "name": "Non-Literal Executable Name",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x003": {
+    "uid": "TS-0234",
+    "name": "Obfuscated Command Argument",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x004": {
+    "uid": "TS-0235",
+    "name": "Build Output Suppressed",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x005": {
+    "uid": "TS-0236",
+    "name": "Home Reached By An Alternative Spelling",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x006": {
+    "uid": "TS-0237",
+    "name": "Source Points Somewhere Unexpected",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x007": {
+    "uid": "TS-0238",
+    "name": "Multiple Evasion Techniques",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x008": {
+    "uid": "TS-0239",
+    "name": "Whitespace A Shell Does Not Split On",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x009": {
+    "uid": "TS-0240",
+    "name": "Fetch Through An Uncatalogued Client",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x010": {
+    "uid": "TS-0241",
+    "name": "Interpreter One-Liner Reaches The Network",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x011": {
+    "uid": "TS-0242",
+    "name": "Package Manager Runs Fetched Code At Build Time",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x012": {
+    "uid": "TS-0243",
+    "name": "Build Toolchain Redirected Into The Source Tree",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x013": {
+    "uid": "TS-0244",
+    "name": "Fetch Redirected Or Trust Root Replaced",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x014": {
+    "uid": "TS-0245",
+    "name": "Environment Variable Names Code To Run",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x015": {
+    "uid": "TS-0246",
+    "name": "Work Scheduled To Run After The Build",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x016": {
+    "uid": "TS-0247",
+    "name": "Fetch Piped Into An Unrecognised Consumer",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x017": {
+    "uid": "TS-0248",
+    "name": "Tool Flag Or Builtin Carries A Command",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x018": {
+    "uid": "TS-0249",
+    "name": "Interpreter One-Liner Assembles A Name",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x019": {
+    "uid": "TS-0250",
+    "name": "Host Material Sent Or Packaged",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x020": {
+    "uid": "TS-0251",
+    "name": "Recipe Writes The Build Steps The Engine Runs",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x021": {
+    "uid": "TS-0252",
+    "name": "Executor Runs A File Chosen At Runtime",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x022": {
+    "uid": "TS-0253",
+    "name": "Generated Config Handed To The Tool That Reads It",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x023": {
+    "uid": "TS-0254",
+    "name": "Command Output Executed As A Script",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x024": {
+    "uid": "TS-0255",
+    "name": "Indirect Sensitive Assignment",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x025": {
+    "uid": "TS-0256",
+    "name": "Multi-Line Function Shadow",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x026": {
+    "uid": "TS-0257",
+    "name": "Unresolved Constructs In Executable Positions",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x027": {
+    "uid": "TS-0258",
+    "name": "Refusal Cluster",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x028": {
+    "uid": "TS-0259",
+    "name": "Pattern Completed Across Commits",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x029": {
+    "uid": "TS-0260",
+    "name": "Encoded Material At Rest",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x030": {
+    "uid": "TS-0261",
+    "name": "ANSI-C Quoted Content In Commands",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x031": {
+    "uid": "TS-0262",
+    "name": "Build Reads Non-Code Text",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x032": {
+    "uid": "TS-0263",
+    "name": "Command Name Assembled By Splicing",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x033": {
+    "uid": "TS-0264",
+    "name": "File With No Provenance Executed",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "x034": {
+    "uid": "TS-0265",
+    "name": "Fetch Laundered Through An Archival Service",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  }
+}

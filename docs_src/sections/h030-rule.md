@@ -1,10 +1,6 @@
 <!-- uid: TS-0086 -->
-<!-- name: Dependency-Set Expansion -->
 <!-- anchor: h030-rule -->
 
-- **Target:** programmatic (delta over dependency arrays × per-dep novelty)
-- **Severity:** MEDIUM (weight 15) - corpus rate 0.13 % (published dependency seed)
-- **Category:** `dependency`
 - **Condition:** A single diff adds 3+ `depends`/`makedepends`/`optdepends`/`checkdepends` entries whose **count × mean rarity** exceeds the expansion gate (≥1.5, tuned on corpus).
 
 **Why not count alone:** Adding 5 deps that are all common (`glibc`, `qt6-base`, `cmake`) is a normal heavy build and should not fire. The signal is count **weighted by how rare/novel each added dep is**, reusing D001's `dependency_observation_count` as a rarity proxy. Novel/obscure deps push the magnitude up; common deps contribute near zero.

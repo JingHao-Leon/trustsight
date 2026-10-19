@@ -37,6 +37,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (delta over dependency arrays × per-dep novelty)
 - **Severity:** MEDIUM (weight 15) - corpus rate 0.13 % (published dependency seed)
 - **Category:** `dependency`
+
 - **Condition:** A single diff adds 3+ `depends`/`makedepends`/`optdepends`/`checkdepends` entries whose **count × mean rarity** exceeds the expansion gate (≥1.5, tuned on corpus).
 
 **Why not count alone:** Adding 5 deps that are all common (`glibc`, `qt6-base`, `cmake`) is a normal heavy build and should not fire. The signal is count **weighted by how rare/novel each added dep is**, reusing D001's `dependency_observation_count` as a rarity proxy. Novel/obscure deps push the magnitude up; common deps contribute near zero.
@@ -50,6 +51,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (resolved build-function lines, position-scoped)
 - **Severity:** MEDIUM (weight 15), or HIGH (weight 25) when the reconstructed line reveals an executable action
 - **Category:** `obfuscation`
+
 - **Condition:** A single added line inside a critical build function (`build()`, `prepare()`, `check()`, `package()`) contains **3 or more** distinct obfuscation indicators:
 
 | Indicator | Pattern |
@@ -75,18 +77,21 @@ itself is the signal.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `adoption`
+
 - **Condition:** One maintainer submitted at least `[thresholds] h045.min_packages` (default 10) packages within `h045.window_days` (default 7).
 
 ### H052: Shared Source Repository {#h052}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `adoption`
+
 - **Condition:** At least `[thresholds] h052.min_packages` (default 3) otherwise unrelated packages share a source repository, a new domain, or an adoption window.
 
 ### H055: Attribute Burst {#h055}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `adoption`
+
 - **Condition:** At least `[thresholds] h055.min_packages` (default 5) packages sharing a maintainer were modified within `h055.window_hours` (default 24).
 
 Only modified packages count. H045 already claims the added-package clusters,

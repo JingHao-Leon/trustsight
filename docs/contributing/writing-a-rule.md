@@ -135,16 +135,30 @@ Give the rule a permanent uid, which the registry refuses to load without:
 uv run python scripts/build_registry_uids.py
 ```
 
-Then add the section as `docs_src/sections/<anchor>.md`, with the identity in
-a header and the body below it. The `###` heading is generated, so it is not
-in the file:
+Add the rule's display metadata to `src/trustsight/registry_meta.json`, keyed
+by the section's anchor:
+
+```json
+"h086": {
+  "uid": "TS-0999",
+  "name": "Name",
+  "canonical": true,
+  "severity_text": "HIGH (weight 25)",
+  "severity": "HIGH",
+  "capability": "maintainer",
+  "target": "programmatic"
+}
+```
+
+The reference page writes the `###` heading and the `Target` / `Severity` /
+`Category` bullets from that record, so they cannot disagree with the name or
+severity a finding carries. `docs_src/sections/<anchor>.md` then holds only
+the identity and the prose:
 
 ```markdown
 <!-- uid: TS-0999 -->
-<!-- name: Name -->
 <!-- anchor: h086 -->
 
-- **Severity:** ...
 - **Condition:** ...
 ```
 
@@ -165,7 +179,7 @@ introduces a new *kind* of claim the page does not yet cover. The two tabs are
 kept in step by the navigation check in `tests/test_docs.py`, which requires
 every page on disk to appear in the nav.
 
-Then rebuild the pages and the index, both assembled from `docs_src`:
+Then rebuild the pages and the index from `docs_src` and the registry:
 
 ```bash
 uv run python scripts/build_rules_index.py
@@ -175,6 +189,8 @@ uv run python scripts/build_rules_index.py
 on a page the category does not own, if a quoted pattern has drifted from
 the shipped one, or if the id is absent from the quick-reference table.
 `tests/test_generated_docs.py` fails if a page or the index was not rebuilt.
+`tests/test_rule_metadata.py` fails if the documented name or severity is not
+one the code actually emits.
 
 ## When to use each
 

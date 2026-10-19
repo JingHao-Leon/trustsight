@@ -54,16 +54,16 @@ rules, because a W is weight-0 by construction:
 
 | Rule | Name | Severity |
 |---|---|---|
-| [W001](#w001) | Executes Code This Analysis Did Not Read | INFO |
-| [W002](#w002) | Build Resolves Dependencies From A Registry | INFO |
-| [W003](#w003) | Applies A Patch This Analysis Did Not Read | INFO |
-| [W004](#w004) | Build Engine Runs A Manifest This Analysis Did Not Read | INFO |
-| [W005](#w005) | Build Runs A Target Whose Recipe Was Not Read | INFO |
-| [W006](#w006) | Generated File Names A Build-Only Path | INFO |
-| [W007](#w007) | Dependency Novelty Declined For Insufficient Observations | INFO |
-| [W008](#w008) | Unresolved Construct In A Recipe | INFO |
-| [W009](#w009) | Upstream Manifests Not Examined | INFO |
-| [W010](#w010) | Alert Volume Capped | INFO |
+| [W001](#w001) | Executes Code This Analysis Did Not Read | - |
+| [W002](#w002) | Build Resolves Dependencies From A Registry | - |
+| [W003](#w003) | Applies A Patch This Analysis Did Not Read | - |
+| [W004](#w004) | Build Engine Runs A Manifest This Analysis Did Not Read | - |
+| [W005](#w005) | Build Runs A Target Whose Recipe Was Not Read | - |
+| [W006](#w006) | Generated File Names A Build-Only Path | - |
+| [W007](#w007) | Dependency Novelty Declined For Insufficient Observations | - |
+| [W008](#w008) | Unresolved Construct In A Recipe | - |
+| [W009](#w009) | Upstream Manifests Not Examined | - |
+| [W010](#w010) | Alert Volume Capped | - |
 <!-- /generated: page-index -->
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}

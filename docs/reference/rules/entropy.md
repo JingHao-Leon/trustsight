@@ -40,6 +40,7 @@ This is a reference page. For how weight and scope work, see
 - **Target:** programmatic (added-text distribution)
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `entropy`
+
 - **Condition:** The added lines compress below `[thresholds] e001.max_ratio`.
 
 A highly compressible addition is repetitive, the shape of a packed or padded payload. Silent unless the threshold is set.
@@ -49,6 +50,7 @@ A highly compressible addition is repetitive, the shape of a packed or padded pa
 - **Target:** programmatic (added-text distribution)
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `entropy`
+
 - **Condition:** At least `[thresholds] e002.min_fraction` of the added tokens are base64/base32/hex runs of at least `e002.min_length` (default 64) characters.
 
 The alphabet sets are X029's, applied as a statistic rather than a staging predicate.
@@ -58,6 +60,7 @@ The alphabet sets are X029's, applied as a statistic rather than a staging predi
 - **Target:** programmatic (added-text distribution)
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `entropy`
+
 - **Condition:** The entropy of newly assigned variable/function names falls outside the configured band - unigram Shannon entropy (`e003.min_entropy`..`e003.max_entropy`) or **bigram** entropy (`e003.min_bigram`..`e003.max_bigram`).
 
 The second-order statistic keeps the structure a unigram distribution flattens, so it separates generated names (`a`, `b`, `x1` - few bigrams) from packed names more reliably.

@@ -53,40 +53,40 @@ engine runs.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [X001](#x001) | Encoded Payload Decoded And Executed | CRITICAL |
-| [X002](#x002) | Non-Literal Executable Name | CRITICAL |
-| [X003](#x003) | Obfuscated Command Argument | HIGH |
-| [X004](#x004) | Build Output Suppressed | MEDIUM |
-| [X005](#x005) | Home Reached By An Alternative Spelling | HIGH |
-| [X006](#x006) | Source Points Somewhere Unexpected | HIGH |
-| [X007](#x007) | Multiple Evasion Techniques | CRITICAL |
-| [X008](#x008) | Whitespace A Shell Does Not Split On | MEDIUM |
-| [X009](#x009) | Fetch Through An Uncatalogued Client | CRITICAL |
-| [X010](#x010) | Interpreter One-Liner Reaches The Network | HIGH |
-| [X011](#x011) | Package Manager Runs Fetched Code At Build Time | HIGH |
-| [X012](#x012) | Build Toolchain Redirected Into The Source Tree | HIGH |
-| [X013](#x013) | Fetch Redirected Or Trust Root Replaced | HIGH |
-| [X014](#x014) | Environment Variable Names Code To Run | HIGH |
-| [X015](#x015) | Work Scheduled To Run After The Build | HIGH |
-| [X016](#x016) | Fetch Piped Into An Unrecognised Consumer | HIGH |
-| [X017](#x017) | Tool Flag Or Builtin Carries A Command | HIGH |
-| [X018](#x018) | Interpreter One-Liner Assembles A Name | HIGH |
-| [X019](#x019) | Host Material Sent Or Packaged | HIGH |
-| [X020](#x020) | Recipe Writes The Build Steps The Engine Runs | HIGH |
-| [X021](#x021) | Executor Runs A File Chosen At Runtime | HIGH |
-| [X022](#x022) | Generated Config Handed To The Tool That Reads It | HIGH |
-| [X023](#x023) | Command Output Executed As A Script | HIGH |
-| [X024](#x024) | Indirect Sensitive Assignment | HIGH |
-| [X025](#x025) | Multi-Line Function Shadow | HIGH |
-| [X026](#x026) | Unresolved Constructs In Executable Positions | MEDIUM |
-| [X027](#x027) | Refusal Cluster | CRITICAL |
-| [X028](#x028) | Pattern Completed Across Commits | HIGH |
-| [X029](#x029) | Encoded Material At Rest | MEDIUM |
-| [X030](#x030) | ANSI-C Quoted Content In Commands | HIGH |
-| [X031](#x031) | Build Reads Non-Code Text | HIGH |
-| [X032](#x032) | Command Name Assembled By Splicing | HIGH |
-| [X033](#x033) | File With No Provenance Executed | HIGH |
-| [X034](#x034) | Fetch Laundered Through An Archival Service | HIGH |
+| [X001](#x001) | Encoded Payload Decoded And Executed | - |
+| [X002](#x002) | Non-Literal Executable Name | - |
+| [X003](#x003) | Obfuscated Command Argument | - |
+| [X004](#x004) | Build Output Suppressed | - |
+| [X005](#x005) | Home Reached By An Alternative Spelling | - |
+| [X006](#x006) | Source Points Somewhere Unexpected | - |
+| [X007](#x007) | Multiple Evasion Techniques | - |
+| [X008](#x008) | Whitespace A Shell Does Not Split On | - |
+| [X009](#x009) | Fetch Through An Uncatalogued Client | - |
+| [X010](#x010) | Interpreter One-Liner Reaches The Network | - |
+| [X011](#x011) | Package Manager Runs Fetched Code At Build Time | - |
+| [X012](#x012) | Build Toolchain Redirected Into The Source Tree | - |
+| [X013](#x013) | Fetch Redirected Or Trust Root Replaced | - |
+| [X014](#x014) | Environment Variable Names Code To Run | - |
+| [X015](#x015) | Work Scheduled To Run After The Build | - |
+| [X016](#x016) | Fetch Piped Into An Unrecognised Consumer | - |
+| [X017](#x017) | Tool Flag Or Builtin Carries A Command | - |
+| [X018](#x018) | Interpreter One-Liner Assembles A Name | - |
+| [X019](#x019) | Host Material Sent Or Packaged | - |
+| [X020](#x020) | Recipe Writes The Build Steps The Engine Runs | - |
+| [X021](#x021) | Executor Runs A File Chosen At Runtime | - |
+| [X022](#x022) | Generated Config Handed To The Tool That Reads It | - |
+| [X023](#x023) | Command Output Executed As A Script | - |
+| [X024](#x024) | Indirect Sensitive Assignment | - |
+| [X025](#x025) | Multi-Line Function Shadow | - |
+| [X026](#x026) | Unresolved Constructs In Executable Positions | - |
+| [X027](#x027) | Refusal Cluster | - |
+| [X028](#x028) | Pattern Completed Across Commits | - |
+| [X029](#x029) | Encoded Material At Rest | - |
+| [X030](#x030) | ANSI-C Quoted Content In Commands | - |
+| [X031](#x031) | Build Reads Non-Code Text | - |
+| [X032](#x032) | Command Name Assembled By Splicing | - |
+| [X033](#x033) | File With No Provenance Executed | - |
+| [X034](#x034) | Fetch Laundered Through An Archival Service | - |
 <!-- /generated: page-index -->
 
 ### X001: Encoded Payload Decoded And Executed {#x001}

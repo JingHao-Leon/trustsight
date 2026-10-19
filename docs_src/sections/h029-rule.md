@@ -1,10 +1,6 @@
 <!-- uid: TS-0085 -->
-<!-- name: Package-Name Typosquat -->
 <!-- anchor: h029-rule -->
 
-- **Target:** programmatic (package name against seeded candidate list)
-- **Severity:** HIGH (weight 25) - corpus rate 0.00 % (0/202, package-name scan)
-- **Category:** `naming`
 - **Condition:** The package's own name is Damerau-Levenshtein distance ≤2 of an **established, far-more-popular** package - AND is not an expected variant (`-git`, `-bin`, `-debug`, `-lts`, etc.) of that package.
 
 This is the AUR equivalent of the `python-sqlite` vs `pysqlite`, `electron` vs `electorn`, and trailing-space/separator-swap attacks that have hit every other registry. The AUR has **zero** typosquat defense; D002 already covers *dependency* names, but nothing covers the package's **own name** impersonating a popular one.

@@ -79,6 +79,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (not TOML-configurable)
 - **Severity:** HIGH (weight 25), downgraded to INFO (weight 0) if justified
 - **Category:** `integrity`
+
 - **Condition:** Fires when a prior SHA-256 checksum is changed to `SKIP`.
 - **Justification:** Severity is downgraded to INFO if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), `validpgpkeys` declaration, or DKMS reference. Justification checked via `is_skip_justified()` in `src/trustsight/differ.py`.
 - **Note:** Hard-coded in `src/trustsight/analysis/structural.py`. Cannot be disabled through `rules.toml` because checksum integrity is foundational to the scoring model.
@@ -88,6 +89,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (not TOML-configurable)
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
+
 - **Condition:** Fires when an existing SHA-256 checksum array is emptied.
 - **Note:** Hard-coded in `src/trustsight/analysis/structural.py`. Cannot be disabled through `rules.toml`.
 
@@ -107,36 +109,42 @@ a top-level flag-set replacement is [H079](#h079).
 ### C001: Checksum Changed Without Source Change With Stable Version {#c001}
 
 - **Severity:** HIGH (weight 25)
+
 - **Condition:** `sha256sums` value changed (added or modified) and **no** source URLs were added or removed, and either `pkgver`, `pkgrel` and `epoch` did not change, **or** the same diff adds a new code capability in a critical function: a network fetch, or an execution of a script-like file that is not a declared source or a benign build artifact.
 - **Description:** A checksum changed with no corresponding version or source change is anomalous. It suggests the tarball content changed without an upstream version bump, which is a red flag for supply-chain compromise. A version move alone no longer stands the signal down when the bump is used as cover: a routine bump that also starts downloading or running something keeps the HIGH finding. Gated by `[thresholds] c001.require_capability_signal` (default true); set it false to restore the historical "every bump is C002" rule.
 
 ### C002: Checksum Updated With Version Bump {#c002}
 
 - **Severity:** INFO (weight 0)
+
 - **Condition:** `sha256sums` value changed (added or modified), **no** source URLs were added or removed, at least one of `pkgver`, `pkgrel` or `epoch` changed, and the diff adds no new code capability (see C001).
 - **Description:** Normal during routine version bumps. Recorded for audit trail; contributes no weight.
 
 ### C003: Source URL Changed Without Version Bump {#c003}
 
 - **Severity:** INFO (weight 0)
+
 - **Condition:** Source URLs were both added **and** removed (the sets differ) **and** `pkgver`, `pkgrel` and `epoch` did not change.
 - **Description:** Source URLs swapped without a version bump is noteworthy but not necessarily malicious. Recorded for audit trail; contributes no weight.
 
 ### C004: Checksum Removed For Unchanged Source {#c004}
 
 - **Severity:** CRITICAL (weight 40)
+
 - **Condition:** A checksum array line is deleted, no replacement checksum line is added, **and** the source URL set is unchanged.
 - **Description:** Distinct from H002 (`sha256sums=()` added, array emptied in place): here the declaration disappears from the file entirely, leaving makepkg with nothing to verify against a source that itself did not change. Detected by `detect_checksum_removed()` in `src/trustsight/differ.py`.
 
 ### C005: Binary Artifact From Untrusted Source {#c005}
 
 - **Severity:** MEDIUM (weight 15)
+
 - **Condition:** An added source URL points at an executable artifact (`.bin`, `.exe`, `.elf`, `.so`, `.dll`, `.dylib`, `.AppImage`, `.deb`, `.rpm`, `.apk`, `.msi`, `.jar`, `.run`) **and** its bucket is neither `trusted_forge` nor `official`.
 - **Description:** A prebuilt binary cannot be reviewed from the PKGBUILD, so its provenance is the only available evidence. Restricted to untrusted buckets deliberately: `-bin` packages repackaging a GitHub release are a large fraction of the AUR and firing on all of them would make the rule pure noise.
 
 ### C008: Unread Content Moved Under A Stable Version {#c008}
 
 - **Severity:** HIGH (weight 25)
+
 - **Condition:** A submodule gitlink, Git-LFS object id, or committed opaque/binary member changed, and `pkgver`/`pkgrel`/`epoch` did not.
 
 The [upstream-payload gap](../../explanation/what-trustsight-cannot-see.md)
@@ -160,6 +168,7 @@ anyone who builds it now.
 ### C009: Unread Content Moved With The Version {#c009}
 
 - **Severity:** INFO (weight 0)
+
 - **Condition:** The same carriers as [C008](#c008), moving alongside a version bump.
 
 The ordinary reading, reported so that the pair is visible rather than only
@@ -169,6 +178,7 @@ behind the pointer changed even though no content appears in the diff.
 ### C010: Binary Metadata File {#c010}
 
 - **Severity:** HIGH (weight 25)
+
 - **Condition:** A `PKGBUILD`, `.SRCINFO`, or `*.install` file is binary, so git emitted no diff body for it.
 
 A binary metadata file is never legitimate, and it is the most direct way to
@@ -188,6 +198,7 @@ committed binary's presence, not the content of a file the build executes.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
+
 - **Condition:** A package whose name ends in `-bin` declares an added
   `source=` URL whose registered domain is neither the registered domain of
   the recipe's `url=` scalar nor a host already in a trusted, official or
@@ -217,6 +228,7 @@ rate is 0.05 %.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
+
 - **Condition:** The recipe's `url=` names a trusted-forge project
   (`github.com/<owner>/<repo>`) and an added `source=` URL fetches the same
   repository name from a **different owner on the same forge**
@@ -237,6 +249,7 @@ rule is a heuristic, not proof.
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `build`
+
 - **Pattern:** `\b(?:CFLAGS|CXXFLAGS|LDFLAGS)\s*\+?=.*(?:-fplugin=|-Wl,--dynamic-linker=)`
 - **Description:** `-fplugin=` loads an arbitrary shared object into the compiler; `-Wl,--dynamic-linker=` changes which loader the produced binary uses. Both alter the build without touching any source file.
 
@@ -245,6 +258,7 @@ rule is a heuristic, not proof.
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `build`
+
 - **Pattern:** `\b(?:CFLAGS|CXXFLAGS|LDFLAGS)\s*\+?=.*(?:-fno-stack-protector|-z\s*execstack)`
 - **Description:** Detects removal of stack-protector or NX protections from the build flags.
 
@@ -253,6 +267,7 @@ rule is a heuristic, not proof.
 - **Target:** programmatic (resolved command lines)
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
+
 - **Description:** `patch` or `git apply` inside a build function takes its input from a URL, an absolute path, or process substitution.
 
 ```bash
@@ -268,6 +283,7 @@ This rule deliberately does **not** check membership of `source=()`. Patches rou
 - **Target:** programmatic (diff-aware)
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `network`
+
 - **Description:** A URL declared in `source=()` as `https://` before the diff appears as `http://` after it, with the same host and path. Plain http was never upgraded; this is a URL that lost its transport security.
 
 Distinguishing a downgrade from a URL that was always http needs both sides of the diff, which is why `extract_source_array_urls()` takes a `side` parameter.
@@ -277,6 +293,7 @@ Distinguishing a downgrade from a URL that was always http needs both sides of t
 - **Target:** programmatic (diff-aware)
 - **Severity:** HIGH (weight 25) - corpus rate 0.03 %
 - **Category:** `integrity`
+
 - **Condition:** `validpgpkeys` was **populated before** the diff and is
   **emptied or removed after** - the package previously verified upstream
   signatures and now does not.
@@ -308,6 +325,7 @@ populated to empty/absent, following the same structure as
   MEDIUM (weight 15) for `CFLAGS`/`LDFLAGS`/`MAKEFLAGS`/`PATH` -
   corpus rate 0.25 % (all HIGH; MEDIUM not observed)
 - **Category:** `build`
+
 - **Condition:** The diff **modifies** `LD_PRELOAD`, `LD_LIBRARY_PATH`,
   `CFLAGS`, `LDFLAGS`, `MAKEFLAGS`, or `PATH` **inside a build function**
   (`prepare`/`build`/`package`).
@@ -341,6 +359,7 @@ equivalent of a `build.rs` that downloads and executes a binary.
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** HIGH (weight 25) when a tag anchor is unchanged, MEDIUM (weight 15) otherwise
 - **Category:** `integrity`
+
 - **Condition:** Either the repository's commit pin moved while the declared version did not, or a digest `#commit=` was replaced by a movable `#tag=`/`#branch=`.
 
 A tag is a name upstream can repoint at will, so "the same tag" is not the
@@ -370,6 +389,7 @@ patch branch under a fixed version, which is the shape the rule describes.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
+
 - **Condition:** A file in the repository tree carries ELF magic (`\x7fELF`) and is not a declared `source=` filename.
 
 H066 has two variants that split by evidence and never double-fire. **H066-tree**
@@ -395,6 +415,7 @@ a declared `source=`, or on icons, fonts, `.desktop` files and test fixtures.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
+
 - **Condition:** An archive carries data past its declared trailer (gzip, tar or zip).
 
 H070 is a pure function over bytes (`check_archive_trailer`). It is wired on
@@ -413,6 +434,7 @@ facts.
 
 - **Severity:** HIGH (weight 25) on replacement, MEDIUM (weight 15) on addition, INFO (weight 0) on introduction
 - **Category:** `integrity`
+
 - **Condition:** `validpgpkeys` gains a fingerprint.
 
 Whoever holds a key in `validpgpkeys` can ship code to every user of the
@@ -431,6 +453,7 @@ rotations.
 
 - **Severity:** HIGH (weight 25) when a mitigation is switched off, MEDIUM (weight 15) on a top-level replacement
 - **Category:** `integrity`
+
 - **Condition:** A recipe line assigns `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `RUSTFLAGS` or `MAKEFLAGS` either to a value naming a disabling flag (`-fno-stack-protector`, `-D_FORTIFY_SOURCE=0`, `-U_FORTIFY_SOURCE`, `-no-pie`, `-Wl,-z,norelro`, ...) or, at the top level, to a literal set that does not reference the variable it replaces.
 
 makepkg exports a hardened flag set. A recipe that appends to it keeps those
@@ -453,6 +476,7 @@ FORTIFY_SOURCE.
 
 - **Severity:** HIGH (weight 25) when a flag was dropped, MEDIUM (weight 15) when one appeared
 - **Category:** `build`
+
 - **Condition:** A long-stable `configure_flags` set changed, and the change touches `[patterns] security_relevant_flags`.
 
 Dropping a hardening flag is the weightier direction, because it removes a
@@ -462,6 +486,7 @@ mitigation the package had.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `integrity`
+
 - **Condition:** A dependency array changed **and** a build function changed, while `source=`, every `*sums=` array and `pkgver` did not.
 
 The June 2026 AUR campaign did not touch the upstream software. It edited the
@@ -494,6 +519,7 @@ and whose build now fetches unpinned code, which is [H088](maintainer-and-metada
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
+
 - **Condition:** `source=()` declares more elements than a `*sums=()`.
   Judged from a wholly-added pair of arrays in the diff, or - when the
   diff shows the source array growing, or on a first-seen recipe - from
@@ -526,6 +552,7 @@ Zero occurrences in the 3,739-diff benign corpus.
   PKGBUILD fetches but `.SRCINFO` never names; INFO (weight 0) for a source
   `.SRCINFO` names but the PKGBUILD does not (stale metadata).
 - **Category:** `integrity`
+
 - **Condition:** `.SRCINFO` and the PKGBUILD disagree on the `install=` hook,
   a checksum array, or `depends`, with both documents stating the field and
   neither carrying an unresolved variable; or their `source` arrays differ
@@ -550,6 +577,7 @@ rather than as a divergence.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
+
 - **Condition:** A URL host appearing in `.SRCINFO` that appears nowhere in
   the PKGBUILD.
 
@@ -576,6 +604,7 @@ corpus-only, so a review never compared the metadata against the recipe.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `build`
+
 - **Pattern:** `(?:^|\s|\+)(?:export\s+|declare\s+-x\s+)?COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)\s*\+?=`
 - **Condition:** Assignment to any `COMPRESS*` variable (`COMPRESSZST`,
   `COMPRESSXZ`, `COMPRESSGZ`, `COMPRESSBZ2`, `COMPRESSLZ4`, etc.).
@@ -590,6 +619,7 @@ Fire rate: 0% on the 3,739-diff benign corpus.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `build`
+
 - **Pattern:** `(?:^|\s|\+)(?:export\s+|declare\s+-x\s+)?PACMAN_AUTH\s*\+?=`
 - **Condition:** Assignment to `PACMAN_AUTH`.
 
@@ -603,6 +633,7 @@ Fire rate: 0% on the 3,739-diff benign corpus.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `build`
+
 - **Pattern:** `^(?:\+)?\s*trap\s+`
 - **Condition:** Any `trap` statement in the PKGBUILD.
 
@@ -618,6 +649,7 @@ already claimed the more specific form.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `build`
+
 - **Pattern:** `trap '' (?:ERR|DEBUG)(?:[^a-zA-Z]|$)`
 - **Condition:** `trap '' ERR` or `trap '' DEBUG`.
 
@@ -634,6 +666,7 @@ first.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `network`
+
 - **Condition:** `DLAGENTS` is assigned or appended to.
 
 `DLAGENTS` controls how makepkg fetches sources for each protocol.
@@ -647,6 +680,7 @@ Fire rate: ~0.03% on the 3,739-diff benign corpus.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
+
 - **Condition:** A function or variable is redefined that suppresses or
   hijacks makepkg logic.
 
@@ -662,6 +696,7 @@ because `source=()` is a legitimate array declaration.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
+
 - **Condition:** A `source` entry's local name is unchanged while the
   registered domain behind it moved, and the version did not move.
 
@@ -681,6 +716,7 @@ array cannot pair a name with the wrong URL.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `integrity`
+
 - **Condition:** A `source` entry moves from pinned (a `#commit=`/`#tag=`
   fragment, or an archive URL carrying its version) to floating (a branch
   ref, HEAD, or a `/latest/` path), under the same local name.
@@ -694,8 +730,9 @@ keying, so a partially shown array cannot mis-pair an entry.
 
 ### C014: Array Order Manipulation {#c014}
 
-- **Severity:** MEDIUM (weight 15)
+- **Severity:** MEDIUM (weight 15) when an array's entries change order and the array also gains or loses an entry; LOW for an insertion at a different index
 - **Category:** `integrity`
+
 - **Condition:** A checksum array's entries change relative order while the
   array also gains or loses an entry, or a `SKIP` entry moves position.
   Ordering facts come from the typed recipe arrays (positions are preserved
@@ -711,6 +748,7 @@ locked benign corpus: 0/3,739.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `integrity`
+
 - **Condition:** An added file carries git's executable mode
   (`100755`). The structural twin of the artifact-side mode check: a file
   that arrives runnable is caught even when its content is never read.
@@ -722,6 +760,7 @@ the locked benign corpus: 0/3,739.
 
 - **Severity:** INFO (weight 0)
 - **Category:** `integrity`
+
 - **Condition:** The diff declares a `rename from`/`rename to` pair.
   Rename-to-hide-history is a known shape, but reorganization is common, so
   the finding is informational and attributes to the post-rename path.
@@ -734,6 +773,7 @@ metadata alone. Measured on the locked benign corpus: 0/3,739.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `source`
+
 - **Condition:** A gained `source=()` entry carries userinfo before the
   host (`https://token@host/...`).
 
@@ -744,6 +784,7 @@ printed. Measured on the locked benign corpus: 0/3,739.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
+
 - **Condition:** The strongest checksum array a recipe carried has its
   declaration removed in this diff while a strictly weaker array remains.
   Strength order is `b2 > sha512 > sha256 > sha1 > md5`; arch-suffixed
@@ -758,6 +799,7 @@ calibration floor.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
+
 - **Condition:** A gained source host parses as an IPv4 or IPv6 literal
   (`https://203.0.113.7/...`, `https://[2001:db8::1]/...`).
 
@@ -768,6 +810,7 @@ Measured on the locked benign corpus: 0/3,739.
 
 - **Severity:** INFO (weight 0)
 - **Category:** `integrity`
+
 - **Condition:** An added file has no hunks. Marker files and placeholder
   drops are the shape; ordinary empty files are common, so this is
   informational.
@@ -779,6 +822,7 @@ locked benign corpus: 0/3,739.
 
 - **Severity:** INFO (weight 0)
 - **Category:** `integrity`
+
 - **Condition:** The `install=` scalar names a file the diff and the tree do
   not carry - a dangling declaration.
 

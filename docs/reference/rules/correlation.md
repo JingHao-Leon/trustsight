@@ -58,6 +58,7 @@ This is a reference page. For how weight and scope work, see
 - **Target:** programmatic (cycle records)
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
+
 - **Condition:** The same gained canonical host appears in `[thresholds] g_host.min_packages` (default 5) distinct packages within the cycle window.
 
 atomic-arch's signature: a new CDN added by many unrelated packages at once.
@@ -67,6 +68,7 @@ atomic-arch's signature: a new CDN added by many unrelated packages at once.
 - **Target:** programmatic (cycle records)
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
+
 - **Condition:** An identical added literal above `[thresholds] g_blob.min_length` (default 256) characters appears in `g_blob.min_packages` (default 2) unrelated packages in the window.
 
 The literal's content is never printed - only its length and the members.
@@ -80,6 +82,7 @@ yet connected, so G002 does not fire on a `full-aur` cycle today.
 - **Target:** programmatic (cycle records)
 - **Severity:** MEDIUM (weight 15); HIGH (weight 25) when escalated
 - **Category:** `correlation`
+
 - **Condition:** One maintainer key adopts at least `[thresholds] g_adopt.min_members` (default 3) packages in the window.
 
 Adoption is the temporal engine's own predicate - H044 (ownership transition) or H086 (orphan-to-maintained) - recorded per package, not a bare maintainer-change. The finding's `predicates` names which T instance the group joined on; H074 (mass adoption) is the cross-package aggregation this rule performs.
@@ -91,6 +94,7 @@ Adoption is the temporal engine's own predicate - H044 (ownership transition) or
 - **Target:** programmatic (cycle records)
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
+
 - **Condition:** The same upstream dependency (and host), added to a committed manifest, appears in at least `[thresholds] g_dep.min_packages` (default 2) packages in the window.
 
 The committed-manifest counterpart to G001: a dependency name and remote host that many packages gain in the same window is the same-new-upstream-dependency campaign shape. It reads the recorded `upstream_dep_additions` view (the U-series dependency additions); the engine ships and is unit-tested, and the corpus feed that fills the view is the same pending work G002's literal feed is.
@@ -100,6 +104,7 @@ The committed-manifest counterpart to G001: a dependency name and remote host th
 - **Target:** programmatic (cycle records)
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
+
 - **Condition:** One maintainer publishes at least `[thresholds] g_impersonation.min_members` (default 3) packages in the window whose names resemble a *far* more popular AUR package (the corpus H029 check over AUR vote counts).
 
 The registry-impersonation campaign shape: many near-identical name-clones of popular packages under a fresh account (`yyay`/`yay`, `parru`/`paru`, …). Where H029 reports one clone, G005 names the campaign - its maintainer, the member count, and the impersonated targets - so a flood of typosquats reads as one alert, not N. It fires only on the per-package impersonation evidence, so a maintainer updating their own legitimate variant family is not a campaign.
@@ -109,6 +114,7 @@ The registry-impersonation campaign shape: many near-identical name-clones of po
 - **Target:** programmatic (cycle records)
 - **Severity:** INFO (weight 0)
 - **Category:** `correlation`
+
 - **Condition:** While a campaign is active (see [Campaign Alert Mode](../../explanation/campaign-alert-mode.md)), a package in the window *gains* a host or domain in that campaign's scope, without itself being corroborated.
 
 The cytokine effect: an alerted neighborhood raises the surrounding tissue's readiness. It is reported, never scored, in v1 - "touches an alerted neighborhood" names a context, not a behaviour - and it never forbids a clean verdict. Only *gained* hosts count.
@@ -118,6 +124,7 @@ The cytokine effect: an alerted neighborhood raises the surrounding tissue's rea
 - **Target:** programmatic (a run inside an active campaign)
 - **Severity:** INFO, weight 0 (report-only)
 - **Category:** `correlation`
+
 - **Condition:** A review run whose package, or a host it newly gained, stands in the scope of an active campaign.
 
 Trained immunity, reported: while a campaign is primed, a package in its scope is named as corroborated - one `G007` entry carrying `campaign_id`, weight 0. It adds no points: the bonus it replaced measured scope *breadth*, not corroboration, and the benign corpus carries no active campaign, so the points were never measured against the false-positive rate. Inert when no campaign is active. See [Campaign Alert Mode](../../explanation/campaign-alert-mode.md).
@@ -127,6 +134,7 @@ Trained immunity, reported: while a campaign is primed, a package in its scope i
 - **Target:** programmatic (cycle records)
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
+
 - **Condition:** An account with no prior maintainer history in the local database adopts at least `[thresholds] g008.min_packages` (default 5) packages within `[thresholds] g008.window_days` (default 7) days, and at least `[thresholds] g008.min_dormant` (default 3) of those targets are dormant (last git activity older than `[thresholds] g008.dormant_days` (default 180) days).
 
 The fennekuiper signature: a throwaway account sweeping up orphans in its first cycle. "First-seen" replaces "registered 3 days ago" because registration date is not in the RPC metadata and chasing profile pages would be a new fetch. First-seen is the deterministic, self-contained approximation: a throwaway account has, by definition, no prior maintainer events in the database.
@@ -138,6 +146,7 @@ The dormant-target clause is the FP killer. A legitimate new maintainer adopts a
 - **Target:** programmatic (cycle records)
 - **Severity:** INFO (weight 0)
 - **Category:** `correlation`
+
 - **Condition:** A package whose maintainer's salted hash appears on the operator's watchlist (`[thresholds] g009`, enabled by default; `~/.config/trustsight/watchlist.json` unless `g009.path` names another file).
 
 Report-only, weight 0, like G006. Registration date, "Inactive since" and suspension state are AUR profile-page facts the pipeline never fetches, so no machine rule can compute them. Where a human has established such a fact - the pattern a triager reads by hand, "Inactive-since ~ Last Updated and Last Packager = Package Maintainer" - the watchlist records it and this rule names the package instead of guessing from RPC metadata.

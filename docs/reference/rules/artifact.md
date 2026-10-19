@@ -47,6 +47,7 @@ This is a reference page. For how weight and scope work, see
 - **Target:** programmatic (built package manifest)
 - **Severity:** HIGH
 - **Category:** `artifact`
+
 - **Condition:** A setuid/setgid file the recipe cannot justify (justification is a documented mode intent).
 
 The conservative default fires and the reviewer decides.
@@ -56,6 +57,7 @@ The conservative default fires and the reviewer decides.
 - **Target:** programmatic (built package manifest)
 - **Severity:** MEDIUM
 - **Category:** `artifact`
+
 - **Condition:** A systemd unit, timer or tmpfiles entry the recipe's declared surface does not explain.
 
 ### A003: Library Outside Depends {#a003}
@@ -63,6 +65,7 @@ The conservative default fires and the reviewer decides.
 - **Target:** programmatic (built package manifest)
 - **Severity:** MEDIUM
 - **Category:** `artifact`
+
 - **Condition:** A linked shared library of a shipped binary outside the declared `depends` closure.
 
 ### A004: Install Hook Diverges From Declaration {#a004}
@@ -70,6 +73,7 @@ The conservative default fires and the reviewer decides.
 - **Target:** programmatic (built package manifest)
 - **Severity:** HIGH
 - **Category:** `artifact`
+
 - **Condition:** The built `.INSTALL` script's effective behavior differs from the recipe's `install=` file - a tampered or regenerated hook.
 
 ### A005: Unusual Artifact Mode {#a005}
@@ -77,6 +81,7 @@ The conservative default fires and the reviewer decides.
 - **Target:** programmatic (built package manifest)
 - **Severity:** INFO
 - **Category:** `artifact`
+
 - **Condition:** World-writable files or executables in unusual paths.
 
 The L1 C018 rule's artifact twin.
@@ -86,6 +91,7 @@ The L1 C018 rule's artifact twin.
 - **Target:** programmatic (built package manifest)
 - **Severity:** HIGH
 - **Category:** `artifact`
+
 - **Condition:** A file carrying Linux file capabilities (e.g. `cap_setuid`, `cap_sys_admin`), which grant privilege without the setuid bit.
 
 ### A007: Privileged Surface In Artifact {#a007}
@@ -93,6 +99,7 @@ The L1 C018 rule's artifact twin.
 - **Target:** programmatic (built package manifest)
 - **Severity:** MEDIUM
 - **Category:** `artifact`
+
 - **Condition:** A file in a privilege/persistence surface the recipe does not declare: polkit rules, sudoers, PAM config, modprobe/modules-load, or a kernel module (`.ko`).
 
 ### A008: eBPF Artifact In Package {#a008}
@@ -100,6 +107,7 @@ The L1 C018 rule's artifact twin.
 - **Target:** programmatic (built package manifest)
 - **Severity:** HIGH
 - **Category:** `artifact`
+
 - **Condition:** An eBPF object or loader shipped in the package - the Atomic Arch rootkit's artifact shape.
 
 Inspection only; nothing is loaded or executed.

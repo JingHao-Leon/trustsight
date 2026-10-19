@@ -1,20 +1,21 @@
 """Regenerate the rule reference pages and ``index.md`` from their sources.
 
 The rule bodies are no longer hand-maintained in ``docs/reference/rules/``:
-each ``###`` section lives in ``docs_src/sections/<anchor>.md``, the prose
-above a page's index in ``docs_src/pages/<page>.md``, and the order the
-sections appear in ``docs_src/layout.json``.  This script reassembles the
-pages, writes each heading from the section's *current* id (resolved from
-its permanent ``uid``), and derives ``index.md``'s legend and catalog.  A
-display-id rename (Phase 5) therefore rewrites every heading from the
-registry instead of 266 hand edits.
+a section's prose lives in ``docs_src/sections/<anchor>.md``, the prose above
+a page's index in ``docs_src/pages/<page>.md``, and the order the sections
+appear in ``docs_src/layout.json``.  A section's name and its ``Target`` /
+``Severity`` / ``Category`` bullets come from ``registry_meta.json``; this
+script reassembles the pages from both, writes each heading from the
+section's *current* id (resolved from its permanent ``uid``), and derives
+``index.md``'s legend and catalog.
 
 ``tests/test_generated_docs.py`` fails if a page or the index is stale, so a
 rule author runs this after editing a section:
 
     uv run python scripts/build_rules_index.py
 
-The recorded ``docs_src`` is produced once by ``scripts/split_rule_sources.py``.
+The recorded ``docs_src`` is produced once by ``scripts/split_rule_sources.py``
+and ``scripts/build_registry_meta.py``.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from trustsight.categories import RuleCategory, rules_in  # noqa: E402
-from trustsight.registry import resolve  # noqa: E402
+from trustsight.registry import SECTION_META, resolve  # noqa: E402
 
 RULES_DIR = ROOT / "docs" / "reference" / "rules"
 INDEX = RULES_DIR / "index.md"
@@ -48,8 +49,7 @@ PAGE_INDEX_RE = re.compile(
     rf"{re.escape(PAGE_START)}\n.*?\n{re.escape(PAGE_END)}", re.S
 )
 
-META = re.compile(r"^<!-- (uid|name|anchor): (.*) -->$")
-SEVERITY = re.compile(r"\b(FATAL|CRITICAL|HIGH|MEDIUM|LOW|INFO)\b")
+META = re.compile(r"^<!-- (uid|anchor): (.*) -->$")
 
 SERIES_NAMES = {
     "C": "Integrity-change",
@@ -70,7 +70,7 @@ SERIES_NAMES = {
 
 
 def _section(anchor: str) -> tuple[dict[str, str], str]:
-    """(metadata, body) for one section source file."""
+    """(header comments, prose) for one section source file."""
     text = (SECTIONS / f"{anchor}.md").read_text()
     lines = text.split("\n")
     meta: dict[str, str] = {}
@@ -83,23 +83,16 @@ def _section(anchor: str) -> tuple[dict[str, str], str]:
     return meta, ""
 
 
-def _severity(body: str) -> str:
-    """The severity a section declares, as a single word.
-
-    Several rules carry a per-branch severity ("HIGH on replacement, MEDIUM
-    on addition"); the table shows the worst one it opens with, which is
-    what the full entry then qualifies.
-    """
-    for line in body.split("\n"):
-        # Two spellings: the list form (`- **Severity:** HIGH (weight 25)`)
-        # and the reference form, where the severity opens the entry
-        # (`**HIGH** (weight 25) - category evasion`).
-        if line.startswith("- **Severity:**") or line.startswith("**"):
-            found = SEVERITY.search(line)
-            if found:
-                return found.group(1)
-            return "tiered" if "tiered" in line else "-"
-    return "-"
+def _bullets(meta: dict) -> str:
+    """The structured facts a section opens with, rendered from the registry."""
+    lines = []
+    if meta.get("target"):
+        lines.append(f"- **Target:** {meta['target']}")
+    if meta.get("severity_text"):
+        lines.append(f"- **Severity:** {meta['severity_text']}")
+    if meta.get("capability"):
+        lines.append(f"- **Category:** `{meta['capability']}`")
+    return "\n".join(lines)
 
 
 def _catalog() -> list[tuple[str, str, str, str, RuleCategory, str]]:
@@ -116,15 +109,19 @@ def _catalog() -> list[tuple[str, str, str, str, RuleCategory, str]]:
     for page_name, anchors in layout.items():
         category = by_page[page_name]
         for anchor in anchors:
-            meta, body = _section(anchor)
-            rule = resolve(meta["uid"])
+            comments, _body = _section(anchor)
+            rule = resolve(comments["uid"])
             if rule is None:
-                raise SystemExit(f"{anchor}: uid {meta['uid']} is unknown")
-            if rule.id in seen:
+                raise SystemExit(f"{anchor}: uid {comments['uid']} is unknown")
+            if rule.uid in seen:
                 continue
-            seen.add(rule.id)
+            seen.add(rule.uid)
+            named = SECTION_META[anchor]
             series = SERIES_NAMES.get(rule.series, rule.series)
-            rows.append((rule.id, meta["name"], _severity(body), series, category, anchor))
+            rows.append(
+                (rule.id, named["name"], named.get("severity") or "-",
+                 series, category, anchor)
+            )
     rows.sort(key=lambda row: (*resolve(row[0]).sort_key, row[5]))
     return rows
 
@@ -162,9 +159,16 @@ def render_page(page_name: str, layout, blocks) -> str:
     header = (PAGES / page_name).read_text().rstrip()
     parts = [header, blocks[page_name]]
     for anchor in layout[page_name]:
-        meta, body = _section(anchor)
-        rule = resolve(meta["uid"])
-        parts.append(f"### {rule.id}: {meta['name']} {{#{anchor}}}\n\n{body}")
+        comments, body = _section(anchor)
+        rule = resolve(comments["uid"])
+        named = SECTION_META[anchor]
+        section = f"### {rule.id}: {named['name']} {{#{anchor}}}"
+        bullets = _bullets(named)
+        if bullets:
+            section += f"\n\n{bullets}"
+        if body:
+            section += f"\n\n{body}"
+        parts.append(section)
     return "\n\n".join(parts) + "\n"
 
 

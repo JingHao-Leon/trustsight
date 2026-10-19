@@ -63,6 +63,7 @@ corpus state.
 - **Target:** programmatic (package name against seeded candidate list)
 - **Severity:** HIGH (weight 25) - corpus rate 0.00 % (0/202, package-name scan)
 - **Category:** `naming`
+
 - **Condition:** The package's own name is Damerau-Levenshtein distance ≤2 of an **established, far-more-popular** package - AND is not an expected variant (`-git`, `-bin`, `-debug`, `-lts`, etc.) of that package.
 
 This is the AUR equivalent of the `python-sqlite` vs `pysqlite`, `electron` vs `electorn`, and trailing-space/separator-swap attacks that have hit every other registry. The AUR has **zero** typosquat defense; D002 already covers *dependency* names, but nothing covers the package's **own name** impersonating a popular one.
@@ -90,6 +91,7 @@ Symmetric edit-distance is a census generator: `foo-git`, `foo-bin`, `foo-lts`, 
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency`
+
 - **Description:** A dependency name appears that has never been observed anywhere in the AUR. Either a typo or a package created specifically to be pulled in.
 
 MEDIUM rather than HIGH: "never observed in the AUR" reads accumulated instrument history, so it is a prior - a quiet or cold corpus can make an ordinary new dependency look novel - and it is evidence to weigh, not a high-severity finding on its own. It stays scored, so poisoning the corpus can quiet it but never silence the structural rules.
@@ -110,6 +112,7 @@ Three classes of name are never considered novel, each an observed false positiv
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `dependency`
+
 - **Description:** A novel dependency name within one or two edits (Damerau-Levenshtein, so transpositions count) of a popular package: `openss1` for `openssl`, `cur1` for `curl`.
 
 D002 **refines D001**: only a name D001 has already found to be globally unknown is compared, and D002 is reported instead of D001 when it matches. That ordering is what makes the check both affordable and correct. A precomputed table of confusable pairs cannot work, because a table built from existing package names can only contain names that must *not* fire, while the names that should fire do not exist yet.
@@ -126,6 +129,7 @@ Popularity is taken from `observation_count`, so no separate package list is shi
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `dependency`
+
 - **Description:** `provides=` or `replaces=` declares an **established package unrelated to this one**. `provides=('openssl')` or `replaces=('sudo')` installs this package in front of the real one, satisfying every dependency on it.
 
 "Established" means present in the official repositories (`pacman -Slq`), falling back to `observation_count` when pacman cannot be reached.
@@ -145,6 +149,7 @@ The ecosystem carve-out matters: thousands of unrelated packages share `python-`
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency`
+
 - **Description:** `makedepends` gains a network-capable tool (`curl`, `wget`, `git`, `python-requests`, …) that was not there before, meaning the build can now fetch code that no checksum covers.
 
 MEDIUM because adding `git` to fetch submodules is legitimate. It is a signal, not a verdict.
@@ -153,6 +158,7 @@ MEDIUM because adding `git` to fetch submodules is legitimate. It is a signal, n
 
 - **Severity:** HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one
 - **Category:** `dependency`
+
 - **Condition:** A newly claimed `provides` or `replaces` names an established package (official repo or fallback observations) or a widely-provided one (observation count at or above `[h064] widely_provided_observations`, default 25).
 
 Claiming another project's name redirects installs of that name to this
@@ -180,6 +186,7 @@ has the config for a package set that is mostly kernels.
 
 - **Severity:** HIGH (weight 25) for a security-relevant library, MEDIUM (weight 15) otherwise
 - **Category:** `dependency`
+
 - **Condition:** A dependency was removed and a new source entry appeared whose project name matches the removed dependency name.
 
 Narrowed to that mechanical case on purpose. Vendoring a library bypasses the
@@ -190,6 +197,7 @@ is what raises the severity.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
+
 - **Condition:** An ecosystem-prefixed package (`python-`, `ruby-`, `nodejs-`, ...) is sourced from neither its ecosystem's canonical hosts nor a known forge.
 
 H053 reads the name as a claim about where a package should come from, and checks
@@ -207,4 +215,5 @@ finding names the prefix and the host so the reader can judge that call.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
+
 - **Condition:** The package name and the repository it is built from share no meaningful token.

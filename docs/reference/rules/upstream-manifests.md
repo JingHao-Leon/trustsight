@@ -55,6 +55,7 @@ This is a reference page. For how weight and scope work, see
 - **Target:** committed manifest files
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
+
 - **Condition:** A known manifest (from `[patterns] manifest_filenames`) is
   added to or removed from the repository in the diff.
 
@@ -66,6 +67,7 @@ surface is, but its mere presence is not a claim about intent.
 - **Target:** committed manifest files
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
+
 - **Condition:** A manifest's parsed dependency set gains or loses a name.
 
 A declared-surface ledger entry, presented with its own group and the
@@ -78,6 +80,7 @@ reported as counts and named top-level dependencies, not a full delta.
 - **Target:** committed manifest files
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency-manifest`
+
 - **Condition:** A manifest gains a `source_kind=git` dependency, or a
   non-default-registry dependency, whose canonical host was not present in
   the old manifest.
@@ -93,6 +96,7 @@ manifest-introduced host exactly like a declared one. The claim is precise:
 - **Target:** committed manifest files
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency-manifest`
+
 - **Condition:** A committed file redirects the resolver away from its
   default: a pip `--index-url`/`--extra-index-url`, `pip.conf`/`pip.ini` or
   `.pypirc`; an npm `registry` override or `.yarnrc.yml`; a cargo `[source]`
@@ -109,6 +113,7 @@ other way to see.
 - **Target:** committed manifest files
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
+
 - **Condition:** A manifest's dependency count multiplies past
   `[thresholds] u005.jump_factor` (default 3x) in one update.
 
@@ -121,6 +126,7 @@ across packages, not a per-package verdict.
 - **Target:** committed manifest files
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
+
 - **Condition:** A declaration manifest (`go.mod`, `Cargo.toml`,
   `package.json`, `pyproject.toml`/`requirements*.txt`, `pubspec.yaml`,
   `mix.exs`, `stack.yaml`, `shard.yml`, `Package.swift`, `*.cabal`) changed in

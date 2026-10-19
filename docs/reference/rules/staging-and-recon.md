@@ -26,7 +26,7 @@ severity weights and the reserved identifier ranges.
 | Rule | Name | Severity |
 |---|---|---|
 | [C025](#c025) | Hardening Option Disabled | LOW |
-| [C028](#c028) | Build Cache Outside The Build Trees | INFO |
+| [C028](#c028) | Build Cache Outside The Build Trees | - |
 | [H007](#h007) | Symlink Redirect | - |
 | [H010](#h010) | Suspicious file write | - |
 | [H038](#h038) | World-Writable Staging | HIGH |
@@ -53,6 +53,7 @@ when the diff shows it, such as [H076](#h076) and [R058](#r058).
 - **Target:** `raw_line`
 - **Severity:** HIGH (weight 25)
 - **Category:** `system`
+
 - **Pattern:** `^\+?\s*(?:sudo\s+)?(?:install|cp|mv|dd|tee)\s+[^;&|]*(?:(?<=\s)|(?<=\s["\x27]))(?:/etc|/boot|/usr/bin|/usr/lib)/`
 - **Description:** Detects writes to `/etc`, `/boot`, `/usr/bin`, or `/usr/lib` by absolute path. The same write prefixed with `$pkgdir` is normal packaging and does not match.
 
@@ -60,6 +61,7 @@ when the diff shows it, such as [H076](#h076) and [R058](#r058).
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
 - **Condition:** `/tmp`, `/var/tmp` or `/dev/shm` is used as a working or execution directory. `mktemp -d` is excluded wholesale: a random private directory is not a fixed world-writable path.
 
 Fire rate: 0 of 3739.
@@ -68,6 +70,7 @@ Fire rate: 0 of 3739.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
 - **Condition:** A leading-dot (hidden) executable is written outside `$srcdir` and `$pkgdir`.
 
 H042 is deliberately the quietest rule in the group so that one payload does
@@ -81,6 +84,7 @@ Fire rate: 0 of 3739.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
 - **Condition:** `prepare`, `build`, `check`, `package` or a top-level line writes to a plain absolute path outside `$srcdir`/`$pkgdir`.
 
 Rather than a list of interesting directories, the rule is the shape: a
@@ -97,6 +101,7 @@ Fire rate: 0 of 3739.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `build`
+
 - **Condition:** Inside a build/package/check/prepare function, a `PATH=` assignment adds a single-level `$srcdir/<subdir>` directory that is neither a declared `source=()` basename nor a repository manifest member.
 
 `PATH=$srcdir/tools:$PATH make` lets the recipe smuggle a binary into a
@@ -109,6 +114,7 @@ layouts, so only single-level subdirectories are flagged. Detected by
 
 - **Severity:** INFO (weight 0)
 - **Category:** `recon`
+
 - **Condition:** Host-profiling commands from `[patterns] recon_commands` run at a command position inside a build or install function.
 
 A lone `uname -m` is an architecture check and is reported at INFO by design.
@@ -121,6 +127,7 @@ Fire rate: 0 of 3739.
 
 - **Severity:** LOW (weight 5)
 - **Category:** `build`
+
 - **Condition:** `options=()` gains a hardening-disabling entry
   (`!strip`, `!debug`, `!lto`, `!fortify`, `!debugsplit`).
 

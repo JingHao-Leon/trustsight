@@ -128,7 +128,7 @@ is deliberately non-contiguous; see
 | [C025](staging-and-recon.md#c025) | Hardening Option Disabled | Integrity-change | LOW | [Staging and Reconnaissance](staging-and-recon.md) |
 | [C026](integrity.md#c026) | Empty File Added | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C027](integrity.md#c027) | Declared Install Script Is Absent | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
-| [C028](staging-and-recon.md#c028) | Build Cache Outside The Build Trees | Integrity-change | INFO | [Staging and Reconnaissance](staging-and-recon.md) |
+| [C028](staging-and-recon.md#c028) | Build Cache Outside The Build Trees | Integrity-change | - | [Staging and Reconnaissance](staging-and-recon.md) |
 | [C029](install-and-persist.md#c029) | Backup Array Gains Entries | Integrity-change | INFO | [Install and Persistence](install-and-persist.md) |
 | [C030](maintainer-and-metadata.md#c030) | Epoch Removed With Version Unchanged | Integrity-change | INFO | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [C031](install-and-persist.md#c031) | Boot Or System Image Tool Run During Build | Integrity-change | HIGH | [Install and Persistence](install-and-persist.md) |
@@ -314,50 +314,50 @@ is deliberately non-contiguous; see
 | [U004](upstream-manifests.md#u004) | Registry Redirect | U | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
 | [U005](upstream-manifests.md#u005) | Dependency Surface Jump | U | INFO | [Upstream Manifests](upstream-manifests.md) |
 | [U006](upstream-manifests.md#u006) | Manifest Changed Without Its Lockfile | U | INFO | [Upstream Manifests](upstream-manifests.md) |
-| [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [W004](unverifiable.md#w004) | Build Engine Runs A Manifest This Analysis Did Not Read | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [W005](unverifiable.md#w005) | Build Runs A Target Whose Recipe Was Not Read | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [W006](unverifiable.md#w006) | Generated File Names A Build-Only Path | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [W007](unverifiable.md#w007) | Dependency Novelty Declined For Insufficient Observations | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [W008](unverifiable.md#w008) | Unresolved Construct In A Recipe | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [W009](unverifiable.md#w009) | Upstream Manifests Not Examined | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [W010](unverifiable.md#w010) | Alert Volume Capped | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
-| [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
-| [X002](crossfire.md#x002) | Non-Literal Executable Name | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
-| [X003](crossfire.md#x003) | Obfuscated Command Argument | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X004](crossfire.md#x004) | Build Output Suppressed | Crossfire | MEDIUM | [Crossfire](crossfire.md) |
-| [X005](crossfire.md#x005) | Home Reached By An Alternative Spelling | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X006](crossfire.md#x006) | Source Points Somewhere Unexpected | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X007](crossfire.md#x007) | Multiple Evasion Techniques | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
-| [X008](crossfire.md#x008) | Whitespace A Shell Does Not Split On | Crossfire | MEDIUM | [Crossfire](crossfire.md) |
-| [X009](crossfire.md#x009) | Fetch Through An Uncatalogued Client | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
-| [X010](crossfire.md#x010) | Interpreter One-Liner Reaches The Network | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X011](crossfire.md#x011) | Package Manager Runs Fetched Code At Build Time | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X012](crossfire.md#x012) | Build Toolchain Redirected Into The Source Tree | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X013](crossfire.md#x013) | Fetch Redirected Or Trust Root Replaced | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X014](crossfire.md#x014) | Environment Variable Names Code To Run | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X015](crossfire.md#x015) | Work Scheduled To Run After The Build | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X016](crossfire.md#x016) | Fetch Piped Into An Unrecognised Consumer | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X017](crossfire.md#x017) | Tool Flag Or Builtin Carries A Command | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X018](crossfire.md#x018) | Interpreter One-Liner Assembles A Name | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X019](crossfire.md#x019) | Host Material Sent Or Packaged | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X020](crossfire.md#x020) | Recipe Writes The Build Steps The Engine Runs | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X021](crossfire.md#x021) | Executor Runs A File Chosen At Runtime | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X022](crossfire.md#x022) | Generated Config Handed To The Tool That Reads It | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X023](crossfire.md#x023) | Command Output Executed As A Script | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X024](crossfire.md#x024) | Indirect Sensitive Assignment | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X025](crossfire.md#x025) | Multi-Line Function Shadow | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X026](crossfire.md#x026) | Unresolved Constructs In Executable Positions | Crossfire | MEDIUM | [Crossfire](crossfire.md) |
-| [X027](crossfire.md#x027) | Refusal Cluster | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
-| [X028](crossfire.md#x028) | Pattern Completed Across Commits | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X029](crossfire.md#x029) | Encoded Material At Rest | Crossfire | MEDIUM | [Crossfire](crossfire.md) |
-| [X030](crossfire.md#x030) | ANSI-C Quoted Content In Commands | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X031](crossfire.md#x031) | Build Reads Non-Code Text | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X032](crossfire.md#x032) | Command Name Assembled By Splicing | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X033](crossfire.md#x033) | File With No Provenance Executed | Crossfire | HIGH | [Crossfire](crossfire.md) |
-| [X034](crossfire.md#x034) | Fetch Laundered Through An Archival Service | Crossfire | HIGH | [Crossfire](crossfire.md) |
+| [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W004](unverifiable.md#w004) | Build Engine Runs A Manifest This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W005](unverifiable.md#w005) | Build Runs A Target Whose Recipe Was Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W006](unverifiable.md#w006) | Generated File Names A Build-Only Path | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W007](unverifiable.md#w007) | Dependency Novelty Declined For Insufficient Observations | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W008](unverifiable.md#w008) | Unresolved Construct In A Recipe | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W009](unverifiable.md#w009) | Upstream Manifests Not Examined | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W010](unverifiable.md#w010) | Alert Volume Capped | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | Crossfire | - | [Crossfire](crossfire.md) |
+| [X002](crossfire.md#x002) | Non-Literal Executable Name | Crossfire | - | [Crossfire](crossfire.md) |
+| [X003](crossfire.md#x003) | Obfuscated Command Argument | Crossfire | - | [Crossfire](crossfire.md) |
+| [X004](crossfire.md#x004) | Build Output Suppressed | Crossfire | - | [Crossfire](crossfire.md) |
+| [X005](crossfire.md#x005) | Home Reached By An Alternative Spelling | Crossfire | - | [Crossfire](crossfire.md) |
+| [X006](crossfire.md#x006) | Source Points Somewhere Unexpected | Crossfire | - | [Crossfire](crossfire.md) |
+| [X007](crossfire.md#x007) | Multiple Evasion Techniques | Crossfire | - | [Crossfire](crossfire.md) |
+| [X008](crossfire.md#x008) | Whitespace A Shell Does Not Split On | Crossfire | - | [Crossfire](crossfire.md) |
+| [X009](crossfire.md#x009) | Fetch Through An Uncatalogued Client | Crossfire | - | [Crossfire](crossfire.md) |
+| [X010](crossfire.md#x010) | Interpreter One-Liner Reaches The Network | Crossfire | - | [Crossfire](crossfire.md) |
+| [X011](crossfire.md#x011) | Package Manager Runs Fetched Code At Build Time | Crossfire | - | [Crossfire](crossfire.md) |
+| [X012](crossfire.md#x012) | Build Toolchain Redirected Into The Source Tree | Crossfire | - | [Crossfire](crossfire.md) |
+| [X013](crossfire.md#x013) | Fetch Redirected Or Trust Root Replaced | Crossfire | - | [Crossfire](crossfire.md) |
+| [X014](crossfire.md#x014) | Environment Variable Names Code To Run | Crossfire | - | [Crossfire](crossfire.md) |
+| [X015](crossfire.md#x015) | Work Scheduled To Run After The Build | Crossfire | - | [Crossfire](crossfire.md) |
+| [X016](crossfire.md#x016) | Fetch Piped Into An Unrecognised Consumer | Crossfire | - | [Crossfire](crossfire.md) |
+| [X017](crossfire.md#x017) | Tool Flag Or Builtin Carries A Command | Crossfire | - | [Crossfire](crossfire.md) |
+| [X018](crossfire.md#x018) | Interpreter One-Liner Assembles A Name | Crossfire | - | [Crossfire](crossfire.md) |
+| [X019](crossfire.md#x019) | Host Material Sent Or Packaged | Crossfire | - | [Crossfire](crossfire.md) |
+| [X020](crossfire.md#x020) | Recipe Writes The Build Steps The Engine Runs | Crossfire | - | [Crossfire](crossfire.md) |
+| [X021](crossfire.md#x021) | Executor Runs A File Chosen At Runtime | Crossfire | - | [Crossfire](crossfire.md) |
+| [X022](crossfire.md#x022) | Generated Config Handed To The Tool That Reads It | Crossfire | - | [Crossfire](crossfire.md) |
+| [X023](crossfire.md#x023) | Command Output Executed As A Script | Crossfire | - | [Crossfire](crossfire.md) |
+| [X024](crossfire.md#x024) | Indirect Sensitive Assignment | Crossfire | - | [Crossfire](crossfire.md) |
+| [X025](crossfire.md#x025) | Multi-Line Function Shadow | Crossfire | - | [Crossfire](crossfire.md) |
+| [X026](crossfire.md#x026) | Unresolved Constructs In Executable Positions | Crossfire | - | [Crossfire](crossfire.md) |
+| [X027](crossfire.md#x027) | Refusal Cluster | Crossfire | - | [Crossfire](crossfire.md) |
+| [X028](crossfire.md#x028) | Pattern Completed Across Commits | Crossfire | - | [Crossfire](crossfire.md) |
+| [X029](crossfire.md#x029) | Encoded Material At Rest | Crossfire | - | [Crossfire](crossfire.md) |
+| [X030](crossfire.md#x030) | ANSI-C Quoted Content In Commands | Crossfire | - | [Crossfire](crossfire.md) |
+| [X031](crossfire.md#x031) | Build Reads Non-Code Text | Crossfire | - | [Crossfire](crossfire.md) |
+| [X032](crossfire.md#x032) | Command Name Assembled By Splicing | Crossfire | - | [Crossfire](crossfire.md) |
+| [X033](crossfire.md#x033) | File With No Provenance Executed | Crossfire | - | [Crossfire](crossfire.md) |
+| [X034](crossfire.md#x034) | Fetch Laundered Through An Archival Service | Crossfire | - | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
 Weight-0 declared-practice findings (`P001`-`P008`, P004 skipped) are not detections
