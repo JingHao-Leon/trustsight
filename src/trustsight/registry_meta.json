@@ -2006,6 +2006,42 @@
     "capability": "dependency-manifest",
     "target": "committed manifest files"
   },
+  "u007": {
+    "uid": "TS-0267",
+    "name": "CI Exfil Shape",
+    "canonical": true,
+    "severity_text": "MEDIUM",
+    "severity": "MEDIUM",
+    "capability": "upstream-ci",
+    "target": "declared upstream repository (federation-fed)"
+  },
+  "u008": {
+    "uid": "TS-0268",
+    "name": "Git-History Credential Sweep",
+    "canonical": true,
+    "severity_text": "MEDIUM",
+    "severity": "MEDIUM",
+    "capability": "upstream-ci",
+    "target": "declared upstream repository (federation-fed)"
+  },
+  "u009": {
+    "uid": "TS-0269",
+    "name": "New CI Surface Committed",
+    "canonical": true,
+    "severity_text": "LOW (weight 0)",
+    "severity": "LOW",
+    "capability": "upstream-ci",
+    "target": "committed .github/workflows/* files"
+  },
+  "u010": {
+    "uid": "TS-0270",
+    "name": "Unauditable Upstream",
+    "canonical": true,
+    "severity_text": "MEDIUM",
+    "severity": "MEDIUM",
+    "capability": "source",
+    "target": "declared source=() transport and access mode"
+  },
   "w001": {
     "uid": "TS-0222",
     "name": "Executes Code This Analysis Did Not Read",

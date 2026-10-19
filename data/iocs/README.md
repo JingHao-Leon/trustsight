@@ -112,3 +112,20 @@ legitimate history to revert to. Two deliberate choices:
   embeds a second one. A host-agnostic shape would flag every PKGBUILD that
   legitimately fetches a vanished upstream through `web.archive.org`; an IOC is
   incident attribution, so it names what this campaign actually used.
+
+`ghostaction-2026-10.json` carries the GhostAction campaign indicators that a
+local analyser can match against a diff: the three C2 IP literals, the
+`*.oast.fun` callback, the three hygiene-themed workflow filenames, and the
+`AKIA_CTX_START` credential-context marker. Two spec-listed shapes are
+deliberately **not** indicators here:
+
+- `REPO=` is a body marker but also an ordinary shell assignment; as a
+  `pkgbuild_pattern` it would flag a large share of clean PKGBUILDs.
+- the commit string "Add security audit workflow" is metadata, not recipe
+  content, so a PKGBUILD/module scan never sees it.
+
+The C2 addresses are written as bounded `pkgbuild_pattern` regexes rather than
+`domain` entries: domain normalisation keeps the registered domain, which turns
+an IP literal into its last two octets (`193.32.204.199` becomes `204.199`).
+The victim-repository list rides the signed federation channel as
+`upstream_repo` entries, not this local file (U007/U008 are federation-fed).

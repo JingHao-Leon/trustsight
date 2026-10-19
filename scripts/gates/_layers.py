@@ -454,7 +454,7 @@ def gate_u003_joins_the_host_view() -> Gate:
     return Gate("U003 joins the host view", "evil.example" in hosts, sorted(hosts))
 
 def gate_manifest_ledger_stays_weight_zero() -> Gate:
-    """U001/U002/U005/U006 are INFO (weight 0); only U003/U004 score."""
+    """U001/U002/U005/U006 are INFO; U009 is a feed-only LOW. All weigh 0."""
     from trustsight.analysis.pipeline import scan_diff
 
     diff = (
@@ -471,6 +471,20 @@ def gate_manifest_ledger_stays_weight_zero() -> Gate:
     for rule_id in ("U001", "U002", "U005", "U006"):
         if severity.get(rule_id, "INFO") != "INFO":
             hits.append(f"{rule_id} is {severity.get(rule_id)}")
+
+    # U009 renders a committed CI workflow at LOW but is feed-only: the
+    # severity is the reader's label, the weight must stay zero.
+    ci = (
+        "diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml\n"
+        "new file mode 100644\n--- /dev/null\n+++ b/.github/workflows/ci.yml\n"
+        "@@ -0,0 +1,1 @@\n+name: CI\n"
+    )
+    ci_fact = scan_diff(ci, package_name="p")
+    u009 = [e for e in ci_fact.score_breakdown if e.rule_id == "U009"]
+    if not u009:
+        hits.append("U009 did not fire on a committed workflow")
+    elif u009[0].weight != 0:
+        hits.append(f"U009 weighs {u009[0].weight}")
     return Gate("manifest ledger stays weight 0", not hits, hits)
 
 def gate_archive_listing_adds_no_extraction() -> Gate:

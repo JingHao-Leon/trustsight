@@ -478,6 +478,7 @@ def init_db():
                 added TEXT,
                 expires_at TEXT,
                 imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+                shape TEXT,
                 UNIQUE(type, value, source)
             );
             CREATE INDEX IF NOT EXISTS idx_ioc_entries_source
@@ -595,6 +596,11 @@ _ADDED_COLUMNS = {
         "activation_count": "INTEGER NOT NULL DEFAULT 1",
         "first_activated_at_obs": "INTEGER NOT NULL DEFAULT 0",
         "last_activated_at_obs": "INTEGER NOT NULL DEFAULT 0",
+    },
+    # The observed shape behind a federated `upstream_repo` indicator
+    # (`exfil` or `history_sweep`); empty for every other IOC type.
+    "ioc_entries": {
+        "shape": "TEXT",
     },
 }
 

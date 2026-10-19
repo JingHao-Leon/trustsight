@@ -32,7 +32,15 @@ log = logging.getLogger(__name__)
 # type needs a matcher in analysis/ioc.py and analysis/ioc_match.py, so an
 # unknown one is dropped rather than ignored.  This is the single source of
 # truth: `ioc_baseline` imports it too, so the two layers cannot drift.
-IOC_TYPES = frozenset({"package", "domain", "hash", "file_path", "pkgbuild_pattern"})
+#
+# `upstream_repo` is the federation-fed U007/U008 surface: a signed entry
+# naming an upstream repository (``host/owner/repo``) a scanner with
+# legitimate access observed gaining a CI exfil or history-sweep workflow.
+# It is matched against a recipe's declared ``url=``, never fetched.
+IOC_TYPES = frozenset({
+    "package", "domain", "hash", "file_path", "pkgbuild_pattern",
+    "upstream_repo",
+})
 
 #: Types the corpus pivot understands.  `file_path` and `pkgbuild_pattern`
 #: describe a file or a line shape, not an artefact a stored corpus row
@@ -200,6 +208,9 @@ class IndicatorSet:
     def match_file_path(self, path: str) -> Indicator | None:
         return self.match("file_path", path)
 
+    def match_upstream_repo(self, repo: str) -> Indicator | None:
+        return self.match("upstream_repo", repo)
+
     def patterns(self) -> tuple[tuple[Indicator, re.Pattern], ...]:
         """The compiled `pkgbuild_pattern` entries, already safety-checked."""
         return tuple(self._patterns)
@@ -257,6 +268,21 @@ def normalize(type: str, value: str) -> str | None:
         # The canonical form is the pattern text itself; whether it is a
         # usable, safe pattern is decided by `compile_ioc_pattern`.
         return value
+    if type == "upstream_repo":
+        # A repository identity, not a URL: ``host/owner/repo`` lowercased,
+        # with the scheme, a trailing ``.git``, a fragment and a trailing
+        # slash folded away.  The host is required: a bare ``owner/repo``
+        # does not name one forge's repository over another's.
+        value = value.lower()
+        if "://" in value:
+            value = value.split("://", 1)[1]
+        value = value.split("#", 1)[0].strip("/")
+        if value.endswith(".git"):
+            value = value[:-4]
+        parts = [part for part in value.split("/") if part]
+        if len(parts) < 3:
+            return None
+        return "/".join(parts[:3])
     return None
 
 

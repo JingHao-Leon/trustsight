@@ -141,6 +141,12 @@ RULE_LAYER_OVERRIDES: dict[str, Layer] = {
     "H074": Layer.L6,
     "H086": Layer.L6,
     "H088": Layer.L6,
+    # U007/U008 are federation-fed indicator matches (the signed
+    # `upstream_repo` feed), so they belong with the indicator mechanism
+    # rather than L3.  U009 reads a committed-file shape, so it is L1.
+    "U007": Layer.L7,
+    "U008": Layer.L7,
+    "U009": Layer.L1,
 }
 
 

@@ -128,6 +128,7 @@ Guides = [
   {Artifact = "reference/rules/artifact.md"},
   {Indicators = "reference/rules/indicator.md"},
   {"Upstream Manifests" = "reference/rules/upstream-manifests.md"},
+  {"Upstream Release Integrity" = "reference/rules/upstream-release.md"},
 ]
 
 [[project.nav]]
@@ -154,6 +155,7 @@ Guides = [
   {Artifact = "reference/nature/artifact.md"},
   {Indicators = "reference/nature/indicator.md"},
   {"Upstream Manifests" = "reference/nature/upstream-manifests.md"},
+  {"Upstream Release Integrity" = "reference/nature/upstream-release.md"},
 ]
 
 [[project.nav]]

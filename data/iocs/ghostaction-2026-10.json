@@ -1,0 +1,90 @@
+[
+  {
+    "type": "pkgbuild_pattern",
+    "value": "\\b193\\.32\\.204\\.199\\b",
+    "confidence": "confirmed",
+    "provenance": "GhostAction campaign report (spec: Upstream CI & Release Integrity); C2",
+    "campaign": "ghostaction-2026-10",
+    "incident": "ghostaction-2026-10",
+    "added": "2026-10-19T00:00:00Z",
+    "expires_at": "2027-10-19T00:00:00Z",
+    "note": "Command-and-control IP literal referenced by the injected workflow; matched as a bounded pattern because an IP is not a registrable domain."
+  },
+  {
+    "type": "pkgbuild_pattern",
+    "value": "\\b45\\.139\\.104\\.115\\b",
+    "confidence": "confirmed",
+    "provenance": "GhostAction campaign report (spec: Upstream CI & Release Integrity); C2",
+    "campaign": "ghostaction-2026-10",
+    "incident": "ghostaction-2026-10",
+    "added": "2026-10-19T00:00:00Z",
+    "expires_at": "2027-10-19T00:00:00Z",
+    "note": "Command-and-control IP literal referenced by the injected workflow; matched as a bounded pattern because an IP is not a registrable domain."
+  },
+  {
+    "type": "pkgbuild_pattern",
+    "value": "\\b170\\.39\\.218\\.2\\b",
+    "confidence": "confirmed",
+    "provenance": "GhostAction campaign report (spec: Upstream CI & Release Integrity); C2",
+    "campaign": "ghostaction-2026-10",
+    "incident": "ghostaction-2026-10",
+    "added": "2026-10-19T00:00:00Z",
+    "expires_at": "2027-10-19T00:00:00Z",
+    "note": "Command-and-control IP literal referenced by the injected workflow; matched as a bounded pattern because an IP is not a registrable domain."
+  },
+  {
+    "type": "pkgbuild_pattern",
+    "value": "[A-Za-z0-9._-]+\\.oast\\.fun",
+    "confidence": "confirmed",
+    "provenance": "GhostAction campaign report (spec: Upstream CI & Release Integrity); callback",
+    "campaign": "ghostaction-2026-10",
+    "incident": "ghostaction-2026-10",
+    "added": "2026-10-19T00:00:00Z",
+    "expires_at": "2027-10-19T00:00:00Z",
+    "note": "Out-of-band callback under the oast.fun interaction service. Pinned to the service host so an ordinary review link does not match."
+  },
+  {
+    "type": "file_path",
+    "value": ".github/workflows/security-audit.yml",
+    "confidence": "confirmed",
+    "provenance": "GhostAction campaign report (spec: Upstream CI & Release Integrity); injected workflow",
+    "campaign": "ghostaction-2026-10",
+    "incident": "ghostaction-2026-10",
+    "added": "2026-10-19T00:00:00Z",
+    "expires_at": "2027-10-19T00:00:00Z",
+    "note": "Hygiene-themed workflow filename the campaign commits to the victim repository."
+  },
+  {
+    "type": "file_path",
+    "value": ".github/workflows/github_actions_security.yml",
+    "confidence": "confirmed",
+    "provenance": "GhostAction campaign report (spec: Upstream CI & Release Integrity); injected workflow",
+    "campaign": "ghostaction-2026-10",
+    "incident": "ghostaction-2026-10",
+    "added": "2026-10-19T00:00:00Z",
+    "expires_at": "2027-10-19T00:00:00Z",
+    "note": "Hygiene-themed workflow filename the campaign commits to the victim repository."
+  },
+  {
+    "type": "file_path",
+    "value": ".github/workflows/security-check.yml",
+    "confidence": "confirmed",
+    "provenance": "GhostAction campaign report (spec: Upstream CI & Release Integrity); injected workflow",
+    "campaign": "ghostaction-2026-10",
+    "incident": "ghostaction-2026-10",
+    "added": "2026-10-19T00:00:00Z",
+    "expires_at": "2027-10-19T00:00:00Z",
+    "note": "Hygiene-themed workflow filename the campaign commits to the victim repository."
+  },
+  {
+    "type": "pkgbuild_pattern",
+    "value": "AKIA_CTX_START",
+    "confidence": "confirmed",
+    "provenance": "GhostAction campaign report (spec: Upstream CI & Release Integrity); body marker",
+    "campaign": "ghostaction-2026-10",
+    "incident": "ghostaction-2026-10",
+    "added": "2026-10-19T00:00:00Z",
+    "expires_at": "2027-10-19T00:00:00Z",
+    "note": "Marker the injected workflow writes around materialised credential context. Narrow enough to stand alone."
+  }
+]

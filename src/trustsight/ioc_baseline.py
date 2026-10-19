@@ -97,6 +97,10 @@ class IocEntry:
     campaign: str = ""
     added: str = ""
     expires_at: str = ""
+    #: The observed shape behind an ``upstream_repo`` entry (``exfil`` or
+    #: ``history_sweep``); empty for every other type.  The U007/U008
+    #: federation feed is the only producer.
+    shape: str = ""
 
 
 @dataclass(frozen=True)
@@ -113,6 +117,7 @@ class IocMatch:
     surface: str = ""
     line: int | None = None
     expired: bool = False
+    shape: str = ""
 
 
 def _now_iso() -> str:
@@ -147,6 +152,8 @@ def _normalize_value(type_: str, value: str) -> str | None:
         # pattern the analyser would refuse to run.
         canonical = normalize_ioc("pkgbuild_pattern", value)
         return canonical if canonical and compile_ioc_pattern(canonical) else None
+    if type_ == "upstream_repo":
+        return normalize_ioc("upstream_repo", value)
     return None
 
 
@@ -289,6 +296,7 @@ def _load_iocs(path: Path) -> list[IocEntry]:
                 campaign=str(row.get("campaign", "")),
                 added=str(row.get("added", "")),
                 expires_at=str(row.get("expires_at", "")),
+                shape=str(row.get("shape", "")).strip().lower(),
             )
         )
     return entries
@@ -455,8 +463,8 @@ def import_baseline(
                 conn.execute(
                     """INSERT INTO ioc_entries
                        (type, value, source, confidence, provenance, campaign,
-                        added, expires_at, imported_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        added, expires_at, imported_at, shape)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         entry.type,
                         entry.value,
@@ -467,6 +475,7 @@ def import_baseline(
                         entry.added,
                         entry.expires_at,
                         now,
+                        entry.shape,
                     ),
                 )
             except sqlite3.IntegrityError:
@@ -478,7 +487,8 @@ def import_baseline(
                 conn.execute(
                     """UPDATE ioc_entries
                        SET confidence = ?, provenance = ?, campaign = ?,
-                           added = ?, expires_at = ?, imported_at = ?
+                           added = ?, expires_at = ?, imported_at = ?,
+                           shape = ?
                        WHERE type = ? AND value = ? AND source = ?""",
                     (
                         entry.confidence,
@@ -487,6 +497,7 @@ def import_baseline(
                         entry.added,
                         entry.expires_at,
                         now,
+                        entry.shape,
                         entry.type,
                         entry.value,
                         source,
@@ -503,6 +514,13 @@ def import_baseline(
 
 
 def _row_to_entry(row: sqlite3.Row) -> IocEntry:
+    # ``shape`` is an added column; a row read from a database created before
+    # the migration (a read-only connection never runs one) simply lacks it.
+    shape = ""
+    try:
+        shape = row["shape"] or ""
+    except (IndexError, KeyError):
+        pass
     return IocEntry(
         type=row["type"],
         value=row["value"],
@@ -512,6 +530,7 @@ def _row_to_entry(row: sqlite3.Row) -> IocEntry:
         campaign=row["campaign"] or "",
         added=row["added"] or "",
         expires_at=row["expires_at"] or "",
+        shape=shape,
     )
 
 
@@ -597,6 +616,7 @@ def match_ioc(type_: str, value: str) -> list[IocMatch]:
                 surface="",
                 line=None,
                 expired=expired,
+                shape=entry.shape,
             )
         )
     return matches
@@ -649,6 +669,15 @@ def match_package(name: str) -> list[IocMatch]:
 def match_file_path(path: str) -> list[IocMatch]:
     """Return active file_path IOC matches for *path*."""
     return match_ioc("file_path", path)
+
+
+def match_upstream_repo(repo: str) -> list[IocMatch]:
+    """Return active ``upstream_repo`` matches for a declared upstream.
+
+    *repo* is the canonical ``host/owner/repo`` the U007/U008 federation feed
+    must name exactly.  A miss is uninformative, as for every other type.
+    """
+    return match_ioc("upstream_repo", repo)
 
 
 def active_patterns(source: str | None = None, expired: bool = False):

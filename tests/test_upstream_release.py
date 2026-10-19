@@ -1,0 +1,187 @@
+"""The U-series extension: upstream CI and release integrity (U007-U010).
+
+U007/U008 are federation-fed (a signed ``upstream_repo`` baseline match);
+U009 reads an added CI workflow; U010 reads the access mode of a gained
+``source=()`` entry.  Nothing here fetches upstream content (A2/A8).
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from trustsight.analysis.pipeline import scan_diff
+from trustsight.analysis.upstream_release import (
+    access_of_source,
+    declared_upstream_repo,
+    has_validpgpkeys,
+    upstream_release_findings,
+)
+from trustsight.changes import change_delta
+from trustsight.ioc_baseline import IocMatch
+
+REPO = "github.com/owner/repo"
+
+BASE = 'pkgname=demo\npkgver=1\npkgrel=1\nurl="https://github.com/owner/repo"\n'
+
+
+def _collect(diff_text, *, matches=None, current_text=None, config=None):
+    delta = change_delta(diff_text, "demo")
+    out: list[dict] = []
+
+    def add(rule_id, name, severity, category, match, **extra):
+        out.append({"rule_id": rule_id, "severity": severity, "match": match,
+                    **extra})
+
+    upstream_release_findings(
+        diff_text, delta, add, config or {}, "demo",
+        current_text=current_text, matches=matches,
+    )
+    return out
+
+
+_NOOP_DIFF = (
+    "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,2 @@\n"
+    " pkgname=demo\n pkgver=1\n"
+)
+
+
+def _add_workflow(path=".github/workflows/ci.yml") -> str:
+    return (
+        f"diff --git a/{path} b/{path}\n"
+        "new file mode 100644\n--- /dev/null\n"
+        f"+++ b/{path}\n@@ -0,0 +1,1 @@\n+name: CI\n"
+    )
+
+
+def _source_diff(token: str) -> str:
+    return (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n"
+        "@@ -1,3 +1,4 @@\n"
+        " pkgname=demo\n pkgver=1\n pkgrel=1\n"
+        f'+source=("{token}")\n'
+    )
+
+
+# -- upstream repository identity -----------------------------------------
+
+
+def test_a_forge_url_names_the_upstream_repo():
+    assert declared_upstream_repo(BASE) == REPO
+
+
+@pytest.mark.parametrize("url", [
+    'url="https://example.com/owner/repo"',
+    'url="https://github.com/owner"',
+    'url=""',
+])
+def test_a_non_forge_url_names_no_repo(url):
+    assert declared_upstream_repo(f"pkgname=demo\n{url}\n") == ""
+
+
+# -- U007 / U008 federation -----------------------------------------------
+
+
+@pytest.mark.parametrize("shape, rule_id", [
+    ("exfil", "U007"),
+    ("", "U007"),
+    ("history_sweep", "U008"),
+])
+def test_a_federated_shape_files_its_rule(shape, rule_id):
+    matches = [IocMatch(type="upstream_repo", value=REPO, source="feed", shape=shape)]
+    fired = _collect(_NOOP_DIFF, current_text=BASE, matches=matches)
+    assert [f["rule_id"] for f in fired] == [rule_id]
+    assert fired[0]["severity"] == "MEDIUM"
+    assert fired[0]["upstream_repo"] == REPO
+
+
+def test_federation_is_silent_without_a_match():
+    assert [f["rule_id"] for f in _collect(_NOOP_DIFF, current_text=BASE)] == []
+
+
+def test_a_pkgver_bump_corroborates_the_federation_finding():
+    bumped = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+        " pkgname=demo\n-pkgver=1\n+pkgver=2\n pkgrel=1\n"
+        ' url="https://github.com/owner/repo"\n'
+    )
+    matches = [IocMatch(type="upstream_repo", value=REPO, source="feed")]
+    fired = _collect(bumped, current_text=BASE.replace("pkgver=1", "pkgver=2"),
+                     matches=matches)
+    assert fired[0]["pkgver_bumped"] is True
+    assert "pkgver bumped" in fired[0]["match"]
+
+
+# -- U009 new CI surface ---------------------------------------------------
+
+
+def test_an_added_workflow_is_low_and_weighs_zero():
+    fact = scan_diff(_add_workflow(), package_name="demo")
+    entries = [e for e in fact.score_breakdown if e.rule_id == "U009"]
+    assert entries, "U009 did not fire on an added workflow"
+    assert entries[0].severity == "LOW"
+    assert entries[0].weight == 0
+
+
+def test_an_added_non_workflow_file_is_not_ci_surface():
+    diff = (
+        "diff --git a/README.md b/README.md\nnew file mode 100644\n"
+        "--- /dev/null\n+++ b/README.md\n@@ -0,0 +1,1 @@\n+hi\n"
+    )
+    fact = scan_diff(diff, package_name="demo")
+    assert not [e for e in fact.score_breakdown if e.rule_id == "U009"]
+
+
+# -- U010 unauditable upstream --------------------------------------------
+
+
+@pytest.mark.parametrize("token, access", [
+    ("git+ssh://git@internal.example/x.git", "ssh"),
+    ("git@internal.example:x.git", "ssh"),
+    ("file:///srv/src/x.tar.gz", "file"),
+    ("http://user:token@example.com/x.tar.gz", "embedded_credentials"),
+    ("https://10.1.2.3/x.tar.gz", "private_network"),
+])
+def test_access_of_source_classifies_the_transport(token, access):
+    assert access_of_source(token)[0] == access
+
+
+@pytest.mark.parametrize("token", [
+    "git+ssh://git@internal.example/x.git",
+    "file:///srv/src/x.tar.gz",
+    "https://10.1.2.3/x.tar.gz",
+    "ftp://user:token@example.com/x.tar.gz",
+])
+def test_each_unauditable_transport_files_u010(token):
+    fired = _collect(_source_diff(token), current_text=BASE)
+    assert [f["rule_id"] for f in fired] == ["U010"]
+    assert fired[0]["severity"] == "MEDIUM"
+
+
+def test_a_public_source_is_not_u010():
+    fired = _collect(_source_diff("https://example.com/x.tar.gz"), current_text=BASE)
+    assert [f["rule_id"] for f in fired] == []
+
+
+def test_u010_amplifies_when_validpgpkeys_is_absent():
+    fired = _collect(_source_diff("git+ssh://git@internal.example/x.git"),
+                     current_text=BASE)
+    assert fired[0]["amplified"] is True
+
+
+def test_u010_does_not_amplify_when_validpgpkeys_vouches():
+    fired = _collect(
+        _source_diff("git+ssh://git@internal.example/x.git"),
+        current_text=BASE + "validpgpkeys=('DEADBEEF')\n",
+    )
+    assert fired[0]["amplified"] is False
+
+
+def test_c020_keeps_a_public_credential_url():
+    fired = _collect(_source_diff("http://user:token@example.com/x.tar.gz"),
+                     current_text=BASE)
+    assert [f["rule_id"] for f in fired] == []
+
+
+def test_validpgpkeys_is_read_from_the_recipe():
+    assert has_validpgpkeys(BASE + 'validpgpkeys=("A" "B")\n')
+    assert not has_validpgpkeys(BASE)

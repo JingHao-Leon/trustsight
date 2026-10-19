@@ -35,6 +35,7 @@ below is the same across mechanisms.
 - [Artifact](artifact.md); what actually lands in the package
 - [Indicators](indicator.md); concrete observables from signed data
 - [Upstream Manifests](upstream-manifests.md); declared source against what upstream published
+- [Upstream Release Integrity](upstream-release.md); a declared upstream's build automation and unauditable source transports
 
 ## See also
 

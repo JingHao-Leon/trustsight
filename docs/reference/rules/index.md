@@ -6,14 +6,16 @@ TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
 rules X001-X034, integrity-change rules C001-C032, dependency rules
 D001-D004, temporal rules T001-T003 and T006-T007, correlation rules G001-G010, entropy
-rules E001-E003, the indicator rule H056, meta rules M001-M006, committed-manifest
-rules U001-U006, artifact rules A001-A008, declared-practice rules P001-P008 (P004 skipped), and
+rules E001-E003, the indicator rule H056, meta rules M001-M006, upstream
+rules U001-U010, artifact rules A001-A008, declared-practice rules P001-P008 (P004 skipped), and
 unverifiable rules W001-W010.
 
 Each rule contributes according to its severity weight, match target and
 scope, except the P and W series and the weight-0 M annotations, which are
-weight 0 and report rather than score (the U-series is the same shape: only U003, a
-new remote source, and U004, a redirected resolver, score), and the A and I
+weight 0 and report rather than score (the U-series is mostly the same shape:
+U003, a new remote source, U004, a redirected resolver, U007, a federated CI
+exfil shape, U008, a federated history sweep, and U010, an unauditable source
+transport, score; the rest are weight 0), and the A and I
 series, which are reported outside the heuristic score.
 
 This page is the map. [The rule system reference](system.md) explains how
@@ -60,6 +62,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 | [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
 | [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 6 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
+| [Upstream Release Integrity](upstream-release.md) | `upstream-release` | 4 | What a recipe declares about upstream - its URL, its sources, their access mode - and the CI surface it commits.  Upstream content is never read (A2/A8); the CI exfil and history-sweep shapes arrive over the signed federation channel instead. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
@@ -315,6 +318,10 @@ is deliberately non-contiguous; see
 | [U004](upstream-manifests.md#u004) | Registry Redirect | U | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
 | [U005](upstream-manifests.md#u005) | Dependency Surface Jump | U | INFO | [Upstream Manifests](upstream-manifests.md) |
 | [U006](upstream-manifests.md#u006) | Manifest Changed Without Its Lockfile | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U007](upstream-release.md#u007) | CI Exfil Shape | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U008](upstream-release.md#u008) | Git-History Credential Sweep | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U009](upstream-release.md#u009) | New CI Surface Committed | U | LOW | [Upstream Release Integrity](upstream-release.md) |
+| [U010](upstream-release.md#u010) | Unauditable Upstream | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
 | [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |

@@ -338,11 +338,11 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **When it fires:** Only in the optional L9 lane, when the built artifact does not match the recipe's declared surface. The category reading is on [Artifact: Rule Nature](../nature/artifact.md).
 
-## U-series: **Manifest** Committed Dependency Surfaces
+## U-series: **Upstream** Declared Surfaces
 
-**Count:** 6 rules (U001-U006)
+**Count:** 10 rules (U001-U010)
 
-**Mechanism:** Parses the dependency manifests committed beside a recipe - `Cargo.toml`, `package.json`, `requirements.txt`, `go.mod`, `Gemfile`, `composer.json` and peers - with the existing tree walk and diff. No fetch and no extraction (A2, A8): these are repository bytes the analysis already reads.
+**Mechanism:** For the committed-manifest rules, parses the dependency manifests committed beside a recipe - `Cargo.toml`, `package.json`, `requirements.txt`, `go.mod`, `Gemfile`, `composer.json` and peers - with the existing tree walk and diff. The upstream-release rules read what the recipe declares about upstream: U007/U008 consume a signed `upstream_repo` shape over the federation channel (the workflow itself is upstream and A2-forbidden locally), U009 notes a committed `.github/workflows/*` path, and U010 reads the access mode of gained `source=()` entries. No fetch and no extraction (A2, A8): these are repository bytes, a signed observation, or the declaration itself.
 
 **What you can tune:**
 
@@ -389,7 +389,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 | M | **Meta** | Other rules' findings | Layer count, per-layer ceiling | Severity-based; M002/M003 weight 0 | After the ownership resolver |
 | A | **Artifact** | Built package manifest | Enable flag only | Outside the score (L9) | Only in the optional build lane |
 | P | **Practice** | Declared practice | Visibility only | 0 (always) | On every analysis |
-| U | **Manifest** | Committed dependency surfaces | Filename table, threshold | U003/U004 MEDIUM; others 0 | When a committed manifest changes |
+| U | **Upstream** | Declared dependency and release surfaces | Filename table, threshold | U003/U004/U007/U008/U010 MEDIUM; others 0 | When a declared upstream surface changes |
 | W | **Warning** | Analysis boundary | Visibility only | 0 (always) | When boundary encountered |
 
 ## See Also

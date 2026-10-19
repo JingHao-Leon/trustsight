@@ -57,8 +57,7 @@ class RuleCategory(StrEnum):
     #: The W series. Not a risk claim: a statement about what the analysis
     #: could not verify, on a surface too common to price. See
     #: `unverifiable.md` for why these carry no weight.
-    UNVERIFIABLE = "unverifiable"
-    # The M series. Predicates over the finding set itself:
+    UNVERIFIABLE = "unverifiable"    # The M series. Predicates over the finding set itself:
     #: a declared practice contradicted by structure, or a composition of
     #: weak signals. Fires at the layer of its inputs.
     META = "meta"
@@ -82,6 +81,12 @@ class RuleCategory(StrEnum):
     #: repository itself shows about the dependency surface, read from the
     #: existing tree walk and diff - never a fetch and never an extraction.
     UPSTREAM_MANIFESTS = "upstream-manifests"
+    #: The U series extension. Upstream CI and release integrity: what a
+    #: recipe *declares* about upstream (URLs, sources, access mode) and what
+    #: the diff shows an added CI surface. A2/A8 forbid reading upstream
+    #: content, so the exfil and history-sweep shapes arrive over the signed
+    #: federation channel; the rest are pure diff projections.
+    UPSTREAM_RELEASE = "upstream-release"
 
     @property
     def doc_page(self) -> str:
@@ -126,6 +131,7 @@ _TITLES: dict[RuleCategory, str] = {
     RuleCategory.ARTIFACT: "Artifact",
     RuleCategory.INDICATOR: "Indicators",
     RuleCategory.UPSTREAM_MANIFESTS: "Upstream Manifests",
+    RuleCategory.UPSTREAM_RELEASE: "Upstream Release Integrity",
 }
 
 _SUMMARIES: dict[RuleCategory, str] = {
@@ -216,6 +222,12 @@ _SUMMARIES: dict[RuleCategory, str] = {
         "A committed dependency manifest changed: a dependency moved, a new "
         "remote source entered the recipe's reach, or the resolver is being "
         "redirected.  Read from the repository, never fetched."
+    ),
+    RuleCategory.UPSTREAM_RELEASE: (
+        "What a recipe declares about upstream - its URL, its sources, their "
+        "access mode - and the CI surface it commits.  Upstream content is "
+        "never read (A2/A8); the CI exfil and history-sweep shapes arrive "
+        "over the signed federation channel instead."
     ),
 }
 
@@ -338,6 +350,10 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "U004": _C.UPSTREAM_MANIFESTS,
     "U005": _C.UPSTREAM_MANIFESTS,
     "U006": _C.UPSTREAM_MANIFESTS,
+    "U007": _C.UPSTREAM_RELEASE,
+    "U008": _C.UPSTREAM_RELEASE,
+    "U009": _C.UPSTREAM_RELEASE,
+    "U010": _C.UPSTREAM_RELEASE,
     "M001": _C.META,
     "M002": _C.META,
     "M003": _C.META,

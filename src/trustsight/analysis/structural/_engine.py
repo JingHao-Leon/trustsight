@@ -122,8 +122,15 @@ def _structural_findings(
             "category": category, "match": match,
             "file": file, "line": line,
         }
+        # A rule may pin its own score weight (U009 is a feed-only
+        # annotation at LOW severity and weight 0).  The scorer reads
+        # ``weight_override`` off the finding, so it is promoted out of
+        # ``params`` rather than buried there.
+        weight_override = extra.pop("weight_override", None) if extra else None
         if extra:
             finding["params"] = extra
+        if weight_override is not None:
+            finding["weight_override"] = weight_override
         findings.append(stamp(finding))
 
     cs_behavior = source_changes.checksum_behavior
@@ -552,6 +559,15 @@ def _structural_findings(
 
     upstream_manifest_findings(
         diff_text, tree_manifest, cdelta, add, config or {}, package_name
+    )
+    # U-series extension: upstream CI and release integrity (spec: Upstream CI
+    # & Release Integrity).  U007/U008 are federation-fed; U009/U010 read the
+    # diff's added CI surface and gained source access modes.
+    from ..upstream_release import upstream_release_findings
+
+    upstream_release_findings(
+        diff_text, cdelta, add, config or {}, package_name,
+        current_text=current_text, source_changes=source_changes,
     )
     _build_findings(diff_text, config or {}, add, current_text=current_text,
                     ctx=ctx)

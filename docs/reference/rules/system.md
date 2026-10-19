@@ -104,7 +104,7 @@ be a script the recipe executes.
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
 | Reported, not scored | W001-W010 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
 
-The U-series reads the dependency manifests committed beside a recipe: U003 (a new remote source) and U004 (a redirected resolver) score at MEDIUM; U001, U002, U005 and U006 are weight-0 ledger entries.
+The U-series reads what a recipe declares about upstream. From the committed dependency manifests beside a recipe: U003 (a new remote source) and U004 (a redirected resolver) score at MEDIUM; U001, U002, U005 and U006 are weight-0 ledger entries. From upstream release integrity: U007 (CI exfil shape) and U008 (git-history credential sweep) score at MEDIUM from the signed federation channel, U009 (new CI surface committed) is a weight-0 ledger entry, and U010 (unauditable upstream) scores at MEDIUM.
 
 Rules only contribute to Tier A. Tiers B and C are computed independently and added to the score alongside the rule contributions.
 
@@ -1215,6 +1215,22 @@ See [U005: Dependency Surface Jump](upstream-manifests.md#u005).
 ### U006 {#u006}
 
 See [U006: Manifest Changed Without Its Lockfile](upstream-manifests.md#u006).
+
+### U007 {#u007}
+
+See [U007: CI Exfil Shape](upstream-release.md#u007).
+
+### U008 {#u008}
+
+See [U008: Git-History Credential Sweep](upstream-release.md#u008).
+
+### U009 {#u009}
+
+See [U009: New CI Surface Committed](upstream-release.md#u009).
+
+### U010 {#u010}
+
+See [U010: Unauditable Upstream](upstream-release.md#u010).
 
 ### M001 {#m001}
 
