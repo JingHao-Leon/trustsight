@@ -230,3 +230,56 @@ def test_the_upstream_boundaries_are_weight_zero():
         assert entries, f"{rule_id} did not fire"
         assert entries[0].severity == "INFO"
         assert entries[0].weight == 0
+
+
+# -- hardening: the boundaries never fail the run ---------------------------
+
+
+import sqlite3  # noqa: E402
+
+from trustsight import ioc_baseline  # noqa: E402
+
+
+@pytest.mark.parametrize("config", [
+    None,
+    {"baselines": None},
+    {"baselines": {"ioc": None}},
+    {"baselines": "not-a-dict"},
+    ["not", "a", "dict"],
+    42,
+])
+def test_odd_configs_do_not_fail_the_boundaries(config):
+    fired = _collect(_NOOP_DIFF, current_text=BASE, config=config)
+    assert [f["rule_id"] for f in fired if f["rule_id"].startswith("W")]
+
+
+@pytest.mark.parametrize("error", [
+    sqlite3.OperationalError("no such table"),
+    sqlite3.ProgrammingError("wrong thread"),
+    RuntimeError("store exploded"),
+])
+def test_w012_survives_an_unreachable_store(monkeypatch, error):
+    def boom():
+        raise error
+
+    monkeypatch.setattr(ioc_baseline, "has_upstream_repo_entries", boom)
+    fired = _collect(_NOOP_DIFF, current_text=BASE, config={})
+    assert "W012" in [f["rule_id"] for f in fired]
+
+
+def test_has_upstream_repo_entries_is_false_on_a_broken_store(monkeypatch):
+    class Boom:
+        def __enter__(self):
+            raise sqlite3.OperationalError("locked")
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(ioc_baseline, "get_connection", lambda: Boom())
+    assert ioc_baseline.has_upstream_repo_entries() is False
+
+
+def test_a_non_iterable_matches_injection_is_a_miss_not_a_crash():
+    fired = _collect(_NOOP_DIFF, current_text=BASE, matches=object())
+    ids = [f["rule_id"] for f in fired]
+    assert "W011" in ids and "W012" not in ids

@@ -574,15 +574,17 @@ def has_upstream_repo_entries() -> bool:
     """True when the store carries at least one ``upstream_repo`` entry.
 
     A store with none is a *cold* federation channel for the U-series: it
-    cannot answer U007/U008, so W012 names that rather than a miss.
+    cannot answer U007/U008, so W012 names that rather than a miss.  An
+    unreachable, unlocked or schema-less store is cold too, never an error:
+    the reader is told the channel has nothing, not that the run failed.
     """
-    with get_connection() as conn:
-        try:
+    try:
+        with get_connection() as conn:
             row = conn.execute(
                 "SELECT 1 FROM ioc_entries WHERE type = 'upstream_repo' LIMIT 1"
             ).fetchone()
-        except sqlite3.OperationalError:
-            return False
+    except sqlite3.Error:
+        return False
     return row is not None
 
 

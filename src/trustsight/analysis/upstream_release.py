@@ -140,6 +140,22 @@ def _resolve_entry(raw: str, table: dict[str, str] | None) -> str:
         return raw
 
 
+def _ioc_section(config) -> dict:
+    """The ``baselines.ioc`` mapping, or {} for any shape that is not one.
+
+    A caller may hand a config with ``baselines: None``, an ``ioc`` key set to
+    a non-mapping, or no config at all: none of those is a reason to fail an
+    analysis, so every read of the section goes through here.
+    """
+    if not isinstance(config, dict):
+        return {}
+    baselines = config.get("baselines")
+    if not isinstance(baselines, dict):
+        return {}
+    section = baselines.get("ioc")
+    return section if isinstance(section, dict) else {}
+
+
 def _federation_matches(repo: str, config: dict | None, matches) -> list:
     """Signed ``upstream_repo`` baseline matches for *repo*, or [] when cold.
 
@@ -147,11 +163,13 @@ def _federation_matches(repo: str, config: dict | None, matches) -> list:
     federation finding without a populated database.
     """
     if matches is not None:
-        return list(matches)
+        try:
+            return list(matches)
+        except TypeError:  # noqa: BLE001 - a non-iterable injection is no match
+            return []
     if not repo:
         return []
-    section = (config or {}).get("baselines", {}).get("ioc", {})
-    if not section.get("enabled", True):
+    if not _ioc_section(config).get("enabled", True):
         return []
     try:
         from ..ioc_baseline import match_upstream_repo
@@ -172,8 +190,7 @@ def _federation_unavailable(repo: str, config: dict | None, matches) -> bool:
     """
     if not repo or matches is not None:
         return False
-    section = (config or {}).get("baselines", {}).get("ioc", {})
-    if not section.get("enabled", True):
+    if not _ioc_section(config).get("enabled", True):
         return True
     try:
         from ..ioc_baseline import has_upstream_repo_entries
