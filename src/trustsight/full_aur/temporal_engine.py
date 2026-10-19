@@ -222,7 +222,11 @@ def _repo_path_tokens(url: str) -> set[str]:
     for part in path.split("/"):
         for piece in part.replace(".tar.gz", "").replace(".tgz", "").replace(
             ".tar", "").replace(".zip", "").replace(".git", "").split("."):
-            piece = piece.rstrip("0123456789")
+            # Lowercased to match ``_package_stem``: the overlap test below
+            # compares a lowercased package name against these, so a repo
+            # spelled ``GTAIV`` / ``Colloid-icon-theme`` never matched its
+            # own package and H059 flagged it as divergent.
+            piece = piece.rstrip("0123456789").lower()
             if len(piece) >= 3:
                 tokens.add(piece)
     return tokens

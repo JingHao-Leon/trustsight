@@ -689,6 +689,23 @@ def test_h059_matching_repo_is_quiet(thresholds):
         "chrome-helper": {"https://github.com/acme/chrome-helper"}}) == []
 
 
+@pytest.mark.parametrize("name,repo", [
+    ("gtaiv-eflc-fusionfix-bin",
+     "https://github.com/ThirteenAG/GTAIV.EFLC.FusionFix/archive/v1.0.tar.gz"),
+    ("colloid-cursors",
+     "https://github.com/vinceliuice/Colloid-icon-theme/archive/2024.tar.gz"),
+])
+def test_h059_repo_tokens_match_case_insensitively(thresholds, name, repo):
+    """The repo path carried capitals (`GTAIV`, `Colloid-icon-theme`) while
+    the package name is lowercased, so the overlap test missed and H059
+    called two matching packages divergent."""
+    thresholds({})
+    old = _snapshot(["base"], "alice")
+    new = copy.deepcopy(old)
+    new[name] = _snapshot([name], "alice")[name]
+    assert _fire("H059", new, old, source_repos={name: {repo}}) == []
+
+
 # --- maintainer_activity_history feed -----------------------------------------
 
 
