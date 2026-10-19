@@ -45,6 +45,11 @@ _NOOP_DIFF = (
 )
 
 
+def _u_ids(fired: list[dict]) -> list[str]:
+    """The U-series rule ids, ignoring the always-on W011/W012 boundaries."""
+    return [f["rule_id"] for f in fired if not f["rule_id"].startswith("W")]
+
+
 def _add_workflow(path=".github/workflows/ci.yml") -> str:
     return (
         f"diff --git a/{path} b/{path}\n"
@@ -89,13 +94,14 @@ def test_a_non_forge_url_names_no_repo(url):
 def test_a_federated_shape_files_its_rule(shape, rule_id):
     matches = [IocMatch(type="upstream_repo", value=REPO, source="feed", shape=shape)]
     fired = _collect(_NOOP_DIFF, current_text=BASE, matches=matches)
-    assert [f["rule_id"] for f in fired] == [rule_id]
+    assert _u_ids(fired) == [rule_id]
     assert fired[0]["severity"] == "MEDIUM"
     assert fired[0]["upstream_repo"] == REPO
 
 
 def test_federation_is_silent_without_a_match():
-    assert [f["rule_id"] for f in _collect(_NOOP_DIFF, current_text=BASE)] == []
+    fired = _collect(_NOOP_DIFF, current_text=BASE)
+    assert [f for f in fired if f["rule_id"] in ("U007", "U008")] == []
 
 
 def test_a_pkgver_bump_corroborates_the_federation_finding():
@@ -153,13 +159,13 @@ def test_access_of_source_classifies_the_transport(token, access):
 ])
 def test_each_unauditable_transport_files_u010(token):
     fired = _collect(_source_diff(token), current_text=BASE)
-    assert [f["rule_id"] for f in fired] == ["U010"]
+    assert _u_ids(fired) == ["U010"]
     assert fired[0]["severity"] == "MEDIUM"
 
 
 def test_a_public_source_is_not_u010():
     fired = _collect(_source_diff("https://example.com/x.tar.gz"), current_text=BASE)
-    assert [f["rule_id"] for f in fired] == []
+    assert _u_ids(fired) == []
 
 
 def test_u010_amplifies_when_validpgpkeys_is_absent():
@@ -179,9 +185,48 @@ def test_u010_does_not_amplify_when_validpgpkeys_vouches():
 def test_c020_keeps_a_public_credential_url():
     fired = _collect(_source_diff("http://user:token@example.com/x.tar.gz"),
                      current_text=BASE)
-    assert [f["rule_id"] for f in fired] == []
+    assert _u_ids(fired) == []
 
 
 def test_validpgpkeys_is_read_from_the_recipe():
     assert has_validpgpkeys(BASE + 'validpgpkeys=("A" "B")\n')
     assert not has_validpgpkeys(BASE)
+
+
+# -- W011 / W012 upstream boundaries --------------------------------------
+
+
+def test_w011_names_the_unread_upstream_once():
+    fired = _collect(_NOOP_DIFF, current_text=BASE)
+    w011 = [f for f in fired if f["rule_id"] == "W011"]
+    assert len(w011) == 1
+    assert w011[0]["severity"] == "INFO"
+    assert w011[0]["upstream_repo"] == REPO
+
+
+def test_w011_is_silent_without_a_forge_upstream():
+    plain = 'pkgname=demo\npkgver=1\npkgrel=1\nurl="https://example.com/demo"\n'
+    fired = _collect(_NOOP_DIFF, current_text=plain)
+    assert [f for f in fired if f["rule_id"] == "W011"] == []
+
+
+def test_w012_fires_when_the_federation_channel_is_cold():
+    cfg = {"baselines": {"ioc": {"enabled": False}}}
+    fired = _collect(_NOOP_DIFF, current_text=BASE, config=cfg)
+    assert [f["rule_id"] for f in fired if f["rule_id"] == "W012"] == ["W012"]
+
+
+def test_w012_is_silent_when_the_channel_was_consulted():
+    matches = [IocMatch(type="upstream_repo", value=REPO, source="feed")]
+    fired = _collect(_NOOP_DIFF, current_text=BASE, matches=matches)
+    assert [f for f in fired if f["rule_id"] == "W012"] == []
+
+
+def test_the_upstream_boundaries_are_weight_zero():
+    cfg = {"baselines": {"ioc": {"enabled": False}}}
+    fact = scan_diff(_NOOP_DIFF, package_name="demo", current_text=BASE, config=cfg)
+    for rule_id in ("W011", "W012"):
+        entries = [e for e in fact.score_breakdown if e.rule_id == rule_id]
+        assert entries, f"{rule_id} did not fire"
+        assert entries[0].severity == "INFO"
+        assert entries[0].weight == 0

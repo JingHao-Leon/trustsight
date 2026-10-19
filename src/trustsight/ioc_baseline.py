@@ -570,6 +570,22 @@ def active_iocs(source: str | None = None, expired: bool = False) -> list[IocEnt
     return entries
 
 
+def has_upstream_repo_entries() -> bool:
+    """True when the store carries at least one ``upstream_repo`` entry.
+
+    A store with none is a *cold* federation channel for the U-series: it
+    cannot answer U007/U008, so W012 names that rather than a miss.
+    """
+    with get_connection() as conn:
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM ioc_entries WHERE type = 'upstream_repo' LIMIT 1"
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return False
+    return row is not None
+
+
 def all_ioc_sources() -> list[str]:
     """Return the distinct source names currently stored."""
     with get_connection() as conn:

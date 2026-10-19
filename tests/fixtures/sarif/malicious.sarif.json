@@ -30,6 +30,32 @@
               "defaultConfiguration": {
                 "level": "warning"
               }
+            },
+            {
+              "id": "W011",
+              "name": "{match}",
+              "shortDescription": {
+                "text": "{match}"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "layer": "L2"
+              }
+            },
+            {
+              "id": "W012",
+              "name": "{match}",
+              "shortDescription": {
+                "text": "{match}"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "properties": {
+                "layer": "L2"
+              }
             }
           ]
         }
@@ -63,6 +89,40 @@
               }
             }
           ]
+        },
+        {
+          "ruleId": "W011",
+          "level": "note",
+          "message": {
+            "text": "upstream content declared at https://github.com/kwsch/PKHeX was not read (A2: the analysis reads declarations, never upstream itself) [W011]"
+          },
+          "partialFingerprints": {
+            "trustsight/v1": "708e7c4d0b396b1bd06b3140e3527e04d4c115c3706500757854467a552b656b"
+          },
+          "properties": {
+            "package": "C011-prebuilt-non-upstream-bin",
+            "severity": "INFO",
+            "file": "PKGBUILD",
+            "line": null,
+            "layer": "L2"
+          }
+        },
+        {
+          "ruleId": "W012",
+          "level": "note",
+          "message": {
+            "text": "the upstream_repo federation channel holds no data for github.com/kwsch/pkhex; U007/U008 could not be checked [W012]"
+          },
+          "partialFingerprints": {
+            "trustsight/v1": "ac9acdff8108b927bce288488771d19244bf7a5b2578cc8b9a72ce0b8e81b9aa"
+          },
+          "properties": {
+            "package": "C011-prebuilt-non-upstream-bin",
+            "severity": "INFO",
+            "file": "PKGBUILD",
+            "line": null,
+            "layer": "L2"
+          }
         },
         {
           "ruleId": "SOURCE_BUCKET",

@@ -102,7 +102,7 @@ be a script the recipe executes.
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
-| Reported, not scored | W001-W010 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
+| Reported, not scored | W001-W012 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
 
 The U-series reads what a recipe declares about upstream. From the committed dependency manifests beside a recipe: U003 (a new remote source) and U004 (a redirected resolver) score at MEDIUM; U001, U002, U005 and U006 are weight-0 ledger entries. From upstream release integrity: U007 (CI exfil shape) and U008 (git-history credential sweep) score at MEDIUM from the signed federation channel, U009 (new CI surface committed) is a weight-0 ledger entry, and U010 (unauditable upstream) scores at MEDIUM.
 
@@ -1191,6 +1191,14 @@ See [W009: Upstream Manifests Not Examined](unverifiable.md#w009).
 ### W010 {#w010}
 
 See [W010: Alert Volume Capped](unverifiable.md#w010).
+
+### W011 {#w011}
+
+See [W011: Upstream Content Not Read](unverifiable.md#w011).
+
+### W012 {#w012}
+
+See [W012: Federation Not Consulted](unverifiable.md#w012).
 
 ### U001 {#u001}
 

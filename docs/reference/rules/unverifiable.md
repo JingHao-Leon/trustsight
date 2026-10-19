@@ -64,6 +64,8 @@ rules, because a W is weight-0 by construction:
 | [W008](#w008) | Unresolved Construct In A Recipe | - |
 | [W009](#w009) | Upstream Manifests Not Examined | - |
 | [W010](#w010) | Alert Volume Capped | - |
+| [W011](#w011) | Upstream Content Not Read | - |
+| [W012](#w012) | Federation Not Consulted | - |
 <!-- /generated: page-index -->
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}
@@ -252,3 +254,38 @@ to skim unnoticed: the boundary names the saturation the way a coverage gap
 names a missing read. Unlike a gap, nothing was left unexamined, so it never
 forbids a clean verdict (`forbids_clean` is false) and never changes the
 score. Volume is a statement about the run, not about any single package.
+
+### W011: Upstream Content Not Read {#w011}
+
+**INFO** (weight 0) · category `unverifiable`
+
+Fires when the recipe declares a forge upstream (a git `url=`) whose content
+the analysis did not read. A2 forbids fetching a declared URL, so the
+U-series extension reads only what the recipe says about upstream, never the
+archive or workflow behind it. This is the standing boundary of that reach:
+reported once per report, shown even when nothing else fires.
+
+Unlike a coverage gap, nothing was left unexamined by a failure; the model
+itself never reads upstream, so it never forbids a clean verdict
+(`forbids_clean` is false) and never changes the score.
+
+When the recipe declares no forge upstream there is nothing to read and it
+does not fire. See [W012](unverifiable.md#w012) for the case where the
+channel that could stand in is cold.
+
+### W012: Federation Not Consulted {#w012}
+
+**INFO** (weight 0) · category `unverifiable`
+
+Fires when a forge upstream is declared and the `upstream_repo` federation
+channel is cold: the IOC baseline is disabled, or the store carries no
+`upstream_repo` entries, or it cannot be reached. U007 and U008 are
+federation-fed, so a cold channel is exactly the case where no finding can
+be produced; not because the upstream was clean, but because nothing could
+be consulted.
+
+A consulted channel that simply holds no entry for the declared repo is a
+*miss*, not an unavailable channel, and does not fire this rule.
+
+Weight 0, reported once, never forbids a clean verdict (`forbids_clean` is
+false).

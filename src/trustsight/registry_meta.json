@@ -2123,6 +2123,24 @@
     "capability": null,
     "target": null
   },
+  "w011": {
+    "uid": "TS-0271",
+    "name": "Upstream Content Not Read",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "w012": {
+    "uid": "TS-0272",
+    "name": "Federation Not Consulted",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
   "w010": {
     "uid": "TS-0231",
     "name": "Alert Volume Capped",

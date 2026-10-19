@@ -46,6 +46,12 @@ class BoundaryKind(str):
     # The alert-volume boundary (W010): the sensor was saturated, not
     # missing.  Nothing was left unread, so it never forbids a clean verdict.
     SATURATED = "saturated"
+    # The A2 standing boundary (W011): a declared upstream's content is not
+    # read locally.  A statement about the model's reach, never a gap.
+    UPSTREAM_UNREAD = "upstream_unread"
+    # The cold federation channel (W012): the upstream_repo baseline that
+    # stands in for reading upstream content holds no data.
+    FEDERATION_UNAVAILABLE = "federation_unavailable"
 
 
 #: Coverage-gap id -> boundary kind.  Kept in step with ``coverage.GAPS``.
@@ -90,6 +96,10 @@ _W_RULE_KIND: dict[str, str] = {
     # The render was capped: a volume statement, not a coverage gap, so
     # forbids_clean is False (a W-only boundary carries no gap).
     "W010": BoundaryKind.SATURATED,
+    # A declared upstream's content is unread (A2 standing boundary).
+    "W011": BoundaryKind.UPSTREAM_UNREAD,
+    # The federation channel that could stand in for reading it is cold.
+    "W012": BoundaryKind.FEDERATION_UNAVAILABLE,
 }
 
 

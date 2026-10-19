@@ -154,6 +154,8 @@ TEMPLATES: dict[str, str] = {
     "W008": "{match}",
     "W009": "{match}",
     "W010": "{match}",
+    "W011": "{match}",
+    "W012": "{match}",
     # --- Upstream manifests (U series) ---
     "U001": "{match}",
     "U002": "{match}",

@@ -161,6 +161,28 @@ def _federation_matches(repo: str, config: dict | None, matches) -> list:
         return []
 
 
+def _federation_unavailable(repo: str, config: dict | None, matches) -> bool:
+    """True when the federation channel could not answer for *repo*.
+
+    A *cold* channel - a disabled baseline or a store carrying no
+    ``upstream_repo`` entries - leaves the declared upstream unread, so W012
+    names it.  A consulted channel that simply holds no entry for *repo* is a
+    miss, not an unavailable channel; *matches* being injected means it was
+    consulted.
+    """
+    if not repo or matches is not None:
+        return False
+    section = (config or {}).get("baselines", {}).get("ioc", {})
+    if not section.get("enabled", True):
+        return True
+    try:
+        from ..ioc_baseline import has_upstream_repo_entries
+
+        return not has_upstream_repo_entries()
+    except Exception:  # noqa: BLE001 - an unreachable store is unavailable
+        return True
+
+
 def _c020_owns(token: str) -> bool:
     """True when C020 already files this credential-bearing source URL.
 
@@ -257,3 +279,18 @@ def upstream_release_findings(
             f"source entry is not publicly inspectable ({access}) on {where}"
             + ("; no validpgpkeys vouches for it" if amplified else ""),
             line=None, access=access, host=host, amplified=amplified)
+
+    # W011 / W012: the A2 standing boundary and the cold-federation note.
+    # Both are weight-0 statements about the analysis, reported once per
+    # report, never a gap (forbids_clean stays False).
+    if repo:
+        url = _declared_upstream_url(head)
+        add("W011", "Upstream Content Not Read", "INFO", "unverifiable",
+            f"upstream content declared at {url or repo} was not read "
+            f"(A2: the analysis reads declarations, never upstream itself)",
+            line=None, upstream_repo=repo, url=url)
+        if _federation_unavailable(repo, config, matches):
+            add("W012", "Federation Not Consulted", "INFO", "unverifiable",
+                f"the upstream_repo federation channel holds no data for "
+                f"{repo}; U007/U008 could not be checked",
+                line=None, upstream_repo=repo)

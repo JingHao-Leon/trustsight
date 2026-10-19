@@ -81,3 +81,18 @@ def test_w010_is_a_saturated_boundary_that_does_not_forbid_clean():
     boundaries = boundaries_from_fact(fact)
     assert [b.kind for b in boundaries] == [BoundaryKind.SATURATED]
     assert forbids_clean(boundaries) is False
+
+
+def test_w011_is_the_a2_standing_boundary():
+    """A declared upstream's unread content is a limit, not a gap."""
+    assert boundary_kind_for_w_rule("W011") == BoundaryKind.UPSTREAM_UNREAD
+    boundaries = boundaries_from_fact(_fact(rules=["W011"]))
+    assert [b.kind for b in boundaries] == [BoundaryKind.UPSTREAM_UNREAD]
+    assert forbids_clean(boundaries) is False
+
+
+def test_w012_is_the_cold_federation_boundary():
+    assert boundary_kind_for_w_rule("W012") == BoundaryKind.FEDERATION_UNAVAILABLE
+    boundaries = boundaries_from_fact(_fact(rules=["W012"]))
+    assert [b.kind for b in boundaries] == [BoundaryKind.FEDERATION_UNAVAILABLE]
+    assert forbids_clean(boundaries) is False
