@@ -165,6 +165,30 @@ def test_x002_still_fires_on_an_unresolved_splice():
     assert "X002" in set(crossfire_techniques(diff))
 
 
+def test_x002_stands_down_for_a_variable_defined_outside_the_hunk():
+    """aside: `local _pip=...` unchanged above the hunk still names the command.
+
+    X002 resolves command-name variables from the diff lines alone, so a
+    variable defined outside every hunk reads as unresolvable and the rule
+    fires CRITICAL on an ordinary `"$_pip" install …`.  Every `$var` command
+    whose assignment is unchanged was a guaranteed false positive; the whole
+    post-diff recipe has to seed the table.
+    """
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -23,5 +23,5 @@\n"
+            "   echo step17\n   echo step18\n   echo step19\n"
+            '-  "$_pip" install --no-cache-dir "litellm==1.92.0" mistune\n'
+            '+  "$_pip" install --no-cache-dir "litellm==1.93.0" mistune\n }\n')
+    # Without the post-diff recipe the diff-only table cannot see the
+    # assignment, which is the bug this pins.
+    assert "X002" in set(crossfire_techniques(diff))
+
+    header = ["pkgname=aside", "build() {", '  local _pip="$srcdir/venv/bin/pip"']
+    body = header + [f"  echo step{i}" for i in range(20)]
+    body += ['  "$_pip" install --no-cache-dir "litellm==1.93.0" mistune', "}"]
+    current_text = "\n".join(body) + "\n"
+    assert "X002" not in set(crossfire_techniques(diff, current_text))
+
+
 def test_x002_stands_down_for_the_sudo_user_wrapper_argument():
     """`sudo -u $SUDO_USER env … fcitx5` names `fcitx5` in plain text.
 

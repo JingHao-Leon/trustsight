@@ -38,6 +38,18 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
     ]
     try:
         var_table, array_table = variable_table(readable)
+        # A variable defined outside every hunk (an unchanged `local
+        # _pip="$srcdir/venv/bin/pip"` a later hunk's command uses) is
+        # invisible to the diff-only table, so the command name reads as
+        # non-literal and X002 fires CRITICAL on an ordinary recipe.  Seed
+        # the whole recipe's assignments underneath the diff's: a name the
+        # diff carries still wins, since that side is the one under review.
+        if current_text:
+            whole_vars, whole_arrays = variable_table(split_lines(current_text))
+            for name, value in whole_vars.items():
+                var_table.setdefault(name, value)
+            for name, values in whole_arrays.items():
+                array_table.setdefault(name, values)
         # An array whose elements are statically known is as readable as a
         # scalar: `A=(curl)` then `${A[0]}` resolves to `curl`, so X002
         # stands down for the static subscript and the payload rules own
