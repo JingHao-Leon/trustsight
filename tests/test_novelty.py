@@ -107,6 +107,24 @@ def test_build_novelty_context_some_already_seen(db):
     assert ctx.url_first_seen_in_this_package is True
 
 
+def test_build_novelty_context_exempts_an_official_host(db):
+    # hmmer: a new path on the project's own distribution host is a version
+    # bump, not a new endpoint, so it must not carry the novelty prior.
+    url = "https://eddylab.org/software/hmmer/hmmer-3.4.tar.gz"
+    ctx = build_novelty_context(
+        [url], 1, source_buckets={url: "official"}, record=True)
+    assert ctx.url_first_seen_globally is False
+    assert ctx.url_first_seen_in_this_package is False
+
+
+def test_build_novelty_context_still_flags_an_unknown_host(db):
+    url = "https://mirror.evil.test/hmmer-3.4.tar.gz"
+    ctx = build_novelty_context(
+        [url], 1, source_buckets={url: "unknown"})
+    assert ctx.url_first_seen_globally is True
+    assert ctx.url_first_seen_in_this_package is True
+
+
 def test_url_tracking_increments_counter(db):
     url = "https://example.com/pkg.tar.gz"
     nurl = normalize_url(url)

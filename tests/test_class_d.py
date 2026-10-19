@@ -647,6 +647,21 @@ def test_h058_lockstep_sibling_bump_is_not_a_deviation(thresholds):
     assert _fire("H058", new, old, maintainer_history=history) == []
 
 
+def test_h058_a_batch_within_the_maintainers_own_range_is_not_a_deviation(thresholds):
+    """hmmer: mschu bumped five packages, a batch size he had shipped
+    before.  A batch no larger than one in his own history is a
+    demonstrated cadence, not the xz-style surge H058 exists for."""
+    thresholds({"h058": {"min_history_cycles": 3, "z_score": 2.0, "min_activity": 2}})
+    old = _snapshot([f"p{i}" for i in range(10)], "alice")
+    new = copy.deepcopy(old)
+    for i in range(5):
+        new[f"p{i}"]["LastModified"] = NOW + 1
+    history = [{"maintainer": "alice", "cycle_time": 1, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 2, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 3, "activity": 5}]
+    assert _fire("H058", new, old, maintainer_history=history) == []
+
+
 # --- H059 name/repo divergence -------------------------------------------------
 
 

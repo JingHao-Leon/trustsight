@@ -389,6 +389,17 @@ def test_h015_silent_on_metadata_only_change(enabled, rules):
     assert "H015" not in fired(diff, enabled, rules)
 
 
+def test_h015_fires_on_a_package_change(enabled, rules):
+    # package() stays: the kernel-dkms backdoor fixture hides in it, and the
+    # calibration recall gate requires H015 to fire there.
+    diff = HEADER + (
+        "+package() {\n"
+        "+  install -Dm644 LICENSE \"$pkgdir/usr/share/licenses/$pkgname/LICENSE\"\n"
+        "+}\n"
+    )
+    assert "H015" in fired(diff, enabled, rules)
+
+
 def test_h016_fires_on_undeclared_download(enabled, rules):
     diff = HEADER + (
         "+source=('https://good.example/a.tar.gz')\n"

@@ -39,7 +39,7 @@ _INSTALL_HOOKS = (
 # (``_network_fetch_url``) is the other high arm.  These two are what the rule
 # name ("Install Hook Fetches Or Executes") actually claims.
 _HOOK_EXEC_RE = re.compile(
-    r"\b(?:eval|bash\s+-c|sh\s+-c|source\s+/)\b",
+    r"(?<![\w-])(?:eval|bash\s+-c|sh\s+-c|source\s+/)\b",
     re.IGNORECASE,
 )
 

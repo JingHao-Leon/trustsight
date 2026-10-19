@@ -578,6 +578,7 @@ def analyze_package_text(
         record=record,
         package_name=pkg_name,
         source_array=_parse_recipe(new_pkgbuild, file="PKGBUILD").arrays.get("source", ()),
+        source_buckets=source_buckets,
     )
 
     resolved_strings, unresolved_strings, resolved_indices = (

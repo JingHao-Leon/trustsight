@@ -688,3 +688,72 @@ def test_x033_still_fires_on_an_undeclared_srcdir_file():
             '+  bash "$srcdir"/stage.sh\n'
             "+}\n")
     assert "X033" in _ids(diff)
+
+
+# --- octave-femoctave: a `--eval` flag is not the shell `eval` --------------
+# 2026-10-19 watcher review: octave-femoctave's post_install calls a wrapper
+# whose body runs `octave ... --eval "$*"`.  H017's execute arm matched the
+# `eval` inside the `--eval` CLI flag, so a benign packaging wrapper scored
+# 40 (H017 HIGH 25 + R007 15).
+
+def _live_hook(name: str, body: str) -> tuple[str, str]:
+    lines = body.splitlines()
+    diff = ("--- a/%s.install\n+++ b/%s.install\n@@ -0,0 +1,%d @@\n"
+            % (name, name, len(lines))
+            + "".join("+" + line + "\n" for line in lines))
+    return diff, f"pkgname={name}\ninstall={name}.install\n"
+
+
+def test_h017_does_not_fire_on_a_dash_eval_flag():
+    diff, current = _live_hook(
+        "octave-femoctave",
+        "post_install() {\n"
+        "  _octave_run \"$@\"\n"
+        "}\n"
+        "_octave_run() {\n"
+        '  octave --no-history --no-init-file -q -f --eval "$*"\n'
+        "}\n")
+    assert "H017" not in _ids(diff, current_text=current)
+
+
+def test_h017_still_fires_on_a_real_eval_builtin():
+    diff, current = _live_hook(
+        "octave-femoctave",
+        "post_install() {\n"
+        '  eval "$(octave --eval 1)"\n'
+        "}\n")
+    assert "H017" in _ids(diff, current_text=current)
+
+
+# --- hmmer: the project's own distribution host is official -----------------
+# 2026-10-19 watcher review: hmmer declares url="http://hmmer.org/" and
+# serves from eddylab.org (the HMMER project's own lab host, which hmmer.org
+# redirects to).  eddylab.org was unclassified, so hmmer paid the
+# SOURCE_BUCKET weight (20) on a URL that is its upstream by definition.
+
+_HMMER_HEAD = (
+    "pkgname=hmmer\n"
+    "pkgver=3.4\n"
+    'url="https://hmmer.org/"\n'
+    'source=("https://eddylab.org/software/hmmer/hmmer-3.4.tar.gz")\n'
+)
+
+
+def test_source_bucket_does_not_fire_on_the_projects_own_host():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -3 +3 @@\n"
+            '-source=("https://mirror.example.org/hmmer-3.3.tar.gz")\n'
+            '+source=("https://eddylab.org/software/hmmer/hmmer-3.4.tar.gz")\n')
+    assert "SOURCE_BUCKET" not in _ids(diff, current_text=_HMMER_HEAD)
+
+
+def test_source_bucket_still_fires_on_an_unknown_host():
+    head = (
+        "pkgname=hmmer\n"
+        "pkgver=3.4\n"
+        'url="https://hmmer.org/"\n'
+        'source=("https://mirror.evil.test/hmmer-3.4.tar.gz")\n'
+    )
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -3 +3 @@\n"
+            '-source=("https://mirror.example.org/hmmer-3.3.tar.gz")\n'
+            '+source=("https://mirror.evil.test/hmmer-3.4.tar.gz")\n')
+    assert "SOURCE_BUCKET" in _ids(diff, current_text=head)

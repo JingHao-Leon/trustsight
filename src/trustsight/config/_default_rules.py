@@ -640,6 +640,10 @@ domains = [
     "registry.npmjs.org",
     "archive.archlinux.org",
     "static.rust-lang.org",
+    # The HMMER project's own distribution host (Sean Eddy's lab; hmmer.org
+    # redirects to eddylab.org/software/hmmer).  Not listed here it scored
+    # `unknown` and charged hmmer a SOURCE_BUCKET weight.
+    "eddylab.org",
 ]
 
 [raw_hosting]

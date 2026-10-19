@@ -387,6 +387,11 @@ def analyze_package(
         _parse_recipe(head_pkgbuild, file="PKGBUILD").arrays.get("source", ())
         if head_pkgbuild else ()
     )
+    source_buckets = classify_urls(
+        source_changes.added_urls,
+        upstream_host=unchanged_upstream_host(diff_text, head_pkgbuild),
+    )
+
     novelty = build_novelty_context(
         scored_urls,
         package_id,
@@ -394,11 +399,7 @@ def analyze_package(
         record=record,
         package_name=pkg_name,
         source_array=_post_source,
-    )
-
-    source_buckets = classify_urls(
-        source_changes.added_urls,
-        upstream_host=unchanged_upstream_host(diff_text, head_pkgbuild),
+        source_buckets=source_buckets,
     )
 
     resolved_strings, unresolved_strings, resolved_indices = (

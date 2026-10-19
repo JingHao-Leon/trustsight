@@ -577,6 +577,14 @@ def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
         prior = prior_by_maintainer.get(maintainer, [])
         if len(prior) < min_cycles:
             continue
+        # A batch no larger than one this maintainer has already shipped is
+        # within their demonstrated range, not a deviation from it: a
+        # packager who has bumped six packages in one cycle before is not
+        # surging when they bump five again.  The xz shape is a quiet
+        # account *exceeding* its own history, so require a new high-water
+        # mark before the z test can fire.
+        if len(members) <= max(prior):
+            continue
         mean = statistics.mean(prior)
         if len(prior) >= 2 and statistics.stdev(prior) > 0:
             z = (len(members) - mean) / statistics.stdev(prior)

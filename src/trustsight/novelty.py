@@ -426,6 +426,15 @@ def check_maintainer_novelty(
             return existing is None
 
 
+#: Buckets whose first-seen URLs carry no novelty suspicion.  An ``official``
+#: host is the project's own distribution host: a URL path there the corpus
+#: has not seen is a version bump, not a new endpoint.  hmmer moved its
+#: source from a forge to eddylab.org (its project host) and the first-seen
+#: path charged the full novelty prior on a routine update.  The URL is
+#: still recorded, so history accumulates; only the score is spared.
+_NOVELTY_EXEMPT_BUCKETS = frozenset({"official"})
+
+
 def build_novelty_context(
     added_urls: list[str],
     package_id: int,
@@ -433,12 +442,17 @@ def build_novelty_context(
     record: bool = False,
     package_name: str = "",
     source_array=None,
+    source_buckets: dict[str, str] | None = None,
 ) -> NoveltyContext:
     """Build a NoveltyContext by checking URL and maintainer novelty.
 
     ``record=False`` (the default) is read-only: the context is computed
     from the database as it stands and left unchanged, so the same diff
     against the same state always produces the same context.
+
+    ``source_buckets`` is the caller's URL-to-bucket map; a URL whose bucket
+    is in :data:`_NOVELTY_EXEMPT_BUCKETS` is recorded but never scored (see
+    the constant).
     """
     ctx = NoveltyContext()
 
@@ -456,6 +470,9 @@ def build_novelty_context(
         first_for_pkg, first_global = check_url_novelty(
             url, package_id, record=record
         )
+        if (source_buckets is not None
+                and source_buckets.get(url) in _NOVELTY_EXEMPT_BUCKETS):
+            continue
         if first_for_pkg:
             ctx.url_first_seen_in_this_package = True
             if not ctx.url_first_seen_in_this_package_url:
