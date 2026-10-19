@@ -1,29 +1,45 @@
-<!-- description: Where the crossfire rules come from (a package attacking its own build environment or peers) and what a finding means. -->
+<!-- description: Where the crossfire rules come from (military interlocking fire against evasion) and what a finding means. -->
 
-# Crossfire: Rule Nature
+# Crossfire
 
 Mechanics live on the [Crossfire system page](../rules/crossfire.md).
 
 ## Where it comes from
 
-The threat model widens from "this package hurts the user" to "this package
-hurts the build". A recipe that kills processes, wipes paths, edits files
-outside `$pkgdir`, or interferes with other packages' sources is attacking
-the shared environment it happens to run in. The name is deliberate: the
-damage is collateral and often aimed at the tooling rather than the user.
+The name is taken from **military crossfire**: two guns sited so that their
+fields of fire overlap on the same ground. A defender who slips past the first
+gun walks straight into the second, because there is no seam between them to
+thread. The crossfire is what closes the gap a single gun leaves.
 
-The rules target writes and destructive operations that escape the sandbox's
-intended scope: `rm -rf` on system paths, permissions changes on installed
-files, and edits to the source cache other packages rely on.
+Crossfire rules are TrustSight's second gun. The payload rules (R, H, C, S)
+are the first: they fire when a command *resolves* to something recognisable -
+a fetch, an execution, a write. An attacker dodges that gun by defeating the
+tokenizer, writing a command the analyser cannot reduce to a literal, so the
+payload rules see nothing and stay silent. Crossfire is trained on exactly
+that ground. It fires on *how* a thing was written rather than on what it
+does, so the same evasion that silences the payload rules trips the crossfire
+rules instead. Dodging one gun is walking into the other.
+
+This is why a single diff can legitimately produce findings from both
+families, scored independently: the payload rule catches what resolved, and
+the crossfire rule catches the attempt to keep it from resolving. Evasion and
+alarm become the same event, instead of evasion and silence.
+
+The family is a function of refusal, so any tokenizer improvement that
+resolves more constructs shrinks its detection surface. That is the intended
+way it shrinks - measured per release and recorded, with a changelog
+adjudication whenever a technique leaves the family's view.
 
 ## What a finding means
 
-- The finding names the out-of-scope target. Read it as a boundary violation,
-  not necessarily intent to harm the end user.
-- Crossfire pairs heavily with staging, persistence, and obfuscation: its
-  role is often to clear the way for another step.
-- The rules assume the sandbox held; a crossfire finding is what the package
-  tried to do to the environment, which is exactly why the sandbox exists.
+- The finding names the evasion technique, not the payload it hid. Read it as
+  "this was written so the analyser could not see it", which is evidence on
+  its own, whatever was hidden.
+- Crossfire pairs with the payload families: crossfire names *how* the thing
+  was hidden, a payload rule names *what* it does. Read them together.
+- The finding assumes the technique itself is the signal, which is exactly
+  why the sandboxed tokenizer exists; where the tokenizer could not read, the
+  refusal is what fires.
 
 ## See also
 

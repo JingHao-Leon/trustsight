@@ -50,6 +50,7 @@ This is a reference page. For how weight and scope work, see
 | [G006](#g006) | Neighborhood Under Campaign Alert | INFO |
 | [G007](#g007) | Campaign Corroboration | INFO |
 | [G008](#g008) | First-Seen Account Adoption Burst | HIGH |
+| [G009](#g009) | Watchlisted Maintainer | INFO |
 <!-- /generated: page-index -->
 
 ### G001: Shared Gained Host {#g001}
@@ -77,11 +78,13 @@ yet connected, so G002 does not fire on a `full-aur` cycle today.
 ### G003: Coordinated Adoption {#g003}
 
 - **Target:** programmatic (cycle records)
-- **Severity:** MEDIUM (weight 15)
+- **Severity:** MEDIUM (weight 15); HIGH (weight 25) when escalated
 - **Category:** `correlation`
 - **Condition:** One maintainer key adopts at least `[thresholds] g_adopt.min_members` (default 3) packages in the window.
 
 Adoption is the temporal engine's own predicate - H044 (ownership transition) or H086 (orphan-to-maintained) - recorded per package, not a bare maintainer-change. The finding's `predicates` names which T instance the group joined on; H074 (mass adoption) is the cross-package aggregation this rule performs.
+
+**Novelty/dormancy escalation.** When the adopting maintainer is globally novel (its earliest recorded maintainer-event falls within `[thresholds] g003.novel_days`, default 30) and at least `[thresholds] g003.min_dormant` (default 2) of the adopted targets are dormant (AUR LastModified older than `[thresholds] g003.dormant_days`, default 180), the finding is escalated to HIGH - the fennekuiper shape, where a first-seen account sweeps up dormant orphans. The bare N-adoption shape stays MEDIUM, so an established maintainer keeps the old posture. The escalation changes the alert's severity and evidence, not member scores: like every G finding but G005, a correlation cluster does not score its own members.
 
 ### G004: Shared Upstream Dependency {#g004}
 
@@ -129,3 +132,14 @@ Trained immunity, reported: while a campaign is primed, a package in its scope i
 The fennekuiper signature: a throwaway account sweeping up orphans in its first cycle. "First-seen" replaces "registered 3 days ago" because registration date is not in the RPC metadata and chasing profile pages would be a new fetch. First-seen is the deterministic, self-contained approximation: a throwaway account has, by definition, no prior maintainer events in the database.
 
 The dormant-target clause is the FP killer. A legitimate new maintainer adopts a package or two they care about (active packages). Nobody's first act is sweeping up 13 orphans including a high-value one. The conjunction of first-seen, many targets, and dormant targets is near-zero FP.
+
+### G009: Watchlisted Maintainer {#g009}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** INFO (weight 0)
+- **Category:** `correlation`
+- **Condition:** A package whose maintainer's salted hash appears on the operator's watchlist (`[thresholds] g009`, enabled by default; `~/.config/trustsight/watchlist.json` unless `g009.path` names another file).
+
+Report-only, weight 0, like G006. Registration date, "Inactive since" and suspension state are AUR profile-page facts the pipeline never fetches, so no machine rule can compute them. Where a human has established such a fact - the pattern a triager reads by hand, "Inactive-since ~ Last Updated and Last Packager = Package Maintainer" - the watchlist records it and this rule names the package instead of guessing from RPC metadata.
+
+Entries are keyed by the same salted SHA-256 the `maintainers_hashed` table uses, so no plaintext identity is stored; the salt is per-installation and the file is absent by default, so G009 is silent until an operator curates a list. Add an entry with `python -c "from trustsight.watchlist import add_entry; add_entry('name', 'note')"`.

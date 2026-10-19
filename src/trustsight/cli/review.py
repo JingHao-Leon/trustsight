@@ -907,17 +907,30 @@ def register_commands(app: typer.Typer):
                     )
                     if sys.stdin.isatty() and typer.confirm("Sync rules now?", default=False):
                         added, updated = sync_rules(update_outdated=True)
-                        if added or updated:
-                            parts = []
-                            if added:
-                                parts.append(f"added {len(added)} rule(s)")
-                            if updated:
-                                parts.append(f"updated {len(updated)} rule(s)")
+                        remaining = drifted_shipped_rules()
+                        parts = []
+                        if added:
+                            parts.append(f"added {len(added)} rule(s)")
+                        if updated:
+                            parts.append(f"updated {len(updated)} rule(s)")
+                        if parts:
                             _print_colored(
                                 f"Rules synced: {', '.join(parts)}.",
                                 "green",
                             )
-                        else:
+                        if remaining:
+                            # A pattern the user edited is never overwritten,
+                            # so these cannot be repaired automatically.  Say
+                            # so, rather than the misleading "already up to
+                            # date" the un-repairable case used to print.
+                            ids = sorted({rid for rid, *_ in remaining})
+                            _print_colored(
+                                f"{len(ids)} rule(s) still differ and are not "
+                                f"auto-repairable (edited by you or superseded): "
+                                f"{', '.join(ids)}. Their detection is unaffected.",
+                                "yellow",
+                            )
+                        elif not parts:
                             _print_colored("Rules are already up to date.", "green")
 
             _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth, required_by=required_by, deps_only=deps_only, sort_by=sort_by, record=record)

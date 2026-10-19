@@ -91,7 +91,7 @@ def _conda_dep(spec: str) -> Dep | None:
     text = str(spec).strip().strip("\"'")
     if not text or text.startswith(("#", "!")):
         return None
-    name = re.split(r"[=<>!~\s]", text, 1)[0].strip()
+    name = re.split(r"[=<>!~\s]", text, maxsplit=1)[0].strip()
     if not name:
         return None
     return Dep(name, None, "registry", None)

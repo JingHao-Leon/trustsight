@@ -1,23 +1,27 @@
-<!-- description: Where the naming-and-dependency rules come from (name-clones and dependency injection) and what a finding means. -->
+<!-- description: Where the naming-and-dependency rules come from (counterfeit names and transitive trust) and what a finding means. -->
 
-# Naming and Dependencies: Rule Nature
+# Naming and Dependencies
 
 Mechanics live on the
 [Naming and Dependencies system page](../rules/naming-and-dependency.md).
 
 ## Where it comes from
 
-Two early-stage attacks, both about identity or a much smaller feedstock
-issue than a shell pipeline:
+Two ideas, both older than code.
 
-- **Typosquatting and name-cloning.** A package name that is a near-miss of a
-  far more popular one (or the same name under the wrong base) relies on the
-  reader's eye, not on any code. G005, the impersonation campaign rule, is the
-  collective form: one account publishing many such clones.
-- **Dependency injection.** Adding a dependency is how you get *someone else's*
-  install hook and code into a user's system. A new dependency that is not a
-  real upstream, or a version pin that redirects to an unowned repo, smuggles
-  in code the package itself never wrote.
+The first is the **counterfeit storefront**: a shop opens next door to a
+trusted one, under a name one letter off, and waits for customers to walk in
+by mistake. That is typosquatting - a package name that is a near-miss of a
+far more popular one (or the same name under the wrong base), relying on the
+reader's eye rather than on any code. G005, the impersonation campaign rule,
+is the collective form: one account publishing many such clones.
+
+The second is **transitive trust**, the "friend of a friend" that gets in on
+someone else's word. Adding a dependency is how you get *someone else's*
+install hook and code into a user's system. A new dependency that is not a
+real upstream, or a version pin that redirects to an unowned repo, smuggles in
+code the package itself never wrote - the class the ecosystem calls dependency
+confusion.
 
 ## What a finding means
 
@@ -30,5 +34,5 @@ issue than a shell pipeline:
 
 ## See also
 
-- [Correlation: Rule Nature](correlation.md); the G005 campaign form
+- [Correlation](correlation.md); the G005 campaign form
 - [Naming and Dependencies system page](../rules/naming-and-dependency.md)

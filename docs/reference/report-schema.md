@@ -242,7 +242,7 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`/`T002`), the G-series correlation rules (`G001`-`G007`), the I-series indicator rules (H056, and future `I` ids), the U-series committed-manifest rules (`U001`-`U005`), and the A-series artifact rules (`A001`-`A008`, L9 only), plus `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W010` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`/`T002`), the G-series correlation rules (`G001`-`G009`), the I-series indicator rules (H056, and future `I` ids), the U-series committed-manifest rules (`U001`-`U005`), and the A-series artifact rules (`A001`-`A008`, L9 only), plus `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W010` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` and `W` finding. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. The full string is carried in both JSON and CLI display. |
@@ -260,6 +260,13 @@ renders from the template rather than from ad-hoc prose, which is what keeps
 the wording of a rule in one place. Neutral facts are reported the same way
 (new files, dependency additions, version bumps), at weight 0, so that "nothing
 scored" and "nothing happened" stay distinguishable.
+
+A finding carries two identifiers for its rule: the display `rule_id` (such as
+`R010`) and its permanent `rule_uid` - an opaque `TS-` number that is assigned
+once and never reused. The uid is the join key a stored artifact, baseline or
+alert should use, because `rule_id` is the human handle and may be renamed, with
+the old spelling kept resolvable. A pseudo rule - a novelty, provenance or
+coverage signal with no docs page - carries `rule_uid: null`.
 
 The sum of all `weight` values, floored at 0 and capped at 100, equals `final_score`. A FATAL entry contributes weight 0 like any other entry; its signal rides the unsuppressible FATAL entry in `score_breakdown` and the verdict label, which names the rule (`Low (FATAL: R012)`).
 

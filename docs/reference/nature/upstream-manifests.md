@@ -1,22 +1,26 @@
-<!-- description: Where the upstream-manifest rules come from (declared source versus what is fetched) and what a finding means. -->
+<!-- description: Where the upstream-manifest rules come from (a citation checked against the original) and what a finding means. -->
 
-# Upstream Manifests: Rule Nature
+# Upstream Manifests
 
 Mechanics live on the
 [Upstream Manifests system page](../rules/upstream-manifests.md).
 
 ## Where it comes from
 
-Upstream projects increasingly publish metadata about themselves (release
-manifests, SBOMs, signature files, `.SRCINFO`-like declarations). The
-upstream-manifest rules compare what a recipe claims about its source against
-what the upstream actually published: a version that does not exist, a hash
-that does not match the manifest, a source name upstream never released.
+This is the discipline of **checking a citation against the original text**. A
+paper can quote a source flawlessly and still be wrong, because the page it
+cites was never printed. Upstream projects increasingly publish metadata about
+themselves (release manifests, SBOMs, signature files, `.SRCINFO`-like
+declarations), and the upstream-manifest rules compare what a recipe claims
+about its source against what the upstream actually published: a version that
+does not exist, a hash that does not match the manifest, a source name
+upstream never released.
 
 The point is to catch the recipe that is internally consistent but
 *externally* wrong: checksums that verify against the wrong artifact, or a
 `source` array naming a file no upstream release contains. This is the
-supply-chain-integrity check turned outward.
+supply-chain-integrity check turned outward - not "does this recipe agree with
+itself?" but "does it agree with the world?".
 
 ## What a finding means
 
@@ -30,5 +34,5 @@ supply-chain-integrity check turned outward.
 
 ## See also
 
-- [Integrity and Verification: Rule Nature](integrity.md)
+- [Integrity and Verification](integrity.md)
 - [Upstream Manifests system page](../rules/upstream-manifests.md)

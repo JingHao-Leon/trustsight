@@ -13,12 +13,17 @@ supplies them), so the join logic is testable without a live corpus:
   damning five times.
 * **G002 Shared Added Literal** (HIGH): an identical added literal above a
   length floor appears in at least two unrelated packages.
-* **G003 Coordinated Adoption** (MEDIUM): the same maintainer key adopted
-  at least M packages in the window.
+* **G003 Coordinated Adoption** (MEDIUM, HIGH for a first-seen account
+  adopting dormant targets): the same maintainer key adopted at least M
+  packages in the window.
 * **G008 First-Seen Account Adoption Burst** (HIGH): an account with no
   prior maintainer history adopts many dormant packages at once.  It reads
   the maintainer-event timeline, so it is a DB-backed rule invoked from the
   sweep beside G006, not from :func:`correlate`.
+* **G009 Watchlisted Maintainer** (INFO, weight 0): a package whose maintainer
+  is on the operator's hand-curated watchlist, the sanctioned home for
+  profile-page facts (registration date, suspension) the RPC metadata does not
+  carry.  Report-only.
 
 Members are named in the finding; the roundup is one alert, not N.
 
@@ -35,11 +40,33 @@ from collections import defaultdict
 
 __all__ = ["correlate", "shared_gained_host", "shared_added_literal",
            "coordinated_adoption", "shared_upstream_dependency",
-           "first_seen_adoption_burst"]
+           "first_seen_adoption_burst", "watchlisted_maintainer"]
 
 
 def _thresholds(config) -> dict:
     return (config or {}).get("thresholds", {})
+
+
+def _maintainer_first_seen_ts(maintainer: str):
+    """Earliest recorded maintainer-event timestamp, or ``None``.
+
+    A database read shared by the adoption rules.  Any read failure is
+    ``None`` (``unknown``), never an established account, so a cold or
+    unreadable database cannot manufacture novelty.
+    """
+    from ..db import maintainer_first_seen
+    from ..db._history import _parse_ts
+
+    try:
+        first_seen = maintainer_first_seen(maintainer)
+    except Exception:
+        return None
+    if not first_seen:
+        return None
+    try:
+        return _parse_ts(first_seen).timestamp()
+    except (ValueError, TypeError):
+        return None
 
 
 #: Buckets whose hosts are ubiquitous and carry no campaign signal: five
@@ -132,7 +159,8 @@ def _one_related_cluster(members) -> bool:
     return len({find(name) for name in names}) == 1
 
 
-def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
+def coordinated_adoption(records, min_members: int = 3,
+                         config=None) -> list[dict]:
     """G003: one maintainer key adopting *min_members* unrelated packages.
 
     Joins on the temporal adoption predicates (H044 ownership transition,
@@ -153,10 +181,30 @@ def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
     the repos.  A naming-relatedness pass (``is_related_package``) therefore
     stands the group down the same way: one cluster of related names is one
     project, not a campaign.
+
+    Novelty/dormancy weighting (``[g003]``): a *globally novel* maintainer
+    (its earliest recorded maintainer-event falls within ``novel_days``)
+    adopting dormant targets (``last_modified`` older than ``dormant_days``)
+    is the fennekuiper shape G008 exists for.  When it holds for at least
+    ``min_dormant`` members the finding is escalated to HIGH; the bare
+    N-adoption shape stays MEDIUM, so established maintainers keep the old
+    posture.  The escalation changes the alert severity and evidence, not
+    member scores - correlation clusters do not score their members
+    (``_apply_cluster_weights`` skips every G finding but G005).
     """
+    thresholds = _thresholds(config)
+    g003 = thresholds.get("g003", {})
+    novel_days = int(g003.get("novel_days", 30))
+    min_dormant = int(g003.get("min_dormant", 2))
+    dormant_days = int(g003.get("dormant_days", 180))
+    now = time.time()
+    novel_cutoff = now - novel_days * 86400
+    dormant_cutoff = now - dormant_days * 86400
+
     by_maintainer: dict[str, set[str]] = defaultdict(set)
     predicates: dict[str, set[str]] = defaultdict(set)
     repos: dict[str, list[set[str]]] = defaultdict(list)
+    last_modified: dict[str, list[float]] = defaultdict(list)
     for record in records:
         maintainer = str(record.get("maintainer", "") or "").strip().lower()
         if maintainer and record.get("adoption"):
@@ -164,6 +212,9 @@ def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
             predicates[maintainer] |= set(
                 record.get("adoption_predicates") or ())
             repos[maintainer].append(set(record.get("source_repos") or ()))
+            last_mod = record.get("last_modified")
+            if isinstance(last_mod, (int, float)) and last_mod:
+                last_modified[maintainer].append(last_mod)
     out = []
     for maintainer, members in sorted(by_maintainer.items()):
         if len(members) < min_members:
@@ -180,16 +231,27 @@ def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
             # appattic/appattic-bin/appattic-qt release shape): H052's
             # family by name, not a coordinated adoption.
             continue
+        dormant_count = sum(
+            1 for lm in last_modified[maintainer] if lm < dormant_cutoff)
+        first_seen_ts = _maintainer_first_seen_ts(maintainer)
+        novel = first_seen_ts is not None and first_seen_ts >= novel_cutoff
+        escalated = novel and dormant_count >= min_dormant
         which = sorted(predicates[maintainer])
         all_repos = sorted({r for rs in member_repos for r in rs})
+        match = (f"maintainer adopted {len(members)} unrelated packages "
+                 "in the window")
+        if escalated:
+            match += (f" (first-seen account, {dormant_count} dormant "
+                      "targets)")
         out.append({
             "rule_id": "G003",
             "name": "Coordinated Adoption",
-            "severity": "MEDIUM", "category": "correlation",
-            "match": (f"maintainer adopted {len(members)} unrelated packages "
-                      "in the window"),
+            "severity": "HIGH" if escalated else "MEDIUM",
+            "category": "correlation",
+            "match": match,
             "params": {"members": sorted(members), "predicates": which,
-                       "repos": all_repos},
+                       "repos": all_repos, "novel": novel,
+                       "dormant_count": dormant_count},
         })
     return out
 
@@ -359,6 +421,53 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
     return out
 
 
+def watchlisted_maintainer(records, config=None) -> list[dict]:
+    """G009: a package whose maintainer is on the operator watchlist.
+
+    Report-only (INFO, weight 0).  Registration date, "Inactive since" and
+    suspension state are profile-page facts the pipeline never fetches, so a
+    human's judgement about an account - the fennekuiper packages that stay on
+    the list precisely because the account-level signal is not computable
+    locally - is carried here instead of being guessed from RPC metadata.
+
+    Entries are matched by the maintainer's salted hash, never a plaintext
+    identity.  The watchlist is absent on a clean install, so this is silent
+    until an operator curates one.
+    """
+    g009 = _thresholds(config).get("g009", {})
+    if not g009.get("enabled", True):
+        return []
+    from ..watchlist import load_watchlist, local_hash
+
+    entries = load_watchlist(g009.get("path") or None)
+    if not entries:
+        return []
+
+    out: list[dict] = []
+    seen: set[str] = set()
+    for record in records:
+        maintainer = str(record.get("maintainer", "") or "").strip()
+        if not maintainer:
+            continue
+        name_hash = local_hash(maintainer)
+        if not name_hash or name_hash not in entries:
+            continue
+        package = str(record.get("package", ""))
+        if package in seen:
+            continue
+        seen.add(package)
+        label = entries[name_hash]
+        out.append({
+            "rule_id": "G009",
+            "name": "Watchlisted Maintainer",
+            "severity": "INFO", "category": "correlation",
+            "match": ("maintainer is on the operator watchlist"
+                      + (f" ({label})" if label else "")),
+            "params": {"members": [package], "label": label},
+        })
+    return out
+
+
 def correlate(records, config=None) -> list[dict]:
     """All G-series findings for one cycle's records."""
     thresholds = _thresholds(config)
@@ -371,7 +480,8 @@ def correlate(records, config=None) -> list[dict]:
     out: list[dict] = []
     out.extend(shared_gained_host(records, host_n))
     out.extend(shared_added_literal(records, blob_n, blob_len))
-    out.extend(coordinated_adoption(records, adopt_m))
+    out.extend(coordinated_adoption(records, adopt_m, config))
     out.extend(shared_upstream_dependency(records, dep_n))
     out.extend(impersonation_campaign(records, imp_m))
+    out.extend(watchlisted_maintainer(records, config))
     return out

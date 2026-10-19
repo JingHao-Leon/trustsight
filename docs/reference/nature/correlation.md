@@ -1,6 +1,6 @@
 <!-- description: Where the correlation rules come from (the immune-import model of campaigns) and what a G finding means. -->
 
-# Correlation: Rule Nature
+# Correlation
 
 Mechanics (target, severity, weight, condition) live on the
 [Correlation system page](../rules/correlation.md). This page is the other

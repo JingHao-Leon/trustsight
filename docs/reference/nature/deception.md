@@ -1,21 +1,24 @@
-<!-- description: Where the deception rules come from (anti-analysis tricks against a human reviewer) and what a finding means. -->
+<!-- description: Where the deception rules come from (sleight of hand against the reviewer) and what a finding means. -->
 
-# Deception and Anti-Analysis: Rule Nature
+# Deception and Anti-Analysis
 
 Mechanics live on the [Deception system page](../rules/deception.md).
 
 ## Where it comes from
 
-The audience for a PKGBUILD is a human reviewer and, increasingly, a reviewer
-with a tool. The deception family is the class of tricks aimed at that
+This is **sleight of hand**. A magician does not change the world, only what
+the audience sees; a deceiving recipe does not change what the shell runs,
+only what the reviewer reads. The family is the class of tricks aimed at the
 audience rather than at the compiler: homoglyphs and lookalike characters,
-right-to-left overrides that reorder displayed text, invisible or
-zero-width bytes, and control characters that render differently than they
-parse.
+right-to-left overrides that reorder displayed text, invisible or zero-width
+bytes, and control characters that render differently than they parse.
 
-These attacks do nothing at build time. Their whole purpose is to make what
-the reviewer *sees* differ from what the shell *runs*, which is why they are
-read as anti-analysis evidence rather than as build behaviour.
+A homoglyph here is the equivalent of a **counterfeit note**: it passes a
+glance, and fails only when someone bothers to compare it character by
+character against the real thing. These attacks do nothing at build time.
+Their whole purpose is to make what the reviewer *sees* differ from what the
+shell *runs*, which is why they are read as anti-analysis evidence rather than
+as build behaviour.
 
 ## What a finding means
 

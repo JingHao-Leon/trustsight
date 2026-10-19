@@ -27,6 +27,7 @@ ALWAYS_SHOWN_ANNOTATIONS = frozenset({"H043", "H065"})
 
 def finding_rows(fact) -> list[dict]:
     """Return the findings exposed by the CLI and API for *fact*."""
+    from .registry import uid_of
     from .verdict import _render
 
     rows = []
@@ -41,6 +42,11 @@ def finding_rows(fact) -> list[dict]:
                 or entry.rule_id.startswith("W")):
             rows.append({
                 "rule_id": entry.rule_id,
+                # The permanent identity behind ``rule_id``, so a stored
+                # artifact stays joinable to its rule however the display id
+                # is later renamed. ``None`` for a pseudo rule (a novelty or
+                # provenance signal) that no docs page owns.
+                "rule_uid": uid_of(entry.rule_id),
                 "file": entry.file,
                 "line": entry.line,
                 "description": _render(entry, fact),
@@ -273,7 +279,7 @@ VERBOSE_KEYS = ("score_breakdown",)
 
 # Fields of a finding that are evidence rather than arithmetic.  ``weight``
 # is deliberately absent: it belongs to VERBOSE_KEYS with the breakdown.
-_FINDING_FIELDS = ("rule_id", "severity", "file", "line", "description",
+_FINDING_FIELDS = ("rule_id", "rule_uid", "severity", "file", "line", "description",
                    "template", "evidence")
 
 

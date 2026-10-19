@@ -1,19 +1,27 @@
-<!-- description: Where the temporal rules come from (timing and sequencing as evidence) and what a finding means. -->
+<!-- description: Where the temporal rules come from (timing as forensic evidence and the ecosystem's memory) and what a finding means. -->
 
-# Temporal Context: Rule Nature
+# Temporal Context
 
 Mechanics live on the [Temporal Context system page](../rules/temporal.md).
 
 ## Where it comes from
 
-Some attacks are only visible in time. A commit made at 03:00, a burst of
+The idea comes from **forensics**: an alibi is checked against the clock, and
+a timeline puts events in an order that a single photograph cannot. Some
+attacks are only visible in time. A commit made at 03:00, a burst of
 publications inside one minute, a change reverted and reapplied, an update
-that lands days after the maintainer went quiet: none of these is anomalous
-on its own line, but the *when* is data a single-snapshot review throws away.
+that lands days after the maintainer went quiet: none of these is anomalous on
+its own line, but the *when* is data a single-snapshot review throws away.
 
-The rules compare the current run against a baseline in the observation
-store, so they need history to say anything. On a cold store they stay quiet
-by construction rather than guessing.
+There is an immune reading here too. The adaptive immune system protects you
+because it *remembers* what it has already met. Temporal rules are TrustSight's
+memory: the same observation store that lets the alerting layer recognise a
+returning infection is what lets a single run notice that this package is
+behaving unlike its own past.
+
+The rules compare the current run against a baseline in the observation store,
+so they need history to say anything. On a cold store they stay quiet by
+construction rather than guessing.
 
 ## What a finding means
 

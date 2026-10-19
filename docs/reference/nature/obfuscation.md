@@ -1,22 +1,26 @@
-<!-- description: Where the obfuscation rules come from (making the recipe unreadable) and what a finding means. -->
+<!-- description: Where the obfuscation rules come from (the recipe speaking a language only the shell reads) and what a finding means. -->
 
-# Obfuscation: Rule Nature
+# Obfuscation
 
 Mechanics live on the [Obfuscation system page](../rules/obfuscation.md).
 
 ## Where it comes from
 
-Fetch-and-execute is visible if a reviewer can read the command. Obfuscation
-exists to defeat exactly that reading: base64 or hex decode before execution,
-string reassembly, `eval`, `printf` into a shell, or an interpreter fed a
-blob. In PKGBUILDs the honest cases are rare, because the source tarball and
-its checksum already exist; a recipe that hides its text is hiding it from
-the one person positioned to approve it.
+Think of a **message written in a private cipher**: you are asked to deliver
+it, but you cannot read it, and you are told not to worry about what it says.
+Obfuscation in a recipe is exactly that. Fetch-and-execute is visible if a
+reviewer can read the command, so obfuscation exists to defeat the reading:
+base64 or hex decode before execution, string reassembly, `eval`, `printf`
+into a shell, or an interpreter fed a blob.
 
-The rules therefore treat concealment itself as evidence, not as a
-implementation detail to decode. TrustSight does **not** try to reverse the
-obfuscation; it flags that the recipe is reaching for a decoder and lets the
-reviewer decide.
+In PKGBUILDs the honest cases are rare, because the source tarball and its
+checksum already exist. A recipe that hides its text is hiding it from the one
+person positioned to approve it, so the concealment itself is treated as the
+evidence.
+
+The rules therefore do **not** try to reverse the obfuscation, which would put
+the analyser inside the payload. They flag that the recipe is reaching for a
+decoder and let the reviewer decide.
 
 ## What a finding means
 

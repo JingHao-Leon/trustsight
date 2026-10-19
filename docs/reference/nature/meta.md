@@ -1,21 +1,27 @@
-<!-- description: Where the meta rules come from (the run's own health) and what an M finding means. -->
+<!-- description: Where the meta rules come from (the immune system's self-tolerance and corroboration) and what an M finding means. -->
 
-# Meta and Confluence: Rule Nature
+# Meta and Confluence
 
 Mechanics live on the [Meta system page](../rules/meta.md).
 
 ## Where it comes from
 
-Every other rule is a claim about the *package*. The meta family is a claim
-about the *run*: too many alerts for one window, a matcher that fired
-suspiciously often, a campaign class re-arming again and again. These are
-tool-health observations, and they exist so the analysis can admit when it
-is not itself trustworthy.
+An immune system that attacks the body it lives in is an **autoimmune
+disease**: the danger is not the pathogen but the response. The meta family is
+TrustSight's self-tolerance. Every other rule is a claim about the *package*;
+meta is a claim about the *run*: too many alerts for one window, a matcher
+that fired suspiciously often, a campaign class re-arming again and again.
+These are tool-health observations, and they exist so the analysis can admit
+when it is not itself trustworthy. They never score against the package,
+because a detector's own over-excitement is not evidence about the diff.
 
-The name "confluence" is the other half: M003 reports when independent
-families agree on the same package, which is a statement about agreement
-rather than about any one rule. Both halves answer "how much should this run's
-own output be trusted?".
+The name "confluence" is the other half, and it is the immune system at work
+again. A single immune cell binding an antigen is not enough to launch a full
+response; it needs **corroboration** from other cells before the alarm is
+real. M003 reports exactly that: independent families agreeing on the same
+package, a statement about agreement rather than about any one rule. Both
+halves answer the same question - "how much should this run's own output be
+trusted?".
 
 ## What a finding means
 

@@ -230,7 +230,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## G-series: **Correlation** Cross-Package Joins
 
-**Count:** 8 rules (G001-G008; G006/G007 weight 0)
+**Count:** 9 rules (G001-G009; G006/G007/G009 weight 0)
 
 **Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N. G001 to G004 are the joins; G005 is the impersonation-campaign trigger; G006 (neighborhood elevation under an active campaign) and G007 (corroboration of a run inside an active campaign) are weight 0, because a set membership must not inflate any one member's score. G008 (first-seen account adoption burst) is the collective dormant-target join. The full immune-import reading is on [Correlation: Rule Nature](../nature/correlation.md).
 

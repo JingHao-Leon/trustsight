@@ -1,17 +1,19 @@
-<!-- description: Where the maintainer-and-metadata rules come from (account and recipe-metadata hygiene) and what a finding means. -->
+<!-- description: Where the maintainer-and-metadata rules come from (a change of custody) and what a finding means. -->
 
-# Maintainer and Metadata: Rule Nature
+# Maintainer and Metadata
 
 Mechanics live on the
 [Maintainer and Metadata system page](../rules/maintainer-and-metadata.md).
 
 ## Where it comes from
 
-Most PKGBUILD attacks are delivered through an *account*, not a clever
-parser: a new maintainer, a fresh key, a `pkgver` that lies, a commit that
-touches the metadata and nothing else. The T-series reads the human and
-recipe metadata around the code, because a takeover usually shows there
-first.
+Think of a **deed to a house, and the signature on it**. You do not need to
+see the new owner do anything suspicious; the moment the handwriting on the
+deed changes, you look at everything else with fresh eyes. Most PKGBUILD
+attacks are delivered through an *account*, not a clever parser: a new
+maintainer, a fresh key, a `pkgver` that lies, a commit that touches the
+metadata and nothing else. The T-series reads the human and recipe metadata
+around the code, because a change of custody usually shows there first.
 
 The rules look at the maintainer key's age and reputation, unusual `pkgver`
 and `pkgrel` moves, checksum work that rewrites history, and metadata that

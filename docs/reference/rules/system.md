@@ -1304,6 +1304,10 @@ See [G007: Campaign Corroboration](correlation.md#g007).
 
 See [G008: First-Seen Account Adoption Burst](correlation.md#g008).
 
+### G009 {#g009}
+
+See [G009: Watchlisted Maintainer](correlation.md#g009).
+
 ### A001 {#a001}
 
 See [A001: Setuid File In Artifact](artifact.md#a001).

@@ -1,16 +1,19 @@
-<!-- description: Where the corpus-behavioral rules come from (deviation from what the ecosystem normally does) and what a finding means. -->
+<!-- description: Where the corpus-behavioral rules come from (deviation from a familiar baseline) and what a finding means. -->
 
-# Corpus Behavioral: Rule Nature
+# Corpus Behavioral
 
 Mechanics live on the
 [Corpus Behavioral system page](../rules/corpus-behavioral.md).
 
 ## Where it comes from
 
-Most rules ask "is this pattern dangerous?". The corpus-behavioral rules ask
-a different question: "does this package behave like the thousands of benign
-packages we have seen?". The model is trained on the benign corpus; what it
-flags is **novelty**, the package that does not look like its peers, whether
+You know a friend has been replaced by an impostor not because they did
+anything obviously wrong, but because they **do not sound like themselves**. A
+teacher catches a ghostwritten essay the same way: the voice is subtly off. The
+corpus-behavioral rules work on that instinct. Most rules ask "is this pattern
+dangerous?"; these ask "does this package behave like the thousands of benign
+packages we have seen?" The model is trained on the benign corpus, so what it
+flags is **novelty** - the package that does not look like its peers, whether
 or not any human named the pattern.
 
 This is the learned layer of TrustSight, and its limits are the corpus's

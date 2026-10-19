@@ -95,7 +95,7 @@ _FLAGGED_REPORT_LIMIT = 10
 # H061 (a centrality hub) are weight-0 context, and a sweep emits hundreds of
 # H061 hubs at once.  Passing them to record_alerts made a routine sweep read
 # as "226 campaign cluster(s) ... 226 new alert(s)".
-_NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061", "G006"})
+_NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061", "G006", "G009"})
 
 #: Burst/share clusters that fire on legitimate variant families as readily
 #: as on a typosquat campaign.  They score and alert only when one of their
@@ -1057,9 +1057,15 @@ def _run_baseline_build(
         # finding (a declared practice, a coverage gap, a boundary warning),
         # and dropping it here is how the feed ended up unable to explain the
         # signals the score deliberately excludes.
+        from ..registry import uid_of
+
         findings = [
             {
                 "rule_id": e.rule_id,
+                # The permanent identity behind the display id, so a feed
+                # reader can join an alert back to its rule however the
+                # display id is later renamed.
+                "rule_uid": uid_of(e.rule_id),
                 "severity": e.severity,
                 "weight": e.weight,
                 "file": e.file or "",

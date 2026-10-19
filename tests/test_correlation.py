@@ -5,6 +5,7 @@ from trustsight.analysis.correlation import (
     correlate,
     shared_added_literal,
     shared_gained_host,
+    watchlisted_maintainer,
 )
 
 
@@ -109,6 +110,84 @@ def test_coordinated_adoption_fires_when_one_member_is_unrelated():
     ]
     found = coordinated_adoption(records, min_members=3)
     assert [f["rule_id"] for f in found] == ["G003"]
+
+
+def test_g003_escalates_for_a_first_seen_account_adopting_dormant_packages(
+        monkeypatch):
+    import time
+
+    now = time.time()
+    dormant = int(now - 180 * 86400 - 86400)
+    records = [
+        {"package": f"pkg{i}", "maintainer": "fennekuiper", "adoption": True,
+         "adoption_predicates": ["H086"], "last_modified": dormant}
+        for i in range(3)
+    ]
+    monkeypatch.setattr(
+        "trustsight.db.maintainer_first_seen",
+        lambda m: "2026-10-18 12:00:00" if m == "fennekuiper" else None,
+    )
+    found = coordinated_adoption(records, min_members=3)
+    assert found[0]["severity"] == "HIGH"
+    assert found[0]["params"]["novel"] is True
+    assert found[0]["params"]["dormant_count"] == 3
+
+
+def test_g003_stays_medium_for_an_established_maintainer(monkeypatch):
+    import time
+
+    now = time.time()
+    dormant = int(now - 180 * 86400 - 86400)
+    records = [
+        {"package": f"pkg{i}", "maintainer": "established", "adoption": True,
+         "adoption_predicates": ["H044"], "last_modified": dormant}
+        for i in range(3)
+    ]
+    monkeypatch.setattr(
+        "trustsight.db.maintainer_first_seen",
+        lambda m: "2020-01-01 00:00:00",
+    )
+    found = coordinated_adoption(records, min_members=3)
+    assert found[0]["severity"] == "MEDIUM"
+    assert found[0]["params"]["novel"] is False
+
+
+def test_g003_stays_medium_when_targets_are_active(monkeypatch):
+    import time
+
+    now = time.time()
+    records = [
+        {"package": f"pkg{i}", "maintainer": "fennekuiper", "adoption": True,
+         "adoption_predicates": ["H086"], "last_modified": int(now - 30 * 86400)}
+        for i in range(3)
+    ]
+    monkeypatch.setattr(
+        "trustsight.db.maintainer_first_seen",
+        lambda m: "2026-10-18 12:00:00",
+    )
+    found = coordinated_adoption(records, min_members=3)
+    assert found[0]["severity"] == "MEDIUM"
+    assert found[0]["params"]["dormant_count"] == 0
+
+
+def test_g009_reports_a_watchlisted_maintainer(monkeypatch):
+    records = [{"package": "xsp", "maintainer": "fennekuiper"}]
+    monkeypatch.setattr(
+        "trustsight.watchlist.load_watchlist",
+        lambda path=None: {"h1": "June 2026 orphan sweep"},
+    )
+    monkeypatch.setattr("trustsight.watchlist.local_hash", lambda n: "h1")
+    found = watchlisted_maintainer(records, None)
+    assert [f["rule_id"] for f in found] == ["G009"]
+    assert found[0]["severity"] == "INFO"
+    assert found[0]["params"]["members"] == ["xsp"]
+
+
+def test_g009_is_silent_without_a_watchlist(monkeypatch):
+    monkeypatch.setattr("trustsight.watchlist.load_watchlist",
+                        lambda path=None: {})
+    assert watchlisted_maintainer(
+        [{"package": "x", "maintainer": "m"}], None) == []
 
 
 def test_correlate_honors_configured_thresholds():

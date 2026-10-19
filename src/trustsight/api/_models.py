@@ -752,6 +752,13 @@ class PivotResult:
             "sources": list(self.sources),
         }
 
+def _uid_of(rule_id: str) -> Optional[str]:
+    """The permanent uid behind *rule_id*, or ``None`` for a pseudo rule."""
+    from ..registry import uid_of
+
+    return uid_of(rule_id)
+
+
 def _evaluate_fact_dict_fallback(report: "Report") -> dict:
     """An evaluated dict rebuilt from a Report's own fields.
 
@@ -775,6 +782,7 @@ def _evaluate_fact_dict_fallback(report: "Report") -> dict:
                 "rule_id": f.rule_id, "severity": f.severity, "weight": f.weight,
                 "file": f.file, "line": f.line, "description": f.description,
                 "template": f.template, "evidence": dict(f.evidence),
+                "rule_uid": _uid_of(f.rule_id),
             }
             for f in report.findings
         ],

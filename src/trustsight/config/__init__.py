@@ -385,6 +385,13 @@ LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
         r"\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|openssl\s+s_client|dig|host|nslookup|drill|kdig|git\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd\s+(?:get|sync|cp)|aws\s+s3\s+(?:cp|sync|mv)|gsutil\s+(?:cp|rsync)|az(?:copy)?\s+(?:storage\s+blob\s+download|copy)|rclone\s+(?:copy|sync|cat|copyto|copyurl|moveto|move|bisync)|ipfs\s+(?:get|cat|dag\s+get)|swift\s+download|rados\s+get|git\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|restic\s+restore|borg\s+extract|lwp-request|lwp-download|npx|git\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b",
     },
     "R057": {r"(?:curl\s+(?:[^;&|]*\s)?(?:--insecure|-k)\b|wget\s+(?:[^;&|]*\s)?--no-check-certificate\b)"},
+    # R046/R047 are generated from config, but an install that predates the
+    # loopback/RFC1918/link-local exclusions still carries these older
+    # spellings on disk.  Their detection is regenerated before matching, so
+    # a stale spelling is inert; listing it lets `config sync-rules --update`
+    # rewrite the stored text anyway.
+    "R046": {r"https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"},
+    "R047": {r'https?://[^/\s:]+:(?!(?:80|443|8080|8443)(?:[/\s"\x27]|$))\d{2,5}'},
     # R054 was narrowed to writes *outside* the package root.  A `$pkgdir`
     # staged unit is the package's own content (every daemon ships its
     # systemd unit that way); firing HIGH on it flagged ordinary packages.
@@ -447,10 +454,22 @@ def drifted_shipped_rules() -> list[tuple[str, str, str, str]]:
     Reporting only.  These are not auto-corrected, because a rule whose
     pattern the user has broadened would lose that work if the shipped
     block were written over it.
+
+    The ``pattern`` field is skipped for the ids in
+    :data:`rules._compiled.GENERATED_PATTERN_RULES`: those patterns are
+    regenerated before matching, so their on-disk text is inert and a
+    difference there is not drift.
     """
     path = CONFIG_DIR / "rules.toml"
     if not path.exists():
         return []
+    # R013/R046/R047/R048/R152 carry a placeholder in TOML; their real
+    # pattern is regenerated from Unicode data and config before matching
+    # (`rules._compiled.resolve_generated_patterns`).  The on-disk `pattern`
+    # therefore never affects what they detect, so a difference there is not
+    # semantic drift and must not fail the run closed.
+    from ..rules._compiled import GENERATED_PATTERN_RULES
+
     shipped = _shipped_rule_fields()
     drift: list[tuple[str, str, str, str]] = []
     for rule in load_rules():
@@ -460,6 +479,8 @@ def drifted_shipped_rules() -> list[tuple[str, str, str, str]]:
             continue
         for field in _SEMANTIC_FIELDS:
             if field not in expected:
+                continue
+            if field == "pattern" and rid in GENERATED_PATTERN_RULES:
                 continue
             default = "raw_line" if field == "match_target" else ""
             actual = str(rule.get(field, default))

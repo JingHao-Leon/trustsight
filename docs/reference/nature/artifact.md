@@ -1,20 +1,22 @@
-<!-- description: Where the artifact rules come from (what actually lands in the package) and what a finding means. -->
+<!-- description: Where the artifact rules come from (inspecting the goods that actually arrive) and what a finding means. -->
 
-# Artifact: Rule Nature
+# Artifact
 
 Mechanics live on the [Artifact system page](../rules/artifact.md).
 
 ## Where it comes from
 
-The final question of any package is "what files does the user end up with?".
-The artifact family reads `$pkgdir` after the build: what was installed,
-where, with what permissions, and whether it matches what the recipe
-declared. It is the last checkpoint before the tarball ships, and it sees the
-result of every step that came before.
+When a parcel arrives you **open the box and look at what is inside**; the
+order form and the packing slip are only claims. The artifact family is the
+open box. It reads `$pkgdir` after the build: what was installed, where, with
+what permissions, and whether it matches what the recipe declared. It is the
+last checkpoint before the tarball ships, and it sees the result of every step
+that came before.
 
 This is why artifact findings often confirm what earlier families suspected:
 an execution path named in the shell becomes a file in the package, a write to
-`/etc` becomes an entry in the installed tree.
+`/etc` becomes an entry in the installed tree. The order form and the box
+agree, or they do not, and only the box is the truth.
 
 ## What a finding means
 

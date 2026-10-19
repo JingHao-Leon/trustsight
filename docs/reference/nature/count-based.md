@@ -1,20 +1,22 @@
-<!-- description: Where the count-based rules come from (thresholds over matched evidence) and what a finding means. -->
+<!-- description: Where the count-based rules come from (volume as signal, not a single event) and what a finding means. -->
 
-# Count-Based: Rule Nature
+# Count-Based
 
 Mechanics live on the [Count-Based system page](../rules/count-based.md).
 
 ## Where it comes from
 
-Some signals are not a pattern but a *rate*: how many network calls, how many
-new dependencies, how many distinct hosts, how many decode steps. One is
-normal, a dozen is a different animal. The count-based family watches those
-magnitudes and flags the recipe that crosses a learned threshold, without
-claiming any single occurrence was wrong.
+One swallow does not make a summer, but a **swarm of them** means the season
+has turned. Some signals are not a pattern but a *rate*: how many network
+calls, how many new dependencies, how many distinct hosts, how many decode
+steps. One is normal, a dozen is a different animal. The count-based family
+watches those magnitudes and flags the recipe that crosses a learned
+threshold, without claiming any single occurrence was wrong.
 
-These rules trade precision for reach: a kitchen-sink build can trip them
-benignly, so their thresholds are set from the benign corpus's actual
-distribution rather than from intuition.
+The single mosquito is not the problem; the swarm is. These rules trade
+precision for reach: a kitchen-sink build can trip them benignly, so their
+thresholds are set from the benign corpus's actual distribution rather than
+from intuition.
 
 ## What a finding means
 

@@ -677,6 +677,49 @@ def test_no_drift_reported_for_a_current_rules_file(tmp_path, monkeypatch):
     assert drifted_shipped_rules() == []
 
 
+def _rules_with_legacy_generated_patterns(cfg) -> dict[str, str]:
+    """DEFAULT_RULES with R046/R047 carrying their pre-exclusion spelling."""
+    shipped = {r["id"]: r["pattern"] for r in tomllib.loads(cfg.DEFAULT_RULES)["rules"]}
+    text = cfg.DEFAULT_RULES
+    for rid in ("R046", "R047"):
+        legacy = next(iter(cfg.LEGACY_RULE_PATTERNS[rid]))
+        assert shipped[rid] in text
+        text = text.replace(shipped[rid], legacy)
+    return shipped, text
+
+
+def test_generated_pattern_drift_is_not_reported(tmp_path, monkeypatch):
+    """R046/R047 patterns are regenerated from config before matching, so an
+    install holding an older spelling must not report as drifted: the on-disk
+    text is inert, and failing closed on it downgrades every verdict forever.
+    """
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    _, text = _rules_with_legacy_generated_patterns(cfg)
+    (tmp_path / "rules.toml").write_text(text)
+
+    assert cfg.drifted_shipped_rules() == []
+
+
+def test_generated_r046_r047_legacy_spellings_are_repaired(tmp_path, monkeypatch):
+    """A stale spelling that is *inert* is still worth rewriting on disk, so
+    `config sync-rules --update` recognizes and replaces it."""
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    shipped, text = _rules_with_legacy_generated_patterns(cfg)
+    (tmp_path / "rules.toml").write_text(text)
+
+    assert set(cfg.outdated_shipped_rules()) >= {"R046", "R047"}
+    _, updated = cfg.sync_rules(update_outdated=True)
+    assert set(updated) >= {"R046", "R047"}
+    repaired = {r["id"]: r["pattern"] for r in cfg.load_rules()}
+    assert repaired["R046"] == shipped["R046"]
+    assert repaired["R047"] == shipped["R047"]
+    assert cfg.drifted_shipped_rules() == []
+
+
 def test_a_pre_h056_iocs_stub_is_replaced(tmp_path, monkeypatch):
     """The schema must reach installs that predate H056.
 

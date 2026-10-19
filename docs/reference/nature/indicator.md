@@ -1,21 +1,24 @@
-<!-- description: Where the indicator rules come from (concrete observable markers) and what a finding means. -->
+<!-- description: Where the indicator rules come from (signed, dated observables) and what a finding means. -->
 
-# Indicators: Rule Nature
+# Indicators
 
 Mechanics live on the [Indicators system page](../rules/indicator.md).
 
 ## Where it comes from
 
-Where the behavioural families reason about *shape*, the indicator family
-matches *specific observables*: a known-bad host, a known campaign's literal,
-a specific metadata endpoint. These are the atomic facts that the collective
-correlation rules (G-series) aggregate, and the ones a maintainer can
-override when a stated use is legitimate.
+An indicator is a **wanted poster**. It does not reason about behaviour; it
+is a specific, named observable - a face, a plate number, a fingerprint - that
+someone with authority has put on a list. The indicator family matches those
+specific observables rather than shapes: a known-bad host, a known campaign's
+literal, a specific metadata endpoint. These are the atomic facts that the
+collective correlation rules (G-series) aggregate, and the ones a maintainer
+can override when a stated use is legitimate.
 
-Indicators age. A host that was malicious last year may be a recycled CDN
-today, so indicator findings carry provenance and date, and the
-override-tolerance logic exists to let a known-good explanation suppress one
-without suppressing the class.
+A wanted poster needs a signature and a date for the same reason. Indicators
+age: a host that was malicious last year may be a recycled CDN today, so
+indicator findings carry provenance and date, and the override-tolerance logic
+exists to let a known-good explanation suppress one without suppressing the
+class.
 
 ## What a finding means
 

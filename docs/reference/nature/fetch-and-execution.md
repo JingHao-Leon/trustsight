@@ -1,20 +1,23 @@
-<!-- description: Where the fetch-and-execution rules come from (the classic supply-chain attack shape) and what an H finding means. -->
+<!-- description: Where the fetch-and-execution rules come from (the Trojan-horse shape of the classic supply-chain attack) and what a finding means. -->
 
-# Fetch and Execution: Rule Nature
+# Fetch and Execution
 
 Mechanics live on the [Fetch and Execution system page](../rules/fetch-and-execution.md).
 
 ## Where it comes from
 
-This is the oldest and best-understood attack in the PKGBUILD space: the build
-recipe reaches out to the network, pulls something down, and runs it, so the
-code that executes is not the code a reviewer read. It is how `curl | bash`
-works and how a hijacked source URL turns a reviewer's diff into a smokescreen.
+The oldest analogy for this family is the **Trojan horse**. The recipe looks
+like an ordinary set of build instructions, but one instruction says "go fetch
+new instructions from a stranger, and run them". What executes is not what the
+reviewer read, and the diff they approved becomes a smokescreen for code that
+was never in it.
 
-The rules are ordered by how directly they express that one shape, from the
-literal pipe to the same effect spread across lines with variables, base64,
-or a helper. The H-series is the security core of TrustSight: built first,
-calibrated hardest, and the one the fire-rate work is measured against.
+That is the oldest and best-understood attack in the PKGBUILD space, and the
+shape `curl | bash` made famous. The rules are ordered by how directly they
+express it, from the literal pipe to the same effect spread across lines with
+variables, base64, or a helper. The H-series is the security core of
+TrustSight: built first, calibrated hardest, and the one the fire-rate work is
+measured against.
 
 ## What a finding means
 
