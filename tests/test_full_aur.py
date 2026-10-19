@@ -986,9 +986,9 @@ def test_the_alerting_bar_is_the_measured_benign_p95():
     """The watcher alert bar must be the published benign p95, not a name
     that merely claims to be.
 
-    The constant was 30 while the comment and guide called it the p95; the
-    measured p95 is 35.  Tying the value to the published figure means a
-    future recalibration moves both or fails here.
+    The constant was once 30 while the comment and guide called it the p95;
+    tying the value to the published figure means a future recalibration
+    moves both or fails here.
     """
     import json
     from pathlib import Path
@@ -998,7 +998,7 @@ def test_the_alerting_bar_is_the_measured_benign_p95():
     figures = json.loads(
         (Path(__file__).parent / "fixtures" / "published-figures.json").read_text()
     )
-    assert _OVER_BENIGN_P95 == figures["calibration"]["benign_p95"] == 35
+    assert _OVER_BENIGN_P95 == figures["calibration"]["benign_p95"] == 30
 
 
 def test_the_watch_logs_a_startup_banner(monkeypatch, caplog):
