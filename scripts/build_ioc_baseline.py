@@ -13,7 +13,8 @@ primary-sourced input file; the script only normalises, signs and packages it.
 
 Input file (`--from-file`): a JSON array of entries, each at minimum::
 
-    {"type": "domain|hash|package", "value": "evil.example",
+    {"type": "domain|hash|package|upstream_repo", "value": "evil.example",
+     "shape": "exfil|history_sweep (upstream_repo only)",
      "confidence": "confirmed", "provenance": "ASA-2026-06",
      "campaign": "some-incident", "expires_at": "2026-12-31T00:00:00Z"}
 
@@ -80,7 +81,7 @@ def _normalise_entries(rows: list[dict], source: str) -> list[dict]:
         provenance = str(row.get("provenance", "")).strip()
         if not provenance and row.get("evidence_url"):
             provenance = str(row["evidence_url"]).strip()
-        out.append({
+        entry = {
             "type": type_,
             "value": value,
             "source": source,
@@ -89,7 +90,13 @@ def _normalise_entries(rows: list[dict], source: str) -> list[dict]:
             "campaign": str(row.get("campaign", row.get("incident", ""))).strip(),
             "added": str(row.get("added", row.get("first_seen", ""))).strip(),
             "expires_at": str(row.get("expires_at", row.get("expires", ""))).strip(),
-        })
+        }
+        # An ``upstream_repo`` row is the only type that carries a shape
+        # (``exfil`` or ``history_sweep``). Dropping it here made every
+        # baseline-built row default to U007 in the analyser.
+        if type_ == "upstream_repo":
+            entry["shape"] = str(row.get("shape", "")).strip().lower()
+        out.append(entry)
     # Deterministic order so the signed bytes are reproducible.
     out.sort(key=lambda e: (e["type"], e["value"]))
     return out

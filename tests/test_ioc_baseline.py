@@ -19,6 +19,7 @@ from trustsight.ioc_baseline import (
     match_hash,
     match_ioc,
     match_package,
+    match_upstream_repo,
 )
 
 
@@ -616,6 +617,8 @@ def test_build_ioc_baseline_signed_round_trips(tmp_path, isolated_db):
         {"type": "domain", "value": "evil.example", "confidence": "confirmed",
          "provenance": "advisory-1", "campaign": "inc-1"},
         {"type": "hash", "value": "b" * 64, "campaign": "inc-1"},
+        {"type": "upstream_repo", "value": "github.com/evil/repo",
+         "shape": "history_sweep", "campaign": "inc-1"},
     ]
     entries = bib._normalise_entries(rows, "curator-x")
     out = tmp_path / "baseline"
@@ -626,8 +629,9 @@ def test_build_ioc_baseline_signed_round_trips(tmp_path, isolated_db):
     # artifact, so this is an explicit opt-in and is not reported verified.
     result = import_baseline(out, allow_unsigned=False, trust_manifest_key=True)
     assert result["verified"] is False
-    assert result["entries_imported"] == 2
+    assert result["entries_imported"] == 3
     assert match_domain("evil.example")
+    assert match_upstream_repo("github.com/evil/repo")[0].shape == "history_sweep"
 
 
 def test_build_ioc_baseline_unsigned_needs_allow_unsigned(tmp_path, isolated_db):
