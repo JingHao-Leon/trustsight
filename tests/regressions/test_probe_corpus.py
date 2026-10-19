@@ -190,3 +190,10 @@ def test_packaging_and_prose_are_not_exec_slots(line, fn):
     """`install -Dm755 "$srcdir/x.sh" …` was every benign match of the
     flag-value arm, and a directory value has no script extension."""
     assert "X014" not in _shipped_ids([line], declared=False, fn=fn), line
+
+
+def test_a_package_manager_filter_flag_names_no_program():
+    """deadlock-modmanager: pnpm's `--filter @scope/pkg` selects workspace
+    packages; the slash made the path-shaped flag arm read it as a command."""
+    line = "  pnpm install --frozen-lockfile --filter @deadlock-mods/desktop..."
+    assert "X014" not in _x([line]), line

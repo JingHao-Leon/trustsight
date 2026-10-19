@@ -62,6 +62,13 @@ _MAX_ARRAY_SPAN = 60
 
 def _is_package_name(token: str) -> bool:
     """check if a token matches the package name pattern"""
+    # Source array syntax, not a package name: `https://...` and the
+    # rename form `name.tar.bz2::https://...`.  A hunk boundary can leave a
+    # dependency array looking open and feed the next hunk's `source=(`
+    # entries through this filter; normalising the URL at its first colon
+    # would otherwise yield the "package" `https` (or a tarball filename).
+    if "://" in token or "::" in token:
+        return False
     return bool(_PACKAGE_NAME_RE.match(normalize_dependency(token)))
 
 
@@ -303,6 +310,19 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
             field = None
             continue
         if line.raw.startswith("@@"):
+            # A hunk header names the line that opened its section.  When
+            # that line is an array assignment, it is the real field for the
+            # hunk's indented entries, whatever array an earlier hunk left
+            # open: a `makedepends=(` cut off at one hunk end must not read
+            # the next hunk's `source=(` entries as dependency names.
+            header = line.raw.split("@@", 2)[-1].strip()
+            opener = _ARRAY_START_RE.match(header)
+            if opener:
+                field = opener.group(1)
+                span = 0
+            elif _UNTRACKED_ARRAY_START_RE.match(header):
+                field = None
+                span = 0
             continue
         if line.side in ("add", "remove") and line.side != wanted:
             continue

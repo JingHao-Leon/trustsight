@@ -139,3 +139,34 @@ def test_isolated_insertion_fires_low():
 
 def test_aligned_insertion_stands_down():
     assert "C014" not in _rule_ids(_ALIGNED_INSERTION, _config())
+
+
+_CUT_BY_HUNK_BOUNDARY = """\
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -2,7 +2,7 @@
+ pkgver=1.0
+ sha256sums=(
+ 'a1'
+-'old'
++'new'
+ 'a2'
+ 'a3'
+ 'a4'
+@@ -16,6 +16,6 @@
+ prepare() {
+   cp x y
+-  npm install typescript@5.7.3
+-  export PATH=node_modules/.bin:${PATH}
++  npm install
++  echo done
+ }
+"""
+
+
+def test_a_checksum_array_cut_by_a_hunk_boundary_is_not_reordered():
+    """gnome-shell-extension-mosaic: neither hunk shows the closing paren, so
+    each projection reads the next hunk's lines as checksum entries.  The
+    two sides then differ only in what they swallowed, which is not a
+    reorder (or a content change) in the array the recipe declares."""
+    assert "C014" not in _rule_ids(_CUT_BY_HUNK_BOUNDARY, _config())

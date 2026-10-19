@@ -98,19 +98,31 @@ def array_order_changes(diff_text: str, config: dict | None = None,
     movement is reformatting, so the default gate stands it down.
     """
     from ...recipedoc import array_diff
+    from ...changes import _drop_unclosed_arrays
 
-    if pre is None or post is None:
-        try:
-            pre, post = recipe_states(parse_diff_lines(split_lines(diff_text)))
-        except Exception:
+    try:
+        doc = parse_diff_lines(split_lines(diff_text))
+        if pre is None or post is None:
+            pre, post = recipe_states(doc)
+        # A hunk can show an array opener without its closer; the projection
+        # then reads the next hunk's lines as entries.  Fail closed per side
+        # (the same rule change_delta applies) so a checksum array cut by a
+        # hunk boundary is not diffed against an unrelated hunk's text.
+        pre_arrays = _drop_unclosed_arrays(
+            pre.arrays, "\n".join(doc.pre_lines()))
+        post_arrays = _drop_unclosed_arrays(
+            post.arrays, "\n".join(doc.post_lines()))
+    except Exception:
+        if pre is None or post is None:
             return []
+        pre_arrays, post_arrays = pre.arrays, post.arrays
     require_content = _require_content_change(config)
-    names = {name for name in pre.arrays if _is_checksum_array(name)}
-    names |= {name for name in post.arrays if _is_checksum_array(name)}
+    names = {name for name in pre_arrays if _is_checksum_array(name)}
+    names |= {name for name in post_arrays if _is_checksum_array(name)}
     changes = []
     for name in sorted(names):
-        old = pre.arrays.get(name, ())
-        new = post.arrays.get(name, ())
+        old = pre_arrays.get(name, ())
+        new = post_arrays.get(name, ())
         delta = array_diff(old, new)
         if not delta.reordered:
             continue

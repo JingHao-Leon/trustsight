@@ -629,6 +629,13 @@ domains = [
     "nodejs.org",
     "rubygems.org",
     "pypi.org",
+    # PyPI's file CDN: the host every `files.pythonhosted.org/...whl` URL
+    # returns, same project and same trust model as pypi.org itself.
+    "files.pythonhosted.org",
+    "pythonhosted.org",
+    # The CEF project's official binary distribution host (Chromium Embedded
+    # Framework is built and published by Spotify).
+    "cef-builds.spotifycdn.com",
     "crates.io",
     "registry.npmjs.org",
     "archive.archlinux.org",

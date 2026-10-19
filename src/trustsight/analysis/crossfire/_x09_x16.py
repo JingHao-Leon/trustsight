@@ -201,7 +201,9 @@ X014_RE = re.compile(
     r"|\bsequence\.editor\b|\bgpg\.program\b"
     # `rsync -e`/`--rsh` names the transport program rsync executes.
     r"|\brsync\b[^\n;&|]*?\s--?(?:e|rsh)[=\s]"
-    r"|--(?:exec|command|on-failure|on-success|filter|use-compress-program)"
+    # `filter` is deliberately absent: pnpm/yarn `--filter @scope/pkg` and
+    # rsync `--filter` rules select work, they do not name a program.
+    r"|--(?:exec|command|on-failure|on-success|use-compress-program)"
     r"\s*[=\s]\s*[\"']?[^\s\"';]*/"
     # Flag-agnostic, and bounded on the *value* rather than the name.
     # `--reloadcmd`, `--callback`, `--ssh-keys`, `-c`: the list of flags

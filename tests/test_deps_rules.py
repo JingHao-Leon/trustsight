@@ -820,3 +820,18 @@ def test_h036_remains_medium_when_reconstruction_is_inert(all_enabled, rules):
     h036 = [e for e in facts.score_breakdown if e.rule_id == "H036"]
     assert h036 and h036[0].severity == "MEDIUM"
 
+
+
+def test_a_source_rename_never_reads_as_a_dependency():
+    """nui-sftp: the `makedepends=(` hunk ended before its closer, so the
+    next hunk's `source=(` rename entry was read as a makedependency.  A
+    `name::url` value is source syntax, not a package name."""
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+        " makedepends=(\n   cmake\n   ninja\n+  clang\n"
+        "@@ -20,4 +21,5 @@\n"
+        '   "${_cefdirectory}.tar.bz2::https://cef-builds.example/x.tar.bz2"\n'
+        "+  extra\n )\n"
+    )
+    added = extract_dependency_changes(diff, "nui-sftp")
+    assert added["makedepends"] == {"clang", "extra"}, added["makedepends"]
