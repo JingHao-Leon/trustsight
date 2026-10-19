@@ -84,8 +84,13 @@ class Rule:
 
     @property
     def sort_key(self) -> tuple[str, int, str]:
-        """The one ordering every generated view uses."""
-        return (self.category.value, _number_of(self.id), self.id)
+        """The one ordering every generated view uses.
+
+        Series-major (``C001`` before ``H026`` before ``R001``), so the
+        catalog, the page indexes and the CLI listing read as families
+        rather than as one interleaved run of numbers.
+        """
+        return (self.series, _number_of(self.id), self.id)
 
 
 class Registry:

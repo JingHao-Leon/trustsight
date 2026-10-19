@@ -175,7 +175,6 @@ is deliberately non-contiguous; see
 | [H024](integrity.md#h024) | GPG Verification Removed | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H025](integrity.md#h025) | Build Environment Subversion | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H026](maintainer-and-metadata.md#h026) | Untrusted Maintainer Takeover | Heuristic | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
-| [H026](maintainer-and-metadata.md#h026-corpus) | Untrusted Maintainer Takeover (corpus path) | Heuristic | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [H027](composition.md#h027) | Capability Density Anomaly | Heuristic | INFO | [Composition](composition.md) |
 | [H028](corpus-behavioral.md#h028) | Accelerated Release Cadence | Heuristic | - | [Corpus Behavioral](corpus-behavioral.md) |
 | [H029](naming-and-dependency.md#h029-rule) | Package-Name Typosquat | Heuristic | HIGH | [Naming and Dependencies](naming-and-dependency.md) |

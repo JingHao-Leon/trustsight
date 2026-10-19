@@ -29,7 +29,6 @@ severity weights and the reserved identifier ranges.
 | [C006](#c006) | Maintainer Change With New Source Domain | HIGH |
 | [C030](#c030) | Epoch Removed With Version Unchanged | INFO |
 | [H026](#h026) | Untrusted Maintainer Takeover | HIGH |
-| [H026](#h026-corpus) | Untrusted Maintainer Takeover (corpus path) | HIGH |
 | [H037](#h037) | Long-Stable Property Changed | MEDIUM |
 | [H044](#h044) | Ownership Transition | MEDIUM |
 | [H049](#h049) | Source Host Changed | MEDIUM |

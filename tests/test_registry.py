@@ -60,18 +60,18 @@ def test_reserved_and_unknown_ids_resolve_to_nothing():
         assert uid_of(name) is None
 
 
-def test_sort_key_groups_by_category_then_numbers():
+def test_sort_key_is_series_major_and_stable():
     rules = REGISTRY.all()
     keys = [sort_key(rule) for rule in rules]
     assert keys == sorted(keys)
-    # Grouping: every rule of a category is contiguous in the ordering.
+    # Grouping: every rule of a series is contiguous in the ordering.
     seen: set[str] = set()
     last = None
     for rule in rules:
-        if rule.category.value != last:
-            assert rule.category.value not in seen, f"{rule.category.value} is not contiguous"
-            seen.add(rule.category.value)
-            last = rule.category.value
+        if rule.series != last:
+            assert rule.series not in seen, f"{rule.series} is not contiguous"
+            seen.add(rule.series)
+            last = rule.series
 
 
 def test_in_category_returns_only_that_category():
