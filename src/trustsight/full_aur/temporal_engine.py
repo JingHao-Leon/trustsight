@@ -214,6 +214,25 @@ def _host_of(url: str) -> str:
     return rest.split("/", 1)[0].split("?")[0].split("#")[0].lower()
 
 
+def _repo_owner(url: str) -> tuple[str, str] | None:
+    """``(host, first path segment)`` for a normalized source URL.
+
+    One upstream org often publishes differently named packages from one
+    repository owner; grouping a batch by name alone missed that shape.
+    """
+    rest = url.split("://", 1)[-1]
+    rest = rest.split("?", 1)[0].split("#", 1)[0]
+    if "/" not in rest:
+        return None
+    host, path = rest.split("/", 1)
+    owner = path.strip("/").split("/", 1)[0]
+    if not host or not owner:
+        return None
+    if owner.endswith(".git"):
+        owner = owner[:-4]
+    return host.lower(), owner.lower()
+
+
 def _repo_path_tokens(url: str) -> set[str]:
     """Meaningful tokens from a source URL's path, minus version noise."""
     rest = url.split("://", 1)[-1]
@@ -595,11 +614,22 @@ def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
         # A bulk packager bumping their own sibling packages in lockstep
         # (linux-lts510, -docs, -headers, ...) is one logical update spread
         # over a naming family, not a deviation from the maintainer's
-        # baseline - the same shape G003 already stands down for.  Only a
-        # surge spanning *unrelated* packages is the xz-style signal.
-        from ..analysis.correlation import _one_related_cluster
-        if len(members) > 1 and _one_related_cluster(members):
-            continue
+        # baseline - the same shape G003 already stands down for.  The same
+        # holds for one upstream org's differently named packages: they share
+        # a source owner, not a name stem.  Only a surge spanning unrelated
+        # packages is the xz-style signal.
+        if len(members) > 1:
+            owner_sets = []
+            for name in members:
+                owners = {_repo_owner(url)
+                          for url in (snapshot.source_repos.get(name) or ())}
+                owners.discard(None)
+                owner_sets.append(owners)
+            if all(owner_sets) and set.intersection(*owner_sets):
+                continue
+            from ..analysis.correlation import _one_related_cluster
+            if _one_related_cluster(members):
+                continue
         out.append(_cluster(
             "H058",
             "Maintainer Baseline Deviation",

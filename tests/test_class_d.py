@@ -662,6 +662,39 @@ def test_h058_a_batch_within_the_maintainers_own_range_is_not_a_deviation(thresh
     assert _fire("H058", new, old, maintainer_history=history) == []
 
 
+def test_h058_cross_name_org_batch_is_not_a_deviation(thresholds):
+    """Six differently named packages from one upstream org are one release."""
+    thresholds({"h058": {"min_history_cycles": 3, "z_score": 2.0, "min_activity": 2}})
+    names = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]
+    old = _snapshot(names, "alice")
+    new = copy.deepcopy(old)
+    for name in names:
+        new[name]["LastModified"] = NOW + 1
+    history = [{"maintainer": "alice", "cycle_time": 1, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 2, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 3, "activity": 1}]
+    repos = {name: {f"https://github.com/duxlabs/{name}"} for name in names}
+    assert _fire("H058", new, old, maintainer_history=history,
+                 source_repos=repos) == []
+
+
+def test_h058_cross_name_distinct_owners_still_fire(thresholds):
+    thresholds({"h058": {"min_history_cycles": 3, "z_score": 2.0, "min_activity": 2}})
+    names = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]
+    old = _snapshot(names, "alice")
+    new = copy.deepcopy(old)
+    for name in names:
+        new[name]["LastModified"] = NOW + 1
+    history = [{"maintainer": "alice", "cycle_time": 1, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 2, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 3, "activity": 1}]
+    repos = {name: {f"https://github.com/owner{i}/{name}"}
+             for i, name in enumerate(names)}
+    findings = _fire("H058", new, old, maintainer_history=history,
+                     source_repos=repos)
+    assert len(findings) == 1
+
+
 # --- H059 name/repo divergence -------------------------------------------------
 
 
