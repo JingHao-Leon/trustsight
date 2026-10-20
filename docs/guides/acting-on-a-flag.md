@@ -58,6 +58,7 @@ The verdict is telling you: "I see some novelty but I don't have enough history 
 - `unresolved_source`: a `source=` entry is computed at build time, so the URL the build will fetch is not in the text.
 - `unresolved_parse_time`: a command substitution runs when the recipe is parsed, so its result is not in the analysed text.
 - `snapshot_refused`: the snapshot archive exceeded a read bound and was refused.
+- `upstream_manifest_incomplete`: a committed dependency manifest was too large to read whole, so the shared-upstream-dependency comparison skipped this package and kept its previous dependency state.
 - `unpinned_build_deps`: a build step resolves dependencies from a package registry.
 - `deps_not_scanned`: the AUR dependency walk stopped before the closure was exhausted.
 - `ruleset_drifted`: the installed `rules.toml` differs from the shipped rule set.

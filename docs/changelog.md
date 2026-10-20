@@ -12,6 +12,8 @@
 
 ### Changed
 
+- **The pending baseline/IOC notice offers to pull.** On a terminal, a newer baseline or IOC release now asks `pull now? [y/N]` and, on yes, runs the same verified download and import as `seed fetch` / `ioc update`. The prompt is skipped for non-terminals and for those pull commands themselves; the notice stays on stderr. Declining or pressing Enter leaves the command unchanged.
+- **Install instructions import the release signing key.** The README first-steps snippet and the installation guide now run `gpg --recv-keys F759D6D49B0A395AB922414A5CC3B4C50D37E793` before `makepkg -si`, so a fresh keyring no longer fails the tarball signature check with an unknown-key error (issue #39).
 - **G009 accepts package entries and is now "Watchlisted Subject".** The operator watchlist can name a package directly under `packages` in `~/.config/trustsight/watchlist.json`, beside the existing salted-hash maintainer entries. A package name is already public in every record and report, so it is stored as written and `add_package()` needs no seeded database; the maintainer path and its privacy properties are unchanged. G009 keeps its id, uid and INFO/weight 0 status, and emits `params.subject` as `package` or `maintainer`.
 
 ## [0.22.0] - 2026-10-19

@@ -497,7 +497,7 @@ behaviour is a config key or a command flag.
 |----------|--------|--------|
 | `TRUSTSIGHT_OFFLINE` | `1`, `true`, `yes` (case-insensitive, surrounding whitespace ignored); anything else is off | Forbids outbound requests to the release channel. |
 | `TRUSTSIGHT_NO_UPDATE_CHECK` | `1`, `true`, `yes` (case-insensitive); anything else is off | Disables the once-a-command "a newer release exists" notice, and with it the baseline/IOC pending notice below. |
-| `TRUSTSIGHT_NO_PENDING_CHECK` | `1`, `true`, `yes` (case-insensitive); anything else is off | Disables only the once-a-command "a newer baseline/IOC is available" notice, keeping the program-version notice. |
+| `TRUSTSIGHT_NO_PENDING_CHECK` | `1`, `true`, `yes` (case-insensitive); anything else is off | Disables only the once-a-command "a newer baseline/IOC is available" notice and its interactive pull prompt, keeping the program-version notice. |
 | `NO_COLOR` | Any non-empty value | Disables Rich output; terminal and pipe both get the plain renderer. |
 | `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |

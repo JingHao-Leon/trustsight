@@ -50,7 +50,12 @@ TrustSight is a **static security auditing tool** for Arch Linux’s AUR that an
 > **TrustSight is available on the AUR, maintained by this project.** The `trustsight` AUR package is built from `packaging/aur/PKGBUILD` in this repository. It gets no special trust for being the author's: it is an AUR package like any other, so inspect its PKGBUILD before installing. Source remains the recommended install, below.
 
 ```bash
-# 1. Install the latest release tag (the PKGBUILD pins one version)
+# 1. Import the release signing key once (makepkg verifies the tarball's
+#    detached signature; without the key it reports "unknown public key")
+gpg --keyserver hkps://keys.openpgp.org \
+  --recv-keys F759D6D49B0A395AB922414A5CC3B4C50D37E793
+
+# 2. Install the latest release tag (the PKGBUILD pins one version)
 git clone --depth 1 --branch "$(git ls-remote --tags --refs --sort=-v:refname \
   https://github.com/emiliano-go/trustsight.git 'v*' | head -1 | cut -d/ -f3)" \
   https://github.com/emiliano-go/trustsight.git
@@ -59,10 +64,10 @@ makepkg -si
 # Or build the checkout in place, with no second download:
 #   cd trustsight/packaging/local && makepkg -si
 
-# 2. Scan your outdated AUR packages
+# 3. Scan your outdated AUR packages
 trustsight review
 
-# 3. Scan a package before install
+# 4. Scan a package before install
 trustsight inspect PACKAGE_NAME --allow-uninstalled --full-recipe
 ```
 

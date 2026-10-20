@@ -76,6 +76,40 @@ Two adjacent cases *are* covered, and the boundary between them is worth being p
 
 What is left is the checksum-pinned tarball. There the content *is* fixed by the recipe: changing it requires changing the checksum, and that change is in the diff. So the recipe-level analysis has real, if indirect, coverage - it can tell you the meal came from the same sealed tin, not what is in the tin.
 
+## Public CA / TLS trust-store compromise
+
+TrustSight audits a PKGBUILD, not the certificate authorities the machine
+trusts. If a public CA is compromised and can mint a valid certificate for a
+host a recipe fetches from, the recipe's TLS checks still pass and nothing in
+the diff has to change.
+
+This is a boundary the security model states explicitly: the TLS trust store
+is trusted ([Security Model: assumptions](../security.md#assumptions)). A
+compromised CA does not violate a rule; it falsifies an assumption. TrustSight
+does not read the OS or browser trust store, inspect installed certificates,
+or verify certificate chains or revocation at analysis time.
+
+The package-level behaviours adjacent to this are covered:
+
+- [R057](../reference/rules/fetch-and-execution.md#r057) for disabled
+  certificate verification.
+- [X013](../reference/rules/crossfire.md#x013) for fetch redirects and
+  trust-root replacement, including CA bundles and gpg/pacman keyrings.
+- [R058](../reference/rules/staging-and-recon.md#r058) for writes outside the
+  package root.
+
+These catch a recipe that changes what it trusts. They do not catch a CA
+compromise outside the recipe.
+
+This limit is not recorded as a coverage gap. Coverage gaps describe parts of
+the analysed input that were not examined; a global trust-store compromise is
+not a property of the PKGBUILD. Adding it to every result would make every
+analysis INCONCLUSIVE and turn a documented boundary into a permanent alarm
+that says nothing about the package. Trust-store currency belongs in the
+operator's update discipline: keep OS and browser trust stores current, and
+treat a CA compromise as OS or vendor remediation, not a package-review
+finding.
+
 ## The parser boundary
 
 PKGBUILDs are shell scripts with structure. Not all structure is resolvable without execution. When the parser encounters:

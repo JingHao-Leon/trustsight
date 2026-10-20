@@ -57,9 +57,9 @@ the primed state end.
 | Rule | Spec-B mechanism | A finding means |
 |---|---|---|
 | G001 Shared Gained Host | clonal recognition (shared antigen) | enough unrelated packages gained the same host this window |
-| G002 Shared Added Literal | clonal recognition | the same large literal appeared in unrelated packages (engine ships; feed pending) |
+| G002 Shared Added Literal | clonal recognition | the same large literal appeared in unrelated packages |
 | G003 Coordinated Adoption | clonal recognition | one maintainer key adopted several packages in the window |
-| G004 Shared Upstream Dependency | clonal recognition | the same new upstream dependency, and host, entered several packages (feed pending) |
+| G004 Shared Upstream Dependency | clonal recognition | the same new upstream dependency, and host, entered several packages |
 | G005 Impersonation Campaign | the trigger | one account published many name-clones of far more popular packages |
 | G006 Neighborhood Under Campaign Alert | cytokine signalling | a package newly touched an active campaign's scope; weight 0, report-only |
 | G007 Campaign Corroboration | trained immunity | a run stands inside an active campaign's scope; weight 0 |

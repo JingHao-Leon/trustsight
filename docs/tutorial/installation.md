@@ -13,6 +13,21 @@ repositories during analysis).
     an AUR package like any other, so inspect its PKGBUILD before installing.
     Source remains the recommended install, below.
 
+## Import the release signing key
+
+`makepkg` verifies the detached signature on the release tarball. Import the
+project's signing key once, or the build stops with `Unbekannter
+öffentlicher Schlüssel` / `unknown public key` for
+`5CC3B4C50D37E793`:
+
+```bash
+gpg --keyserver hkps://keys.openpgp.org \
+  --recv-keys F759D6D49B0A395AB922414A5CC3B4C50D37E793
+```
+
+The same key is pinned in `validpgpkeys` in both repository PKGBUILDs and in
+the AUR package, so one import covers every install path below.
+
 ## Build the repository PKGBUILD (recommended)
 
 The PKGBUILD pins one released version, so check out the release tag it names
@@ -95,5 +110,6 @@ trustsight config show
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `ModuleNotFoundError: No module named 'pygit2'` | The `python-pygit2` package is missing or the installation is incomplete | `sudo pacman -S python-pygit2`, then reinstall |
+| `PGP Signature ... FEHLGESCHLAGEN (Unbekannter öffentlicher Schlüssel 5CC3B4C50D37E793)` | The release signing key is not in your GPG keyring | Import it with the [key command above](#import-the-release-signing-key), then re-run `makepkg -si` |
 
 **Next:** [Quickstart](quickstart.md#quickstart), run your first review.

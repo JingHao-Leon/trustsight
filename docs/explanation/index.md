@@ -143,7 +143,7 @@ The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (
 INCONCLUSIVE is not a score range but a state. It signals that the tool could not complete its analysis, not that the package is clean or dirty, and it is produced in exactly two situations:
 
 1. **Cold database.** The score is in the Medium band (21 to 50), maturity is below 0.5 (fewer than 25 recorded analyses; novelty reaches full weight at 50), and no HIGH, CRITICAL or FATAL finding fired. Novelty is the only thing holding the score up, and novelty is not trustworthy on a cold database.
-2. **Incomplete coverage.** The run recorded any coverage gap: `diff_truncated`, `scan_truncated`, `line_truncated`, `tree_not_analyzed`, `companion_truncated`, `unresolved_source`, `unresolved_parse_time`, `snapshot_refused`, `unpinned_build_deps`, `ruleset_drifted`, `deps_not_scanned`, `stage_degraded`, `history_truncated`, or `noextract_suppressed`. When a HIGH or worse *did* fire, the band survives but is shown qualified, as `High (incomplete analysis)`.
+2. **Incomplete coverage.** The run recorded any coverage gap: `diff_truncated`, `scan_truncated`, `line_truncated`, `tree_not_analyzed`, `companion_truncated`, `unresolved_source`, `unresolved_parse_time`, `snapshot_refused`, `upstream_manifest_incomplete`, `unpinned_build_deps`, `ruleset_drifted`, `deps_not_scanned`, `stage_degraded`, `history_truncated`, or `noextract_suppressed`. When a HIGH or worse *did* fire, the band survives but is shown qualified, as `High (incomplete analysis)`.
 
 In both cases a HIGH, CRITICAL or FATAL finding keeps its own band: an analysis that found something does not get to hide it behind "inconclusive".
 
