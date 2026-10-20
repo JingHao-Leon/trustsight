@@ -51,7 +51,7 @@ This is a reference page. For how weight and scope work, see
 | [G006](#g006) | Neighborhood Under Campaign Alert | INFO |
 | [G007](#g007) | Campaign Corroboration | INFO |
 | [G008](#g008) | First-Seen Account Adoption Burst | HIGH |
-| [G009](#g009) | Watchlisted Maintainer | INFO |
+| [G009](#g009) | Watchlisted Subject | INFO |
 | [G010](#g010) | Shared First-Seen Host | INFO |
 <!-- /generated: page-index -->
 
@@ -143,17 +143,17 @@ The fennekuiper signature: a throwaway account sweeping up orphans in its first 
 
 The dormant-target clause is the FP killer. A legitimate new maintainer adopts a package or two they care about (active packages). Nobody's first act is sweeping up 13 orphans including a high-value one. The conjunction of first-seen, many targets, and dormant targets is near-zero FP.
 
-### G009: Watchlisted Maintainer {#g009}
+### G009: Watchlisted Subject {#g009}
 
 - **Target:** programmatic (cycle records)
 - **Severity:** INFO (weight 0)
 - **Category:** `correlation`
 
-- **Condition:** A package whose maintainer's salted hash appears on the operator's watchlist (`[thresholds] g009`, enabled by default; `~/.config/trustsight/watchlist.json` unless `g009.path` names another file).
+- **Condition:** A package whose name, or whose maintainer's salted hash, appears on the operator's watchlist (`[thresholds] g009`, enabled by default; `~/.config/trustsight/watchlist.json` unless `g009.path` names another file).
 
-Report-only, weight 0, like G006. Registration date, "Inactive since" and suspension state are AUR profile-page facts the pipeline never fetches, so no machine rule can compute them. Where a human has established such a fact - the pattern a triager reads by hand, "Inactive-since ~ Last Updated and Last Packager = Package Maintainer" - the watchlist records it and this rule names the package instead of guessing from RPC metadata.
+Report-only, weight 0, like G006. Registration date, "Inactive since" and suspension state are AUR profile-page facts the pipeline never fetches, so no machine rule can compute them. Where a human has established such a fact - the pattern a triager reads by hand, "Inactive-since ~ Last Updated and Last Packager = Package Maintainer" - the watchlist records it and this rule names the package instead of guessing from RPC metadata. A package can also be named directly, for the same report-only reason: the operator wants it surfaced without asserting a machine-computable signal.
 
-Entries are keyed by the same salted SHA-256 the `maintainers_hashed` table uses, so no plaintext identity is stored; the salt is per-installation and the file is absent by default, so G009 is silent until an operator curates a list. Add an entry with `python -c "from trustsight.watchlist import add_entry; add_entry('name', 'note')"`.
+Maintainer entries are keyed by the same salted SHA-256 the `maintainers_hashed` table uses, so no plaintext identity is stored; the salt is per-installation and the file is absent by default, so G009 is silent until an operator curates a list. Package entries are kept under `packages` as written, because a package name is already public in every record, report and AUR page. Add a maintainer with `python -c "from trustsight.watchlist import add_entry; add_entry('name', 'note')"`, or a package with `add_package('pkgname', 'note')`.
 
 ### G010: Shared First-Seen Host {#g010}
 

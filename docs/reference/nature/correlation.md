@@ -64,7 +64,7 @@ the primed state end.
 | G006 Neighborhood Under Campaign Alert | cytokine signalling | a package newly touched an active campaign's scope; weight 0, report-only |
 | G007 Campaign Corroboration | trained immunity | a run stands inside an active campaign's scope; weight 0 |
 | G008 First-Seen Account Adoption Burst | clonal recognition | a first-seen account adopted many dormant packages at once |
-| G009 Watchlisted Maintainer | operator memory | a package's maintainer is on the operator's curated watchlist; weight 0 |
+| G009 Watchlisted Subject | operator memory | a package, or its maintainer, is on the operator's curated watchlist; weight 0 |
 | G010 Shared First-Seen Host | clonal recognition (novelty join) | enough unrelated packages gained the same host the corpus had not met before; weight 0 |
 
 ## See also

@@ -176,15 +176,50 @@ def test_g009_reports_a_watchlisted_maintainer(monkeypatch):
         "trustsight.watchlist.load_watchlist",
         lambda path=None: {"h1": "June 2026 orphan sweep"},
     )
+    monkeypatch.setattr("trustsight.watchlist.load_packages",
+                        lambda path=None: {})
     monkeypatch.setattr("trustsight.watchlist.local_hash", lambda n: "h1")
     found = watchlisted_maintainer(records, None)
     assert [f["rule_id"] for f in found] == ["G009"]
     assert found[0]["severity"] == "INFO"
     assert found[0]["params"]["members"] == ["xsp"]
+    assert found[0]["params"]["subject"] == "maintainer"
+    assert found[0]["name"] == "Watchlisted Subject"
+
+
+def test_g009_reports_a_watchlisted_package_without_hashing(monkeypatch):
+    monkeypatch.setattr("trustsight.watchlist.load_watchlist",
+                        lambda path=None: {})
+    monkeypatch.setattr("trustsight.watchlist.load_packages",
+                        lambda path=None: {"xsp": "June 2026 review"})
+    monkeypatch.setattr(
+        "trustsight.watchlist.local_hash",
+        lambda n: (_ for _ in ()).throw(AssertionError("hashed a package")),
+    )
+    found = watchlisted_maintainer(
+        [{"package": "xsp", "maintainer": "fennekuiper"}], None)
+    assert len(found) == 1
+    assert found[0]["params"]["subject"] == "package"
+    assert found[0]["match"] == "package is on the operator watchlist (June 2026 review)"
+
+
+def test_g009_prefers_the_package_when_both_match(monkeypatch):
+    monkeypatch.setattr("trustsight.watchlist.load_watchlist",
+                        lambda path=None: {"h1": "maintainer note"})
+    monkeypatch.setattr("trustsight.watchlist.load_packages",
+                        lambda path=None: {"xsp": "package note"})
+    monkeypatch.setattr("trustsight.watchlist.local_hash", lambda n: "h1")
+    found = watchlisted_maintainer(
+        [{"package": "xsp", "maintainer": "fennekuiper"}], None)
+    assert len(found) == 1
+    assert found[0]["params"]["subject"] == "package"
+    assert found[0]["params"]["label"] == "package note"
 
 
 def test_g009_is_silent_without_a_watchlist(monkeypatch):
     monkeypatch.setattr("trustsight.watchlist.load_watchlist",
+                        lambda path=None: {})
+    monkeypatch.setattr("trustsight.watchlist.load_packages",
                         lambda path=None: {})
     assert watchlisted_maintainer(
         [{"package": "x", "maintainer": "m"}], None) == []

@@ -466,7 +466,7 @@ own project's names from firing a scope-expansion rule.
 | `g_adopt.min_members` | G003 | `3` | Packages one maintainer key must adopt within the window for a coordinated-adoption finding. |
 | `g003.novel_days` / `g003.min_dormant` / `g003.dormant_days` | G003 | `30` / `2` / `180` | Window in which an adopter counts as novel, the dormant targets that escalate the finding to HIGH, and the age that makes a target dormant. |
 | `g008.min_packages` / `g008.window_days` / `g008.min_dormant` / `g008.dormant_days` | G008 | `5` / `7` / `3` / `180` | First-seen account adoption floor, its window, the dormant-target floor and the dormancy age. |
-| `g009.enabled` / `g009.path` | G009 | `true` / empty | Whether the watchlist is consulted, and the watchlist file (`~/.config/trustsight/watchlist.json` when empty). |
+| `g009.enabled` / `g009.path` | G009 | `true` / empty | Whether the watchlist is consulted, and the watchlist file (`~/.config/trustsight/watchlist.json` when empty). The file holds maintainer entries under `entries` (salted hashes) and package entries under `packages` (plain names). |
 | `g010.min_packages` / `g010.window_days` | G010 | `5` / `7` | Packages that must share one first-seen host, and the first-seen window. |
 | `m002.min_layers` | M002 | `3` | Distinct evidence categories that must fire (none above the alert bar) before M002 escalates the reported band one step. |
 

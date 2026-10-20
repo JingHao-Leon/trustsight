@@ -1330,7 +1330,7 @@ See [G008: First-Seen Account Adoption Burst](correlation.md#g008).
 
 ### G009 {#g009}
 
-See [G009: Watchlisted Maintainer](correlation.md#g009).
+See [G009: Watchlisted Subject](correlation.md#g009).
 
 ### G010 {#g010}
 

@@ -496,7 +496,7 @@
   },
   "g009": {
     "uid": "TS-0056",
-    "name": "Watchlisted Maintainer",
+    "name": "Watchlisted Subject",
     "canonical": true,
     "severity_text": "INFO (weight 0)",
     "severity": "INFO",

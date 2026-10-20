@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **G009 accepts package entries and is now "Watchlisted Subject".** The operator watchlist can name a package directly under `packages` in `~/.config/trustsight/watchlist.json`, beside the existing salted-hash maintainer entries. A package name is already public in every record and report, so it is stored as written and `add_package()` needs no seeded database; the maintainer path and its privacy properties are unchanged. G009 keeps its id, uid and INFO/weight 0 status, and emits `params.subject` as `package` or `maintainer`.
+
 ## [0.22.0] - 2026-10-19
 
 ### Added

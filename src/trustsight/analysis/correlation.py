@@ -20,10 +20,10 @@ supplies them), so the join logic is testable without a live corpus:
   prior maintainer history adopts many dormant packages at once.  It reads
   the maintainer-event timeline, so it is a DB-backed rule invoked from the
   sweep beside G006, not from :func:`correlate`.
-* **G009 Watchlisted Maintainer** (INFO, weight 0): a package whose maintainer
-  is on the operator's hand-curated watchlist, the sanctioned home for
-  profile-page facts (registration date, suspension) the RPC metadata does not
-  carry.  Report-only.
+* **G009 Watchlisted Subject** (INFO, weight 0): a package named directly on
+  the operator's hand-curated watchlist, or one whose maintainer is.  It is the
+  sanctioned home for profile-page facts the RPC metadata does not carry, and
+  for an operator's package-level attention.  Report-only.
 
 Members are named in the finding; the roundup is one alert, not N.
 
@@ -422,48 +422,56 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
 
 
 def watchlisted_maintainer(records, config=None) -> list[dict]:
-    """G009: a package whose maintainer is on the operator watchlist.
+    """G009: a package or maintainer on the operator watchlist.
 
-    Report-only (INFO, weight 0).  Registration date, "Inactive since" and
-    suspension state are profile-page facts the pipeline never fetches, so a
-    human's judgement about an account - the fennekuiper packages that stay on
-    the list precisely because the account-level signal is not computable
-    locally - is carried here instead of being guessed from RPC metadata.
+    Report-only (INFO, weight 0).  A package entry is the operator asking for
+    that package to be named; a maintainer entry carries a human's judgement
+    about an account, where registration date, "Inactive since" and suspension
+    state are profile-page facts the pipeline never fetches.
 
-    Entries are matched by the maintainer's salted hash, never a plaintext
-    identity.  The watchlist is absent on a clean install, so this is silent
+    Maintainer entries are matched by salted hash, never a plaintext identity.
+    Package entries are stored as written because package names are already
+    public.  The watchlist is absent on a clean install, so this is silent
     until an operator curates one.
     """
     g009 = _thresholds(config).get("g009", {})
     if not g009.get("enabled", True):
         return []
-    from ..watchlist import load_watchlist, local_hash
+    from ..watchlist import load_packages, load_watchlist, local_hash
 
-    entries = load_watchlist(g009.get("path") or None)
-    if not entries:
+    path = g009.get("path") or None
+    entries = load_watchlist(path)
+    packages = load_packages(path)
+    if not entries and not packages:
         return []
 
     out: list[dict] = []
     seen: set[str] = set()
     for record in records:
-        maintainer = str(record.get("maintainer", "") or "").strip()
-        if not maintainer:
-            continue
-        name_hash = local_hash(maintainer)
-        if not name_hash or name_hash not in entries:
-            continue
         package = str(record.get("package", ""))
         if package in seen:
             continue
+        if package in packages:
+            label = packages[package]
+            subject = "package"
+        else:
+            maintainer = str(record.get("maintainer", "") or "").strip()
+            if not maintainer:
+                continue
+            name_hash = local_hash(maintainer)
+            if not name_hash or name_hash not in entries:
+                continue
+            label = entries[name_hash]
+            subject = "maintainer"
         seen.add(package)
-        label = entries[name_hash]
         out.append({
             "rule_id": "G009",
-            "name": "Watchlisted Maintainer",
+            "name": "Watchlisted Subject",
             "severity": "INFO", "category": "correlation",
-            "match": ("maintainer is on the operator watchlist"
+            "match": (f"{subject} is on the operator watchlist"
                       + (f" ({label})" if label else "")),
-            "params": {"members": [package], "label": label},
+            "params": {"members": [package], "label": label,
+                       "subject": subject},
         })
     return out
 

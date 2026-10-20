@@ -151,7 +151,7 @@ is deliberately non-contiguous; see
 | [G006](correlation.md#g006) | Neighborhood Under Campaign Alert | Correlation | INFO | [Correlation](correlation.md) |
 | [G007](correlation.md#g007) | Campaign Corroboration | Correlation | INFO | [Correlation](correlation.md) |
 | [G008](correlation.md#g008) | First-Seen Account Adoption Burst | Correlation | HIGH | [Correlation](correlation.md) |
-| [G009](correlation.md#g009) | Watchlisted Maintainer | Correlation | INFO | [Correlation](correlation.md) |
+| [G009](correlation.md#g009) | Watchlisted Subject | Correlation | INFO | [Correlation](correlation.md) |
 | [G010](correlation.md#g010) | Shared First-Seen Host | Correlation | INFO | [Correlation](correlation.md) |
 | [H001](integrity.md#h001) | Checksum Disabled | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H002](integrity.md#h002) | Checksum Emptied | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
