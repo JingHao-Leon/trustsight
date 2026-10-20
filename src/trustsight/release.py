@@ -293,6 +293,17 @@ def _resolve_ioc_tag(channel: Channel | None = None) -> str | None:
     return _resolve_channel_tag("ioc-", channel)
 
 
+def _resolve_watchlist_tag(channel: Channel | None = None) -> str | None:
+    """Find the most recent ``watchlist-*`` release tag that carries assets.
+
+    The watchlist ships on its own channel so a curated subject list can be
+    republished without a baseline or IOC cut; neither ``baseline-`` nor
+    ``ioc-`` resolution matches these tags, so a seed, corpus or IOC fetch
+    can never be pointed at one.
+    """
+    return _resolve_channel_tag("watchlist-", channel)
+
+
 def resolve_baseline_tag(channel: Channel | None = None) -> str | None:
     """Public: the newest asset-bearing ``baseline-*`` tag, or ``None``."""
     return _resolve_baseline_tag(channel)
@@ -301,6 +312,11 @@ def resolve_baseline_tag(channel: Channel | None = None) -> str | None:
 def resolve_ioc_tag(channel: Channel | None = None) -> str | None:
     """Public: the newest asset-bearing ``ioc-*`` tag, or ``None``."""
     return _resolve_ioc_tag(channel)
+
+
+def resolve_watchlist_tag(channel: Channel | None = None) -> str | None:
+    """Public: the newest asset-bearing ``watchlist-*`` tag, or ``None``."""
+    return _resolve_watchlist_tag(channel)
 
 
 def clear_tag_cache() -> None:
@@ -469,6 +485,17 @@ def asset_url(asset_name: str, tag: str | None = None,
             "and no fallback baseline tag is configured; pass --tag "
             "(e.g. --tag baseline-2026-10-18) or set [seed] baseline_tag"
         )
+    if asset_name.startswith("watchlist-"):
+        watchlist_tag = _resolve_watchlist_tag(channel) or (
+            _configured_watchlist_tag() if channel.official else None
+        )
+        if watchlist_tag:
+            return f"{channel.base_url}/download/{watchlist_tag}/{asset_name}"
+        raise ReleaseFetchError(
+            f"no {asset_name} is reachable: the release API is unavailable "
+            "and no fallback watchlist tag is configured; pass --tag "
+            "(e.g. --tag watchlist-2026-10-20) or set [baselines.watchlist] tag"
+        )
     return f"{channel.base_url}/latest/download/{asset_name}"
 
 
@@ -501,6 +528,17 @@ def _configured_ioc_tag() -> str | None:
         return configured_ioc_tag()
     except Exception:
         log.debug("could not read the configured IOC tag", exc_info=True)
+        return None
+
+
+def _configured_watchlist_tag() -> str | None:
+    """The operator-configured fallback watchlist channel tag, or ``None``."""
+    from .config import configured_watchlist_tag
+
+    try:
+        return configured_watchlist_tag()
+    except Exception:
+        log.debug("could not read the configured watchlist tag", exc_info=True)
         return None
 
 

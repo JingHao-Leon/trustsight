@@ -42,6 +42,17 @@ Usage::
         --sign-key /tmp/distribution-key.pem \
         --ioc-only \
         --ioc data/iocs/asa-2026.json --ioc-source emiliano-go --ioc-incident asa-2026
+
+The watchlist is likewise its own channel.  ``--watchlist-only`` emits just
+the signed ``watchlist-official.json`` for a ``watchlist-<date>`` release;
+its input carries public package names and already-salted maintainer hashes
+(never plaintext):
+
+    python scripts/build_release_baselines.py \
+        --out dist/ \
+        --sign-key /tmp/distribution-key.pem \
+        --watchlist-only \
+        --watchlist data/watchlist/official.json
 """
 
 import argparse
@@ -140,6 +151,52 @@ def build_ioc_assets(args, out_dir: Path, private_key, assets: list[dict]):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+WATCHLIST_ASSET = "watchlist-official.json"
+
+
+def build_watchlist_asset(args, out_dir: Path, private_key, assets: list[dict]):
+    """Build and sign the single watchlist document for the watchlist-* channel.
+
+    The input carries public package names and already-salted maintainer
+    hashes, never plaintext: hashing happens out of band with the
+    installation's salt, exactly as the baseline seed is built.  The document
+    also records the salt those hashes were built under, so an import can
+    adopt it or skip the hashes when a different salt is already stored.
+    """
+    rows = json.loads(args.watchlist.read_text(encoding="utf-8"))
+    if not isinstance(rows, dict):
+        raise SystemExit(f"{args.watchlist}: input must be a JSON object")
+    packages = rows.get("packages") or {}
+    maintainers = rows.get("maintainers") or {}
+    if not isinstance(packages, dict) or not isinstance(maintainers, dict):
+        raise SystemExit(
+            f"{args.watchlist}: 'packages' and 'maintainers' must be objects")
+    for name in packages:
+        if not str(name).strip():
+            raise SystemExit(f"{args.watchlist}: empty package name")
+    for name_hash in maintainers:
+        value = str(name_hash).strip()
+        if len(value) != 64 or any(c not in "0123456789abcdefABCDEF" for c in value):
+            raise SystemExit(
+                f"{args.watchlist}: maintainer key {value!r} is not a "
+                "64-character hex hash")
+    salt = str(args.watchlist_salt or rows.get("salt") or "").strip()
+    if maintainers and not salt:
+        raise SystemExit(
+            f"{args.watchlist}: maintainer hashes need --watchlist-salt "
+            "(the salt they were built under)")
+    document = {
+        "schema_version": 1,
+        "built_at": datetime.now(timezone.utc).isoformat(),
+        "source": str(args.watchlist_source or "emiliano-go"),
+        "salt": salt,
+        "packages": packages,
+        "maintainers": maintainers,
+    }
+    data = (json.dumps(document, indent=2) + "\n").encode("utf-8")
+    write_signed_asset(out_dir, WATCHLIST_ASSET, data, private_key, assets)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path("dist"),
@@ -165,6 +222,16 @@ def main() -> int:
                         help="Build only the IOC pair(s), for the dedicated "
                              "ioc-* channel: no seed, corpus or "
                              "baseline-manifest.json is emitted")
+    parser.add_argument("--watchlist", type=Path, default=None,
+                        help="Watchlist input JSON ({packages, maintainers, salt})")
+    parser.add_argument("--watchlist-source", default="emiliano-go",
+                        help="Source name recorded in the watchlist document")
+    parser.add_argument("--watchlist-salt", default="",
+                        help="Salt the maintainer hashes were built under")
+    parser.add_argument("--watchlist-only", action="store_true",
+                        help="Build only the watchlist document, for the "
+                             "dedicated watchlist-* channel: no seed, corpus, "
+                             "IOC pair or baseline-manifest.json is emitted")
     args = parser.parse_args()
 
     if len(args.ioc) != len(args.ioc_source) or len(args.ioc) != len(args.ioc_incident):
@@ -175,11 +242,22 @@ def main() -> int:
         parser.error("--ioc-only needs at least one --ioc input")
     if args.ioc_only and (args.seed_v2_dir or args.seed_archive or args.corpus):
         parser.error("--ioc-only cannot be combined with a seed or --corpus")
+    if args.watchlist and not args.watchlist_only:
+        parser.error("--watchlist ships only on the watchlist-* channel: "
+                     "pass --watchlist-only")
+    if args.watchlist_only and not args.watchlist:
+        parser.error("--watchlist-only needs --watchlist")
+    if args.watchlist_only and (args.seed_v2_dir or args.seed_archive
+                                or args.corpus or args.ioc):
+        parser.error("--watchlist-only cannot be combined with a seed, "
+                     "--corpus or an IOC input")
 
     out_dir = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
-    if not args.seed_v2_dir and not args.seed_archive and not args.ioc and not args.corpus:
-        parser.error("nothing to build: pass a seed, --ioc, or --corpus")
+    if not args.seed_v2_dir and not args.seed_archive and not args.ioc \
+            and not args.corpus and not args.watchlist:
+        parser.error("nothing to build: pass a seed, --ioc, --corpus "
+                     "or --watchlist")
 
     private_key = _load_ed25519_private(args.sign_key)
     pubkey_hex = private_key.public_key().public_bytes_raw().hex()
@@ -192,6 +270,14 @@ def main() -> int:
         print(f"Building the ioc-* assets into {out_dir}")
         build_ioc_assets(args, out_dir, private_key, assets)
         print(f"Wrote {len(assets)} IOC asset(s) for the ioc-* channel.")
+        return 0
+
+    if args.watchlist_only:
+        # Like ioc-only: the watchlist-* channel carries exactly one signed
+        # document, never a baseline-family artifact.
+        print(f"Building the watchlist-* asset into {out_dir}")
+        build_watchlist_asset(args, out_dir, private_key, assets)
+        print(f"Wrote {len(assets)} watchlist asset(s) for the watchlist-* channel.")
         return 0
 
     print(f"Building release baselines into {out_dir}")

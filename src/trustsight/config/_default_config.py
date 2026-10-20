@@ -3,7 +3,7 @@
 import tomllib
 from ._defaults_executor import DEFAULT_ANTI_ANALYSIS_PROBES, DEFAULT_CONFUSABLE_CHARS, DEFAULT_CONFUSABLE_DOMAINS, DEFAULT_COVERT_EGRESS_CLIENTS, DEFAULT_COVERT_EGRESS_ENDPOINTS, DEFAULT_ECOSYSTEM_PREFIXES, DEFAULT_FOREIGN_PKG_MANAGERS, DEFAULT_FREE_HOSTING_DOMAINS, DEFAULT_FREE_REGISTRAR_TLDS, DEFAULT_H029_MIN_OBSERVATIONS, DEFAULT_H029_PLAIN_MIN_OBSERVATIONS, DEFAULT_KNOWN_SUFFIXES, DEFAULT_MANIFEST_FILENAMES, DEFAULT_NETWORK_TOOLS, DEFAULT_OBFUSCATION_INDICATORS, DEFAULT_PARSE_TIME_FETCH, DEFAULT_PASTE_HOSTS, DEFAULT_RECON_COMMANDS, DEFAULT_SECURITY_RELEVANT_FLAGS, DEFAULT_SECURITY_RELEVANT_LIBRARIES, DEFAULT_SOURCE_SCHEMES, DEFAULT_STANDARD_PORTS, DEFAULT_UPLOAD_FLAGS, DEFAULT_VARIANT_SUFFIXES
 
-__all__ = ['DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_IOC_TAG', 'DEFAULT_NAMING', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_PATTERNS', 'DEFAULT_RELEASE_CHANNEL', 'DEFAULT_RELEASE_KEY', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_THRESHOLDS', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', '_STRUCTURAL_CLAMPED', '_toml_escape_str', '_toml_str_list', '_toml_value']
+__all__ = ['DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_IOC_TAG', 'DEFAULT_NAMING', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_PATTERNS', 'DEFAULT_RELEASE_CHANNEL', 'DEFAULT_RELEASE_KEY', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_THRESHOLDS', 'DEFAULT_WATCHLIST_TAG', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', '_STRUCTURAL_CLAMPED', '_toml_escape_str', '_toml_str_list', '_toml_value']
 
 DEFAULT_CONFIG = """\
 [severity_weights]
@@ -210,6 +210,22 @@ name = "example-feed"
 url = "https://example.org/trustsight/ioc-baseline/"
 enabled = false
 
+[baselines.watchlist]
+# The imported watchlist (v0.23.0).  A signed ``watchlist-*`` release carries
+# public package names and salted maintainer hashes; ``trustsight watchlist
+# update`` downloads it, verifies the distribution signature, and imports it.
+# The imported set is unioned with the operator's hand-curated file
+# (``~/.config/trustsight/watchlist.json``) at load, so a release import never
+# clobbers a local entry.  ``enabled`` gates both the import and the pre-command
+# "a newer watchlist is available" notice.
+enabled = true
+
+# Fallback release tag for the watchlist channel when the GitHub releases API
+# cannot be reached (offline or rate-limited).  Empty means "resolve the newest
+# watchlist-* release", refused if unreachable.  Set it to pin an exact
+# channel, e.g. tag = "watchlist-2026-10-20".
+tag = ""
+
 [discovery]
 # Default repositories to scan when no --repo/--foreign/--all-repos CLI
 # flags are given.  Only packages found on the AUR are reviewed.
@@ -343,6 +359,14 @@ DEFAULT_IOC_TAG = (
     tomllib.loads(DEFAULT_CONFIG)
     .get("baselines", {})
     .get("ioc", {})
+    .get("tag")
+    or None
+)
+
+DEFAULT_WATCHLIST_TAG = (
+    tomllib.loads(DEFAULT_CONFIG)
+    .get("baselines", {})
+    .get("watchlist", {})
     .get("tag")
     or None
 )

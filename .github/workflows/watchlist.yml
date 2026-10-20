@@ -1,0 +1,80 @@
+name: Watchlist Channel
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft watchlist tag to complete, e.g. watchlist-2026-10-20
+        required: true
+        type: string
+      watchlist_file:
+        description: Watchlist input JSON (packages + salted maintainer hashes)
+        default: data/watchlist/official.json
+
+permissions:
+  contents: write
+
+# Builds and uploads the dedicated watchlist channel asset for a draft
+# *watchlist* release (tag ``watchlist-<date>``): one signed
+# ``watchlist-official.json`` document.  The channel is kept separate from the
+# bulk ``baseline-*`` family and the ``ioc-*`` channel, so a curated subject
+# list can be republished without a baseline or IOC cut; neither baseline nor
+# IOC discovery can be pointed at a watchlist-* release.
+#
+# The document carries public package names and salted maintainer hashes,
+# never plaintext.  It ships with a detached ``.sig`` under the distribution
+# key held in the BASELINE_SIGNING_KEY Actions secret; ``trustsight watchlist
+# update`` refuses a download whose signature does not verify against the
+# pinned key (see docs/reference/baseline-keys.md).  No seed, corpus, IOC pair
+# or ``baseline-manifest.json`` is written to a *watchlist* release.
+
+jobs:
+  watchlist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Install
+        run: uv sync --locked --extra dev --python 3.12
+
+      - name: Verify the draft watchlist release exists
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          case "$TAG" in
+            watchlist-*) ;;
+            *) echo "tag must be a watchlist-<date> release, got: $TAG" >&2; exit 1 ;;
+          esac
+          gh release view "$TAG" --json tagName >/dev/null
+
+      - name: Write the distribution signing key
+        env:
+          BASELINE_SIGNING_KEY: ${{ secrets.BASELINE_SIGNING_KEY }}
+        run: |
+          umask 077
+          if [ -z "$BASELINE_SIGNING_KEY" ]; then
+            echo "no BASELINE_SIGNING_KEY secret configured; cannot sign assets" >&2
+            exit 1
+          fi
+          printf '%s' "$BASELINE_SIGNING_KEY" > /tmp/sign-key.pem
+
+      - name: Build and sign the watchlist-* asset
+        shell: bash
+        env:
+          WATCHLIST_FILE: ${{ inputs.watchlist_file }}
+        run: |
+          uv run python scripts/build_release_baselines.py \
+            --out /tmp/watchlist-assets \
+            --sign-key /tmp/sign-key.pem \
+            --watchlist-only \
+            --watchlist "${WATCHLIST_FILE:-data/watchlist/official.json}"
+
+      - name: Upload watchlist-* asset to the release
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release upload "$TAG" /tmp/watchlist-assets/watchlist-official.json*

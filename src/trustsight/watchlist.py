@@ -30,9 +30,11 @@ maintainer with the local salt, or a package without one::
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
-__all__ = ["add_entry", "add_package", "default_path", "load_packages",
+__all__ = ["add_entry", "add_package", "default_path", "import_release",
+           "load_packages", "load_release_maintainers", "load_release_packages",
            "load_watchlist", "local_hash", "watchlist_hashes"]
 
 
@@ -65,6 +67,13 @@ def load_watchlist(path=None) -> dict[str, str]:
         name_hash = str(entry.get("name_hash", "")).strip()
         if name_hash:
             out[name_hash] = str(entry.get("label", "") or "")
+    if path is None:
+        # The imported ``watchlist-*`` release is a separate, signed set; a
+        # local entry wins on collision because the operator's own judgement
+        # is the specific one.  A non-default *path* names another local
+        # file and, like the default, is not mixed with the release.
+        for name_hash, label in load_release_maintainers().items():
+            out.setdefault(name_hash, label)
     return out
 
 
@@ -82,12 +91,15 @@ def load_packages(path=None) -> dict[str, str]:
     """
     packages = _read(path).get("packages")
     if not isinstance(packages, dict):
-        return {}
+        packages = {}
     out: dict[str, str] = {}
     for name, label in packages.items():
         package = str(name).strip()
         if package:
             out[package] = str(label or "")
+    if path is None:
+        for package, label in load_release_packages().items():
+            out.setdefault(package, label)
     return out
 
 
@@ -151,3 +163,114 @@ def add_package(name: str, label: str = "", path=None) -> str:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(data, indent=2) + "\n")
     return package
+
+
+def _db_entries(kind: str, source: str | None = None) -> dict[str, str]:
+    """Return ``{value: label}`` for imported rows of *kind*.
+
+    A database without the table (never initialised) is empty, never an
+    error: like the file reader, this is a best-effort aid.
+    """
+    from .db import get_connection
+
+    sql = "SELECT value, label FROM watchlist_entries WHERE kind = ?"
+    params: tuple = (kind,)
+    if source:
+        sql += " AND source = ?"
+        params = (kind, source)
+    try:
+        with get_connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+    except (sqlite3.Error, RuntimeError):
+        return {}
+    out: dict[str, str] = {}
+    for row in rows:
+        value = str(row["value"])
+        if value:
+            out.setdefault(value, str(row["label"] or ""))
+    return out
+
+
+def load_release_packages(source: str | None = None) -> dict[str, str]:
+    """``{package: label}`` imported from a signed watchlist release."""
+    return _db_entries("package", source)
+
+
+def load_release_maintainers(source: str | None = None) -> dict[str, str]:
+    """``{name_hash: label}`` imported from a signed watchlist release.
+
+    The values are salted SHA-256 hashes, never plaintext: the release ships
+    the same pseudonymous form the baseline seed does.
+    """
+    return _db_entries("maintainer", source)
+
+
+def import_release(data: dict, source: str = "") -> dict:
+    """Ingest a verified watchlist release into the database.
+
+    *data* is the signed release document: ``packages`` (public names),
+    ``maintainers`` (salted hashes), and the ``salt`` those hashes were
+    built under.  The salt is handled exactly as ``db.import_seed`` handles a
+    seed's: adopted when the database has none, and when a *different* salt
+    is already stored the maintainer rows are skipped (they would be
+    unreachable in the local hash namespace) while the packages still import.
+    Idempotent per *source*: its previous rows are replaced.
+
+    Returns import stats; raises ``ValueError`` for a document that is not an
+    object.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("a watchlist release must be a JSON object")
+    packages = data.get("packages")
+    maintainers = data.get("maintainers")
+    packages = packages if isinstance(packages, dict) else {}
+    maintainers = maintainers if isinstance(maintainers, dict) else {}
+    release_salt = str(data.get("salt") or "").strip()
+    source = str(source or data.get("source") or "").strip() or "official"
+
+    from .db import get_connection, init_db
+    from .db._connection import SEED_META_SALT_KEY, _get_salt
+
+    init_db()
+    new_packages = {
+        str(name).strip(): str(label or "")
+        for name, label in packages.items()
+        if str(name).strip()
+    }
+    new_maintainers = {
+        str(name_hash).strip(): str(label or "")
+        for name_hash, label in maintainers.items()
+        if str(name_hash).strip()
+    }
+    with get_connection() as conn:
+        stored_salt = _get_salt(conn)
+        adopted = bool(release_salt) and not stored_salt
+        skipped = bool(stored_salt) and bool(release_salt) and stored_salt != release_salt
+        if adopted:
+            conn.execute(
+                "INSERT OR REPLACE INTO seed_meta (key, value) VALUES (?, ?)",
+                (SEED_META_SALT_KEY, release_salt),
+            )
+        conn.execute("DELETE FROM watchlist_entries WHERE source = ?", (source,))
+        rows = [
+            ("package", value, label, source)
+            for value, label in new_packages.items()
+        ]
+        if not skipped:
+            rows += [
+                ("maintainer", value, label, source)
+                for value, label in new_maintainers.items()
+            ]
+        conn.executemany(
+            "INSERT OR IGNORE INTO watchlist_entries (kind, value, label, source) "
+            "VALUES (?, ?, ?, ?)",
+            rows,
+        )
+        conn.commit()
+    return {
+        "source": source,
+        "packages_imported": len(new_packages),
+        "maintainers_imported": 0 if skipped else len(new_maintainers),
+        "maintainers_skipped": len(new_maintainers) if skipped else 0,
+        "salt_adopted": adopted,
+    }

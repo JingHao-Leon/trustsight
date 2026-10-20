@@ -18,9 +18,10 @@ import json
 import time
 from pathlib import Path
 
-#: The two kinds of channel this tracks.
+#: The kinds of channel this tracks.
 BASELINE = "baseline"
 IOC = "ioc"
+WATCHLIST = "watchlist"
 
 
 def _path() -> Path:
@@ -43,7 +44,7 @@ def record_pull(kind: str, tag: str | None, channel: str = "") -> None:
     Best-effort: never raises.  An empty *tag* is recorded as-is; the notice
     treats an empty recorded tag as "never pulled".
     """
-    if kind not in (BASELINE, IOC):
+    if kind not in (BASELINE, IOC, WATCHLIST):
         return
     try:
         from .config import ensure_dirs

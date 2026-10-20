@@ -488,6 +488,26 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_ioc_entries_expires
                 ON ioc_entries(expires_at);
 
+            /* The imported watchlist: the package names and salted
+               maintainer hashes a signed ``watchlist-*`` release carries,
+               ingested with ``trustsight watchlist update``.  Kept apart
+               from the operator's hand-curated watchlist.json and unioned
+               with it at load, so a release import never clobbers the
+               operator's own entries.  Maintainer rows are salted SHA-256,
+               the same pseudonymous form the baseline seed uses; package
+               names are public and stored as written. */
+            CREATE TABLE IF NOT EXISTS watchlist_entries (
+                id INTEGER PRIMARY KEY,
+                kind TEXT NOT NULL,
+                value TEXT NOT NULL,
+                label TEXT,
+                source TEXT NOT NULL,
+                imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(kind, value, source)
+            );
+            CREATE INDEX IF NOT EXISTS idx_watchlist_entries_kind
+                ON watchlist_entries(kind);
+
             /* (T-series): the ecosystem index the temporal
                rules read.  One row per signing key and per maintainer
                domain the corpus has ever observed, with its first-seen
@@ -648,8 +668,57 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _migrate_plaintext_maintainers(conn)
 
     _migrate_rule_ids(conn)
+    _repair_first_observation_adoptions(conn)
 
 _SCHEMA_VERSION = 1
+
+def _repair_first_observation_adoptions(conn: sqlite3.Connection) -> int:
+    """Remove first-submission rows the old pipeline mislabeled as H086.
+
+    A package absent from the previous snapshot was recorded as
+    ``"" -> maintainer``.  The ``adoption_events`` view cannot tell that from
+    a real orphan adoption, so identify the bug's rows by the package's
+    first cycle event: it was *added* by the same maintainer the transition
+    names.  A real orphan adoption by a different maintainer is kept.
+
+    One-shot, keyed in ``metadata``: the write path no longer creates these
+    rows, and deleting history on every startup would be surprising.
+    """
+    key = "maintainer_first_observation_repair_v1"
+    if conn.execute(
+        "SELECT 1 FROM metadata WHERE key = ?", (key,)
+    ).fetchone():
+        return 0
+    cur = conn.execute("""
+        DELETE FROM property_transitions
+        WHERE id IN (
+            SELECT pt.id
+            FROM property_transitions pt
+            JOIN (
+                SELECT package_name, MIN(cycle_time) AS cycle_time
+                FROM cycle_events
+                GROUP BY package_name
+            ) first_cycle ON first_cycle.package_name = pt.package_name
+            JOIN cycle_events ce
+              ON ce.package_name = pt.package_name
+             AND ce.cycle_time = first_cycle.cycle_time
+            WHERE pt.property_key = 'maintainer'
+              AND COALESCE(json_extract(pt.old_value, '$'), '') = ''
+              AND ce.status = 'added'
+              AND lower(ce.maintainer) =
+                  lower(COALESCE(json_extract(pt.new_value, '$'), ''))
+        )
+    """)
+    conn.execute(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, '1')",
+        (key,),
+    )
+    if cur.rowcount:
+        log.info(
+            "Removed %d first-observation row(s) misrecorded as adoptions",
+            cur.rowcount,
+        )
+    return cur.rowcount
 
 def _migrate_rule_ids(conn: sqlite3.Connection) -> None:
     """Rewrite stored rule ids for the heuristic rules renamed to ``H``.

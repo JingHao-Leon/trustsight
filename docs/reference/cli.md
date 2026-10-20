@@ -692,7 +692,7 @@ Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snaps
 
 ```
 trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--json]
-trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--auto-pull-baselines] [--auto-pull-iocs] [--json]
+trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--auto-pull-baselines] [--auto-pull-iocs] [--auto-pull-watchlists] [--json]
 trustsight full-aur --transitions PACKAGE [--limit N] [--json]
 ```
 
@@ -709,6 +709,7 @@ trustsight full-aur --transitions PACKAGE [--limit N] [--json]
 | `--cycles N` | Stop `--watch` after N cycles. `0`, the default, means run until interrupted. |
 | `--auto-pull-baselines` | With `--watch`, after each cycle check the followed baseline channel and pull and import a newer `baseline-seed.tar.gz` (verified against the channel's pinned key). Off by default. Cannot be combined without `--watch`; exits 2. |
 | `--auto-pull-iocs` | With `--watch`, after each cycle pull and import newer IOC feeds (verified against the pinned distribution key). Off by default. Cannot be combined without `--watch`; exits 2. |
+| `--auto-pull-watchlists` | With `--watch`, after each cycle pull and import a newer watchlist release (verified against the pinned distribution key). Off by default. Cannot be combined without `--watch`; exits 2. |
 | `--notify URL` | POST each cycle's new alerts as a JSON document to this webhook, on single-shot cycles and `--watch` alike. Overrides `[notify] webhook` in `config.toml`. A dead receiver is logged and swallowed; a quiet cycle sends nothing. |
 | `--over-threshold N` | Alerting bar: packages scoring strictly above N land in the cycle's `over_threshold` list, which the webhook document carries. Default 30, the benign corpus's measured p95. |
 | `--since YYYY-MM-DD` | Replay change history from this date: each cycle analyses the packages whose AUR `LastModified` falls in one day of AUR time, skipping empty days, and joins the live delta stream when caught up. The cursor persists in the database, so a replay resumes across restarts. Sweep and adoption-feed machinery stay out of replay cycles. |
@@ -828,6 +829,38 @@ trustsight ioc export [<dir>] [--source SOURCE] [--json]
 | `--publisher-key` | Path to the Ed25519 public key pinning a federation publisher. Required with `--federation`. |
 | `--type` | Filter `ioc list` by indicator type (`package`, `domain`, `hash`, `file_path`, or `pkgbuild_pattern`). |
 | `--include-expired` | Include expired entries in `ioc list`. |
+
+---
+
+## trustsight watchlist
+
+Manage the imported watchlist. The operator's hand-curated list
+(`~/.config/trustsight/watchlist.json`) is local and never published; this
+group handles the signed `watchlist-*` release, which carries public package
+names and salted maintainer hashes (never plaintext) and is unioned with the
+local list at load.
+
+```
+trustsight watchlist update [--tag TAG]
+trustsight watchlist import <file> [--source NAME]
+trustsight watchlist list [--json]
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `update` | Download `watchlist-official.json` (plus its detached signature) from the newest `watchlist-*` release (or `--tag`), verify it against the pinned distribution key, and import it. An import adopts the release's salt when the database has none; when a different salt is stored, the maintainer hashes are skipped while the packages still import. |
+| `import` | Import the same document from a local file. No signature is verified, so use it only for a file already trusted. |
+| `list` | Show the local and imported package names and maintainer hashes, marking each entry's origin. |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--tag` | Pin an exact `watchlist-*` release tag instead of resolving the newest. |
+| `--source` | Override the source name recorded for an imported document. |
+| `--json` | Output JSON. |
 
 ---
 

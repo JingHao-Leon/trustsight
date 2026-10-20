@@ -52,6 +52,7 @@ from .forget import register_commands as _register_forget
 from .admin import register_commands as _register_admin
 from .corpus import register_commands as _register_corpus
 from .ioc import register_commands as _register_ioc
+from .watchlist import register_commands as _register_watchlist
 from .seed import register_commands as _register_seed
 from .rules import register_commands as _register_rules
 
@@ -65,6 +66,7 @@ _register_forget(app)
 _register_admin(app)
 _register_corpus(app)
 _register_ioc(app)
+_register_watchlist(app)
 _register_seed(app)
 _register_rules(app)
 

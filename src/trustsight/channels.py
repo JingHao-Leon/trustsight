@@ -38,6 +38,9 @@ SEED_ASSET_NAME = "baseline-seed.tar.gz"
 #: The corpus baseline asset.
 CORPUS_ASSET_NAME = "baseline-corpus.tar.zst"
 
+#: The imported watchlist release asset.
+WATCHLIST_ASSET_NAME = "watchlist-official.json"
+
 #: A progress factory: given a description, a context manager yielding an
 #: ``on_progress(pos, total)`` callback.  The CLI passes a Rich factory; the
 #: watcher passes nothing (no terminal to draw on).
@@ -147,6 +150,52 @@ def pull_baseline_seed(
     url = release.asset_url(SEED_ASSET_NAME, tag, channel)
     resolved = release.tag_from_asset_url(url)
     channel_state.record_pull(channel_state.BASELINE, resolved, channel.repo)
+    return {"tag": resolved or tag or "latest", "url": url,
+            "channel": channel.repo, **stats}
+
+
+def pull_watchlist(
+    channel: release.Channel | None = None,
+    tag: str | None = None,
+    progress: ProgressFactory | None = None,
+    pubkey_path: Path | None = None,
+) -> dict:
+    """Pull, verify and import the signed watchlist release, recording the pull.
+
+    The asset is a single JSON document (``watchlist-official.json``) whose
+    detached ``.sig`` verifies against the channel's pinned key; it carries
+    public package names plus salted maintainer hashes.  Raises a
+    ``release.ReleaseError`` subclass on any refusal.  Returns the import
+    stats plus ``tag``/``url``/``channel``.
+    """
+    import json
+
+    from .watchlist import import_release
+
+    channel = channel or release.active_baseline_channel()
+    # Refuse a channel with no usable pinned key before any network I/O; see
+    # pull_baseline_seed for the reasoning.
+    release._channel_pubkey(channel, pubkey_path)
+    _emit_warning(channel)
+    data = _verified_download(
+        WATCHLIST_ASSET_NAME, tag=tag, channel=channel, progress=progress,
+        pubkey_path=pubkey_path,
+    )
+    try:
+        document = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise release.ReleaseFetchError(
+            f"the watchlist asset is not a JSON document: {exc}"
+        ) from exc
+    try:
+        stats = import_release(document)
+    except ValueError as exc:
+        raise release.ReleaseFetchError(
+            f"the watchlist asset is malformed: {exc}"
+        ) from exc
+    url = release.asset_url(WATCHLIST_ASSET_NAME, tag, channel)
+    resolved = release.tag_from_asset_url(url)
+    channel_state.record_pull(channel_state.WATCHLIST, resolved, channel.repo)
     return {"tag": resolved or tag or "latest", "url": url,
             "channel": channel.repo, **stats}
 
@@ -296,8 +345,9 @@ def enabled_feeds() -> list[dict]:
     return [f for f in feeds if isinstance(f, dict) and f.get("enabled", True)]
 
 
-def auto_pull(*, baselines: bool = False, iocs: bool = False) -> list[str]:
-    """Pull a newer baseline seed and/or IOC feeds, once each, best-effort.
+def auto_pull(*, baselines: bool = False, iocs: bool = False,
+              watchlists: bool = False) -> list[str]:
+    """Pull a newer baseline seed, IOC feeds and/or watchlist, once each.
 
     Called by the watcher after every cycle.  Only pulls when the channel
     offers a tag the operator has not already pulled (recorded in
@@ -306,7 +356,7 @@ def auto_pull(*, baselines: bool = False, iocs: bool = False) -> list[str]:
     raises, because a failed data pull must not kill the watch.
     """
     notes: list[str] = []
-    if not (baselines or iocs):
+    if not (baselines or iocs or watchlists):
         return notes
     # A watcher process runs for weeks; the per-process tag cache would pin it
     # to the first tag it ever saw.  Re-query every cycle.
@@ -341,4 +391,17 @@ def auto_pull(*, baselines: bool = False, iocs: bool = False) -> list[str]:
                     notes.append(
                         f"iocs auto-pull skipped for {name}: {result.get('error')}"
                     )
+    if watchlists:
+        try:
+            channel = release.active_baseline_channel()
+            newest = release.resolve_watchlist_tag(channel)
+            if newest and newest != channel_state.pulled_tag(
+                    channel_state.WATCHLIST):
+                stats = pull_watchlist(channel=channel)
+                notes.append(
+                    f"watchlist pulled: {stats['tag']} "
+                    f"({stats['packages_imported']} packages)"
+                )
+        except Exception as exc:  # noqa: BLE001 - never kill the watch
+            notes.append(f"watchlist auto-pull skipped: {exc}")
     return notes

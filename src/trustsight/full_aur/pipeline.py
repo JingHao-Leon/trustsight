@@ -1374,6 +1374,7 @@ def run_watch(
     since: Optional[int] = None,
     auto_pull_baselines: bool = False,
     auto_pull_iocs: bool = False,
+    auto_pull_watchlists: bool = False,
 ) -> list[CycleResult]:
     """Run corpus cycles on an interval until interrupted.
 
@@ -1500,11 +1501,12 @@ def run_watch(
             # IOC set is pulled once and then recorded, so the next cycle sees
             # nothing new until the channel moves again.  Best-effort: a
             # failed pull is logged and the watch continues.
-            if auto_pull_baselines or auto_pull_iocs:
+            if auto_pull_baselines or auto_pull_iocs or auto_pull_watchlists:
                 from ..channels import auto_pull
 
                 for note in auto_pull(
-                    baselines=auto_pull_baselines, iocs=auto_pull_iocs
+                    baselines=auto_pull_baselines, iocs=auto_pull_iocs,
+                    watchlists=auto_pull_watchlists,
                 ):
                     _log(f"  {note}")
             if cycles and len(results) >= cycles:

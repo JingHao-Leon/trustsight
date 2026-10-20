@@ -483,6 +483,7 @@ def register_commands(app: typer.Typer):
         since: str | None = typer.Option(None, "--since", help="Replay change history from this date (YYYY-MM-DD, UTC), one AUR day per cycle, then join the live stream"),
         auto_pull_baselines: bool = typer.Option(False, "--auto-pull-baselines", help="With --watch, pull and import a newer baseline seed after each cycle"),
         auto_pull_iocs: bool = typer.Option(False, "--auto-pull-iocs", help="With --watch, pull and import newer IOC feeds after each cycle"),
+        auto_pull_watchlists: bool = typer.Option(False, "--auto-pull-watchlists", help="With --watch, pull and import a newer watchlist release after each cycle"),
         transitions: str | None = typer.Option(None, "--transitions", help="Show this package's recorded property timeline and exit (read-only; works offline)"),
         limit: int = typer.Option(500, "--limit", help="With --transitions, the newest rows to show (0 = all)"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -549,9 +550,11 @@ def register_commands(app: typer.Typer):
             else:
                 _print_colored(msg, "red", stderr=True)
             raise typer.Exit(code=2)
-        if (auto_pull_baselines or auto_pull_iocs) and not watch:
-            msg = ("--auto-pull-baselines/--auto-pull-iocs pull data across "
-                   "cycles and only make sense with --watch.")
+        if (auto_pull_baselines or auto_pull_iocs
+                or auto_pull_watchlists) and not watch:
+            msg = ("--auto-pull-baselines/--auto-pull-iocs/"
+                   "--auto-pull-watchlists pull data across cycles and only "
+                   "make sense with --watch.")
             if json_output:
                 typer.echo(json.dumps({"error": msg}))
             else:
@@ -578,7 +581,8 @@ def register_commands(app: typer.Typer):
                                 notify_url=notify, over_threshold=over_threshold,
                                 since=since_ts,
                                 auto_pull_baselines=auto_pull_baselines,
-                                auto_pull_iocs=auto_pull_iocs)
+                                auto_pull_iocs=auto_pull_iocs,
+                                auto_pull_watchlists=auto_pull_watchlists)
             # A watch that ended on a refusal never analysed anything: the
             # single-shot path already maps that to exit 2, and the loop is
             # the same "could not run" case.

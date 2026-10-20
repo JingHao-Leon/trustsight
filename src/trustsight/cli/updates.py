@@ -143,6 +143,17 @@ def _write_json_cache(path: Path, data: dict) -> None:
         pass
 
 
+def _watchlist_configured() -> bool:
+    """True when the operator has the imported watchlist feed enabled."""
+    try:
+        from ..config import load_config
+
+        section = load_config().get("baselines", {}).get("watchlist", {})
+        return bool(section.get("enabled", True))
+    except Exception:  # noqa: BLE001
+        return True
+
+
 def _ioc_feeds_configured() -> bool:
     """True when the operator has at least one enabled IOC feed."""
     try:
@@ -178,6 +189,10 @@ def _channel_tags() -> dict:
     data["ioc"] = (
         release.resolve_ioc_tag() if _ioc_feeds_configured() else None
     )
+    data["watchlist"] = (
+        release.resolve_watchlist_tag(baseline_channel)
+        if _watchlist_configured() else None
+    )
     _write_json_cache(_pending_cache_path(), data)
     return data
 
@@ -209,12 +224,18 @@ def pending_channels() -> list[tuple[str, str, str]]:
         # IOC discovery always resolves the official ``ioc-*`` channel, so the
         # notice names it by slug rather than the vague word "official".
         pending.append(("ioc", str(ioc_tag), release.OFFICIAL_REPO))
+    watchlist_tag = tags.get("watchlist")
+    if watchlist_tag and watchlist_tag != channel_state.pulled_tag(
+            channel_state.WATCHLIST):
+        pending.append(("watchlist", str(watchlist_tag),
+                        str(tags.get("baseline_channel") or "official")))
     return pending
 
 
 #: Commands that pull the very data the pending notice would offer.  Asking
 #: them to pull first would run the same fetch twice in one invocation.
-_PULL_COMMANDS = {("seed", "fetch"), ("ioc", "update")}
+_PULL_COMMANDS = {("seed", "fetch"), ("ioc", "update"),
+                  ("watchlist", "update")}
 
 
 def _is_pull_command() -> bool:
@@ -228,7 +249,8 @@ def _pull_pending(kinds: set[str]) -> None:
 
     try:
         notes = channels.auto_pull(
-            baselines="baseline" in kinds, iocs="ioc" in kinds)
+            baselines="baseline" in kinds, iocs="ioc" in kinds,
+            watchlists="watchlist" in kinds)
     except Exception as exc:  # noqa: BLE001 - a failed pull must not abort
         print(f"trustsight: pull failed: {exc}", file=sys.stderr)
         return
@@ -256,10 +278,16 @@ def check_and_warn_pending() -> None:
                 f"on {channel}. Pull with 'trustsight seed fetch'.",
                 file=sys.stderr,
             )
-        else:
+        elif kind == "ioc":
             print(
                 f"trustsight: newer IOCs are available: {tag} "
                 f"on {channel}. Pull with 'trustsight ioc update'.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"trustsight: a newer watchlist is available: {tag} "
+                f"on {channel}. Pull with 'trustsight watchlist update'.",
                 file=sys.stderr,
             )
     if not pending or not _interactive() or _is_pull_command():

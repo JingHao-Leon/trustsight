@@ -241,6 +241,27 @@ same curator-key-checked `ioc import` path in every case.
 | `key` | string | Ed25519 public key pinning a non-release-channel publisher (64 hex characters or a path to a raw key file). Required for a federation `url`; ignored for a release-channel `url`, which uses the channel's key. |
 | `enabled` | bool | Whether the feed is active. |
 
+#### `[baselines.watchlist]`
+
+The imported watchlist. A signed `watchlist-*` release carries public package
+names and salted maintainer hashes (never plaintext); `trustsight watchlist
+update` downloads `watchlist-official.json` (plus its detached signature) from
+the newest `watchlist-*` release, verifies it against the pinned distribution
+key, and imports it. The imported set is stored in the database and unioned
+with the operator's hand-curated file at load, so a release import never
+clobbers a local entry.
+
+Maintainer hashes are handled exactly as a baseline seed's: the release
+records the salt they were built under, and an import adopts it when the
+database has none. When a *different* salt is already stored, the maintainer
+hashes are skipped (they would be unreachable in the local namespace) while
+the package names still import.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `true` | Import the release and offer the pre-command "a newer watchlist is available" notice. |
+| `tag` | string | `""` | Fallback release tag for the watchlist channel when the GitHub releases API cannot be reached. Empty means "resolve the newest `watchlist-*` release", which is then refused if unreachable. Set it to pin an exact channel, e.g. `"watchlist-2026-10-20"`. |
+
 ### `[depth]`
 
 ```toml
@@ -463,7 +484,7 @@ own project's names from firing a scope-expansion rule.
 | `e003.min_entropy` / `e003.max_entropy` / `e003.min_bigram` / `e003.max_bigram` | E003 | *empty* | Unigram and bigram entropy band for newly assigned variable/function names; generated names sit low, packed names high. |
 | `g_host.min_packages` | G001 | `5` | Distinct packages that must add the same canonical host within the cycle window. |
 | `g_blob.min_length` / `g_blob.min_packages` | G002 | `256` / `2` | Length floor for a shared added literal and the number of unrelated packages that must carry it. |
-| `g_adopt.min_members` | G003 | `3` | Packages one maintainer key must adopt within the window for a coordinated-adoption finding. |
+| `g_adopt.min_members` | G003 | `3` | Packages with a recorded adoption predicate one maintainer key must be joined to among a cycle's processed packages for a coordinated-adoption finding. |
 | `g003.novel_days` / `g003.min_dormant` / `g003.dormant_days` | G003 | `30` / `2` / `180` | Window in which an adopter counts as novel, the dormant targets that escalate the finding to HIGH, and the age that makes a target dormant. |
 | `g008.min_packages` / `g008.window_days` / `g008.min_dormant` / `g008.dormant_days` | G008 | `5` / `7` / `3` / `180` | First-seen account adoption floor, its window, the dormant-target floor and the dormancy age. |
 | `g009.enabled` / `g009.path` | G009 | `true` / empty | Whether the watchlist is consulted, and the watchlist file (`~/.config/trustsight/watchlist.json` when empty). The file holds maintainer entries under `entries` (salted hashes) and package entries under `packages` (plain names). |
