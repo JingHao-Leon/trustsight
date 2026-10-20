@@ -22,7 +22,7 @@ pkgbase = trustsight
 	source = trustsight-0.22.0.tar.gz::https://github.com/emiliano-go/trustsight/releases/download/v0.22.0/trustsight-0.22.0.tar.gz
 	source = trustsight-0.22.0.tar.gz.sig::https://github.com/emiliano-go/trustsight/releases/download/v0.22.0/trustsight-0.22.0.tar.gz.sig
 	validpgpkeys = F759D6D49B0A395AB922414A5CC3B4C50D37E793
-	sha256sums = b7d6aa1b3df7a56923d76cf1c58d2ef4dfdeb65814d081ef96fcd5080a4b81cb
-	sha256sums = 229c0bb38c74cb9b57df5ab6ffee8b031cc70f84f7bcb2ba32ff89b567eea6ab
+	sha256sums = 0e19434336b298dfb6ade6d67b3890fc41b9e2e086ba76921ad810445fffee7f
+	sha256sums = e3cf75e412aeac49b2e2ceffb15ac9380c0b2d17f0e96421c59172bd073afe59
 
 pkgname = trustsight
