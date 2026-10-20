@@ -16,8 +16,7 @@ repositories during analysis).
 ## Import the release signing key
 
 `makepkg` verifies the detached signature on the release tarball. Import the
-project's signing key once, or the build stops with `Unbekannter
-öffentlicher Schlüssel` / `unknown public key` for
+project's signing key once, or the build stops with `unknown public key` for
 `5CC3B4C50D37E793`:
 
 ```bash
@@ -110,6 +109,6 @@ trustsight config show
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `ModuleNotFoundError: No module named 'pygit2'` | The `python-pygit2` package is missing or the installation is incomplete | `sudo pacman -S python-pygit2`, then reinstall |
-| `PGP Signature ... FEHLGESCHLAGEN (Unbekannter öffentlicher Schlüssel 5CC3B4C50D37E793)` | The release signing key is not in your GPG keyring | Import it with the [key command above](#import-the-release-signing-key), then re-run `makepkg -si` |
+| `PGP Signature ... FAILED (unknown public key 5CC3B4C50D37E793)` | The release signing key is not in your GPG keyring | Import it with the [key command above](#import-the-release-signing-key), then re-run `makepkg -si` |
 
 **Next:** [Quickstart](quickstart.md#quickstart), run your first review.
