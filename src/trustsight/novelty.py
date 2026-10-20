@@ -29,7 +29,7 @@ from .schema import NoveltyContext
 # 9 components deep, so bounding costs nothing real and this drops to
 # 2.2ms.
 _VERSION_RE = re.compile(r"\d{1,32}+(?:\.\d{1,32}+){1,8}")
-_HASH_RE = re.compile(r"(?<=[./])[a-f0-9]{7,40}(?=[./]|$)", re.IGNORECASE)
+_HASH_RE = re.compile(r"(?<=[./])[a-f0-9]{7,64}(?=[./]|$)", re.IGNORECASE)
 _DATE_RE = re.compile(r"\d{4}[-_]\d{2}[-_]\d{2}")
 
 

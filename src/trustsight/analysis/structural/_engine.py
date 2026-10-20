@@ -333,11 +333,18 @@ def _structural_findings(
                 "sha256sums updated alongside a version move",
                 line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
 
-    if removed and added and not version_moved and set(removed) != set(added):
-        add("C003", "Source URL Changed Without Version Bump", "INFO", "integrity",
-            f"URLs changed: {removed} -> {added}",
-            line=find_line_in_diff(diff_text, r"source(?:_[a-z0-9_]+)?\s*=\s*\("),
-            added=str(added), removed=str(removed))
+    if removed and added and not version_moved:
+        # A repack can rotate a volatile path token (a signed download URL's
+        # sha256 segment) without changing the source.  Compare the same
+        # version-stable templates novelty uses; keep the raw URLs in the
+        # message so a genuine host change is still legible.
+        from ...novelty import normalize_url
+        if ({normalize_url(u) for u in removed}
+                != {normalize_url(u) for u in added}):
+            add("C003", "Source URL Changed Without Version Bump", "INFO", "integrity",
+                f"URLs changed: {removed} -> {added}",
+                line=find_line_in_diff(diff_text, r"source(?:_[a-z0-9_]+)?\s*=\s*\("),
+                added=str(added), removed=str(removed))
 
     # H099 - the quiet swap: the local name a reviewer recognises stays,
     # the server behind it changes.  Suppressed on a version move, where a

@@ -757,3 +757,69 @@ def test_source_bucket_still_fires_on_an_unknown_host():
             '-source=("https://mirror.example.org/hmmer-3.3.tar.gz")\n'
             '+source=("https://mirror.evil.test/hmmer-3.4.tar.gz")\n')
     assert "SOURCE_BUCKET" in _ids(diff, current_text=head)
+
+
+# --- yandex-messenger: a signed download path is not a source change --------
+# 2026-10-20 watcher review: Yandex Disk mints a fresh 64-char hex path token
+# per request, so a repack that changed nothing but the signed URL fired C003
+# and NOVELTY every cycle.
+
+_YANDEX_OLD = "a" * 64
+_YANDEX_NEW = "b" * 64
+
+
+def _yandex_diff(old: str, new: str, host: str = "downloader.disk.yandex.ru"):
+    return ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -3 +3 @@\n"
+            f'-source=("https://{host}/disk/{old}/yandex-messenger.deb")\n'
+            f'+source=("https://{host}/disk/{new}/yandex-messenger.deb")\n')
+
+
+def test_c003_does_not_fire_on_a_rotated_signed_path_token():
+    current = (
+        "pkgname=yandex-messenger\n"
+        "pkgver=1.0\n"
+        'source=("https://downloader.disk.yandex.ru/disk/'
+        + _YANDEX_NEW + '/yandex-messenger.deb")\n'
+    )
+    assert "C003" not in _ids(_yandex_diff(_YANDEX_OLD, _YANDEX_NEW),
+                              current_text=current)
+
+
+def test_c003_still_fires_on_a_source_host_change():
+    current = (
+        "pkgname=yandex-messenger\n"
+        "pkgver=1.0\n"
+        'source=("https://evil.test/disk/'
+        + _YANDEX_NEW + '/yandex-messenger.deb")\n'
+    )
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -3 +3 @@\n"
+            '-source=("https://downloader.disk.yandex.ru/disk/'
+            + _YANDEX_OLD + '/yandex-messenger.deb")\n'
+            '+source=("https://evil.test/disk/'
+            + _YANDEX_NEW + '/yandex-messenger.deb")\n')
+    assert "C003" in _ids(diff, current_text=current)
+
+
+# --- qodercli-bin: the project's own Alibaba OSS bucket ---------------------
+
+_QODER = (
+    "pkgname=qodercli-bin\n"
+    "pkgver=1.0\n"
+    'url="https://qoder.com"\n'
+    'source_x86_64=("https://qoder-ide.oss-accelerate.aliyuncs.com/'
+    'new/qodercli.deb")\n'
+)
+
+
+def test_qoder_project_bucket_is_not_an_unknown_source():
+    # A repack changes only the source line, so the declared url= is not in
+    # the diff and SOURCE_BUCKET reads the official bucket, not the homepage.
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -4 +4 @@\n"
+            '-source_x86_64=("https://qoder-ide.oss-accelerate.aliyuncs.com/'
+            'old/qodercli.deb")\n'
+            '+source_x86_64=("https://qoder-ide.oss-accelerate.aliyuncs.com/'
+            'new/qodercli.deb")\n')
+    ids = _ids(diff, current_text=_QODER)
+    assert "SOURCE_BUCKET" not in ids
+    assert "C005" not in ids
+    assert "C011" not in ids

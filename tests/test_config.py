@@ -291,9 +291,12 @@ def test_load_domains_creates_default(tmp_path, monkeypatch):
     assert "official_projects" in domains
     assert "python.org" in domains["official_projects"]["domains"]
     assert "kernel.org" in domains["official_projects"]["domains"]
+    assert "qoder-ide.oss-accelerate.aliyuncs.com" in (
+        domains["official_projects"]["domains"])
     assert "raw_hosting" in domains
     assert "raw.githubusercontent.com" in domains["raw_hosting"]["domains"]
     assert "pastebin.com" in domains["raw_hosting"]["domains"]
+    assert "downloader.disk.yandex.ru" in domains["raw_hosting"]["domains"]
 
 
 def test_domains_not_empty(tmp_path, monkeypatch):

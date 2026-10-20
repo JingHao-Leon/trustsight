@@ -159,6 +159,20 @@ def test_normalize_strips_hash():
     assert "HASH" in n
 
 
+def test_normalize_strips_a_sha256_sized_path_hash():
+    """A signed download URL can carry a 64-character hex path segment.
+
+    Yandex Disk mints one per request, so every repack looked like a new
+    source until the hash template covered sha256.
+    """
+    a = normalize_url(
+        "https://downloader.disk.yandex.ru/disk/" + "a" * 64 + "/pkg.deb")
+    b = normalize_url(
+        "https://downloader.disk.yandex.ru/disk/" + "b" * 64 + "/pkg.deb")
+    assert "HASH" in a
+    assert a == b
+
+
 def test_normalize_strips_date():
     n = normalize_url("https://example.com/snapshots/2024-03-15/file.tar.gz")
     assert "2024" not in n

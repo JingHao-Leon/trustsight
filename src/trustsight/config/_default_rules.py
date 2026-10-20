@@ -644,6 +644,9 @@ domains = [
     # redirects to eddylab.org/software/hmmer).  Not listed here it scored
     # `unknown` and charged hmmer a SOURCE_BUCKET weight.
     "eddylab.org",
+    # Qoder's project-owned Alibaba Cloud OSS bucket: the vendor's own
+    # distribution host, the same model as cef-builds.spotifycdn.com.
+    "qoder-ide.oss-accelerate.aliyuncs.com",
 ]
 
 [raw_hosting]
@@ -666,6 +669,9 @@ domains = [
     "anonfiles.com",
     "dpaste.com",
     "sprunge.us",
+    # Yandex Disk: a shared file-drop service, not the project's own host.
+    # Weight 15 (raw_hosting), not 0 (official): any account can upload there.
+    "downloader.disk.yandex.ru",
 ]
 """
 
