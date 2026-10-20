@@ -227,6 +227,33 @@ def test_multi_line_arrays_keep_their_opening_line_items():
     assert props["source_orgs"] == frozenset({"github.com/org", "gitlab.com/other"})
 
 
+def test_source_properties_resolve_recipe_variables():
+    """fluxa-desktop-bin wrote its source as ``${_url}/releases/...``.
+
+    The literal walk saw no scheme, so source_hosts/source_orgs were empty,
+    update_properties recorded a break, and H049 fired twice on a routine
+    version bump.  Read the resolved recipe instead.
+    """
+    from trustsight.full_aur.properties import extract_properties
+
+    pkgbuild = (
+        "pkgname=fluxa-desktop-bin\n"
+        "pkgver=1.2.3\n"
+        '_url="https://github.com/FluxaMedia/fluxa-desktop"\n'
+        'source=("fluxa-${pkgver}.deb::${_url}/releases/download/v${pkgver}/'
+        'fluxa-${pkgver}.deb")\n'
+    )
+    props = extract_properties(pkgbuild)
+    assert props["source_hosts"] == frozenset({"github.com"})
+    assert props["source_orgs"] == frozenset({"github.com/FluxaMedia"})
+
+    # A genuine host move still changes the property, so the fix does not
+    # merely stop H049 firing.
+    moved = pkgbuild.replace("github.com/FluxaMedia", "mirror.evil.test/x")
+    assert extract_properties(moved)["source_hosts"] == frozenset(
+        {"mirror.evil.test"})
+
+
 def test_one_line_function_bodies_are_recorded_and_closed():
     """``build() { make; }`` has a body, and it ends on the same line.
 

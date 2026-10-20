@@ -11,6 +11,7 @@ import json
 import logging
 import re
 
+from ..differ import resolved_source_urls
 from ..recipedoc import _function_body_segments
 from ..tokenizer import split_lines
 from dataclasses import dataclass
@@ -218,33 +219,13 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
                     in_depends = False
     props["depends"] = _bounded(depends)
 
-    # source_hosts / source_orgs: extracted from source=() entries
+    # source_hosts / source_orgs: extracted from source=() entries.  Read the
+    # resolved recipe: a source written as `${url}/releases/...` names no host
+    # in the literal text, and an empty property broke H049 on every bump.
     hosts: set[str] = set()
     orgs: set[str] = set()
-    in_source = False
-    for line in split_lines(new_pkgbuild):
-        stripped = line.strip()
-        m = re.match(r"^\s*source(?:_x86_64|_i686|_any)?\s*=\s*\(([^)]*)\)", stripped)
-        if m:
-            # single-line: source=('https://...')
-            for u in _URL_RE.finditer(m.group(1)):
-                _extract_host_org(u.group(0), hosts, orgs)
-            continue
-        m = re.match(r"^\s*source(?:_x86_64|_i686|_any)?\s*=\s*\((.*)", stripped)
-        if m:
-            # multi-line: source=('https://...'  - opening line carries items too
-            in_source = True
-            for u in _URL_RE.finditer(m.group(1)):
-                _extract_host_org(u.group(0), hosts, orgs)
-            continue
-        if in_source:
-            if stripped.startswith(")"):
-                in_source = False
-                continue
-            for u in _URL_RE.finditer(stripped):
-                _extract_host_org(u.group(0), hosts, orgs)
-            if ")" in stripped:
-                in_source = False
+    for url in resolved_source_urls(new_pkgbuild):
+        _extract_host_org(url, hosts, orgs)
     props["source_hosts"] = _bounded(hosts)
     props["source_orgs"] = _bounded(orgs)
 
@@ -306,9 +287,6 @@ def _classify_version(pkgver: str) -> str:
 def _tokenize_desc(desc: str) -> list[str]:
     tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9_-]*", desc.lower())
     return [t for t in tokens if t not in _STOPWORDS]
-
-
-_URL_RE = re.compile(r"https?://[^\s\"')\]]+")
 
 
 def _extract_host_org(url: str, hosts: set[str], orgs: set[str]) -> None:
