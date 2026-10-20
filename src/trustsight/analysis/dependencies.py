@@ -107,6 +107,76 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
                 return
 
 
+def name_shadow_findings(text: str, package_name: str,
+                         skip: set[str] | None = None) -> list[dict]:
+    """D005: a name that shadows an established package, as absolute state.
+
+    H064/D004 own *newly added* ``provides``/``replaces``/``conflicts``; this
+    rule owns the name a recipe carries now, including one whose target only
+    became an official package later.  Two signals:
+
+    * a ``pkgname`` output that is exactly an established package - the AUR
+      package claims a name pacman already resolves elsewhere;
+    * a ``conflicts`` entry naming an established package unrelated to this
+      one (a variant such as ``foo-git`` conflicting ``foo`` is the ordinary
+      pattern and is suppressed).
+
+    *skip* holds names already reported by the diff-time rules, so an added
+    conflict is not reported twice.  Weight 0 until the benign corpus
+    calibrates it; cold start (no pacman, no observations) fires nothing.
+    """
+    if not text:
+        return []
+    from ..findings import stamp
+    from ..recipedoc import parse_recipe
+
+    try:
+        doc = parse_recipe(text, file="PKGBUILD")
+    except Exception:
+        return []
+
+    skip = skip or set()
+    findings: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def emit(name: str, kind: str, match: str) -> None:
+        key = (kind, name)
+        if key in seen:
+            return
+        seen.add(key)
+        findings.append(stamp({
+            "rule_id": "D005", "name": "Official-Repo Name Shadow",
+            "severity": "MEDIUM", "category": "dependency",
+            "weight_override": 0, "match": match,
+            "file": "PKGBUILD", "line": None,
+            "params": {"kind": kind, "dep_name": name,
+                       "package_name": package_name},
+        }))
+
+    for name in sorted(declared_package_names(text)):
+        if name in skip:
+            continue
+        if is_established_package(name):
+            emit(name, "pkgname",
+                 f"pkgname '{name}' is an established package")
+
+    conflicts = {
+        entry
+        for field, entries in doc.arrays.items()
+        if field == "conflicts" or field.startswith("conflicts_")
+        for entry in entries
+    }
+    for name in sorted(conflicts):
+        if name in skip or is_related_package(name, package_name):
+            continue
+        if is_established_package(name):
+            emit(name, "conflicts",
+                 f"conflicts claims '{name}', an established package "
+                 f"unrelated to '{package_name}'")
+
+    return findings
+
+
 def _dependency_findings(diff_text, package_name, config, add, current_text=None,
                          delta=None) -> None:
     added_deps = _added_deps(diff_text, package_name, delta)
@@ -133,6 +203,15 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                 n_novel=len(novel), novel_names=", ".join(novel))
 
     _scope_expansion_findings(diff_text, package_name, config, add, delta=delta)
+
+    for shadow in name_shadow_findings(
+        current_text or "", package_name,
+        skip=set(added_deps.get("conflicts", ())),
+    ):
+        add(shadow["rule_id"], shadow["name"], shadow["severity"],
+            shadow["category"], shadow["match"],
+            weight_override=shadow.get("weight_override"),
+            **(shadow.get("params") or {}))
 
     wanted = {r for r in ("D001", "D002", "D003", "D004")
               if _code_rule_enabled(config, r)}

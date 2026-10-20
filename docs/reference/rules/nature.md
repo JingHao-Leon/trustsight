@@ -94,7 +94,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## D-series: **Dependency** Graph Analysis
 
-**Count:** 4 rules (D001-D004)
+**Count:** 5 rules (D001-D005)
 
 **Mechanism:** Graph algorithms walk the AUR dependency tree to detect naming anomalies, typosquatting, or suspicious dependency additions. D-series rules compare package names against known-good lists or edit-distance thresholds, and flag new network-using makedepends. Unlike H-series (which examines behavioral context) and C-series (which checks structural invariants), D-series operates specifically on the dependency graph topology.
 
@@ -165,7 +165,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## P-series: **Practice** Declared Practices
 
-**Count:** 7 rules (P001-P008; P004 is skipped)
+**Count:** 8 rules (P001-P009; P004 is skipped)
 
 **Mechanism:** Reports practices the recipe *declares*, not risks that were found. P-series findings are emitted at weight 0 and never contribute to the score. They exist so a reviewer can see what the recipe claims (checksums, PGP keys, pinned sources) without those claims being able to lower the score.
 

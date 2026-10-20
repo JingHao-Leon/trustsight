@@ -93,7 +93,7 @@ Everything TrustSight sees is attacker-declared, and TrustSight never fetches,
 so it never confirms that a declared key signs anything or that a pinned commit
 holds what it claims. A signal an attacker can assert for free must not be able
 to lower a score. These facts are now reported as weight-0 declared-practice
-findings in the `P` namespace (`P001`-`P008`, P004 skipped); see
+findings in the `P` namespace (`P001`-`P009`, P004 skipped); see
 [the security model](../security.md#b10-positive-evidence-is-reported-never-credited).
 
 Pinning classification via `classify_pinning_level()` in

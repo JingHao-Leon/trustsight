@@ -5,9 +5,9 @@
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
 rules X001-X034, integrity-change rules C001-C032, dependency rules
-D001-D004, temporal rules T001-T003 and T006-T007, correlation rules G001-G010, entropy
+D001-D005, temporal rules T001-T003 and T006-T007, correlation rules G001-G010, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M006, upstream
-rules U001-U010, artifact rules A001-A008, declared-practice rules P001-P008 (P004 skipped), and
+rules U001-U010, artifact rules A001-A008, declared-practice rules P001-P009 (P004 skipped), and
 unverifiable rules W001-W012.
 
 Each rule contributes according to its severity weight, match target and
@@ -47,7 +47,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Install and Persistence](install-and-persist.md) | `install-and-persist` | 22 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 10 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
 | [Integrity and Verification](integrity.md) | `integrity` | 46 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
-| [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 10 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
+| [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 12 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 14 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 8 | How recently the package or this revision appeared, independent of any diff content. |
 | [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
@@ -140,6 +140,7 @@ is deliberately non-contiguous; see
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
 | [D004](naming-and-dependency.md#d004) | Dependency Hijack Via Provides | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
+| [D005](naming-and-dependency.md#d005) | Official-Repo Name Shadow | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
 | [E001](entropy.md#e001) | Added-Text Compression Ratio | Entropy | MEDIUM | [Entropy](entropy.md) |
 | [E002](entropy.md#e002) | Encoded-Alphabet Fraction | Entropy | MEDIUM | [Entropy](entropy.md) |
 | [E003](entropy.md#e003) | Identifier Entropy | Entropy | MEDIUM | [Entropy](entropy.md) |
@@ -256,6 +257,7 @@ is deliberately non-contiguous; see
 | [H101](integrity.md#h101) | Source Pinning Lost | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
 | [H102](composition.md#h102) | Maintainer Change With Signing Key Change | Heuristic | HIGH | [Composition](composition.md) |
 | [H103](integrity.md#h103) | Metadata And Recipe Disagree | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H104](naming-and-dependency.md#h104) | Placeholder Package | Heuristic | INFO | [Naming and Dependencies](naming-and-dependency.md) |
 | [M001](meta.md#m001) | Claim Contradicted By Structure | Meta | HIGH | [Meta and Confluence](meta.md) |
 | [M002](meta.md#m002) | Weak Signal Across Layers | Meta | MEDIUM | [Meta and Confluence](meta.md) |
 | [M003](meta.md#m003) | Composition Not Owned Elsewhere | Meta | MEDIUM | [Meta and Confluence](meta.md) |
@@ -370,6 +372,6 @@ is deliberately non-contiguous; see
 | [X034](crossfire.md#x034) | Fetch Laundered Through An Archival Service | Crossfire | - | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
-Weight-0 declared-practice findings (`P001`-`P008`, P004 skipped) are not detections
+Weight-0 declared-practice findings (`P001`-`P009`, P004 skipped) are not detections
 and have no category. They are documented in
 [the system reference](system.md#declared-practice).

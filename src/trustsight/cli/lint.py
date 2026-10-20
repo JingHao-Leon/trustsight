@@ -145,6 +145,27 @@ def lint_report(text: str, filename: str) -> dict:
             "message": parity["match"],
         })
 
+    from ..analysis.placeholder import placeholder_finding
+
+    placeholder = placeholder_finding(text)
+    if placeholder is not None:
+        findings.append({
+            "rule_id": placeholder["rule_id"],
+            "severity": placeholder["severity"],
+            "message": placeholder["match"],
+        })
+
+    from ..analysis.dependencies import name_shadow_findings
+
+    for shadow in name_shadow_findings(
+        text, str(recipe.scalars.get("pkgname", "") or ""),
+    ):
+        findings.append({
+            "rule_id": shadow["rule_id"],
+            "severity": shadow["severity"],
+            "message": shadow["match"],
+        })
+
     return {
         "file": filename,
         "parsed": True,

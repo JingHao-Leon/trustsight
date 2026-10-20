@@ -83,6 +83,10 @@ TEMPLATES: dict[str, str] = {
     "H042": "{position}() drops a hidden file outside the build trees: {path}",
     "H062": "{position}() installs a pacman hook: {path}",
 
+    # --- naming / placeholder ---
+    "H104": "{match}",
+    "D005": "{match}",
+
     # --- kill-chain composition ---
     "H040": "{position}() profiles the host: {probe}",
     "H043": "rule hits span {n_stages} distinct kill-chain stages: {stages}",
@@ -216,6 +220,7 @@ NON_CONTENT_RULES = {
     "H020": "temporal", "H021": "temporal", "H022": "temporal",
     "H026": "maintainer", "H027": "maintainer", "H028": "maintainer",
     "H029": "naming", "H030": "naming", "H037": "longitudinal",
+    "H104": "naming",
     "H044": "corpus", "H045": "corpus", "H046": "corpus", "H047": "longitudinal",
     "H048": "longitudinal", "H049": "longitudinal", "H050": "longitudinal",
     "H051": "longitudinal", "H052": "corpus", "H053": "corpus",
@@ -223,7 +228,7 @@ NON_CONTENT_RULES = {
     "H058": "corpus", "H059": "corpus", "H060": "corpus", "H061": "corpus",
     "H073": "corpus", "H074": "corpus",
     "D001": "dependency", "D002": "dependency", "D003": "dependency",
-    "D004": "dependency",
+    "D004": "dependency", "D005": "dependency",
     "R059": "context", "H015": "context", "H023": "context", "H025": "context",
     "H031": "context", "H038": "context", "H043": "composite",
     "H098": "composite",

@@ -79,7 +79,7 @@ from ..coverage import (
     unresolved_source_lines,
 )
 from ..diffdoc import parse_diff_lines
-from ..scoring import calculate_score
+from ..scoring import calculate_score, prebuilt_declared
 from ..schema import (
     with_changes,
     DiffSummary,
@@ -478,7 +478,8 @@ def analyze_package_text(
             degraded_stages=stage_failures(),
         )
         score, breakdown, risk = calculate_score(
-            triggered_rules, {}, novelty, config, coverage_gaps=gaps
+            triggered_rules, {}, novelty, config, coverage_gaps=gaps,
+            prebuilt=prebuilt_declared(new_pkgbuild),
         )
 
         fact = PackageFact(
@@ -722,6 +723,7 @@ def analyze_package_text(
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
+        prebuilt=prebuilt_declared(new_pkgbuild),
     )
 
     fact = PackageFact(

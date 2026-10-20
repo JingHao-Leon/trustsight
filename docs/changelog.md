@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- **H104 Placeholder Package.** A recipe that claims a name and ships nothing - two of three of `pkgver=0.0.0`, a `package`/`package_*` body with no install verb or `$pkgdir` write, and a dummy or empty checksum - is reported as **H104 Placeholder Package** (INFO, weight 0), on the fresh and incremental analysis paths and in `trustsight lint`. It is the per-package signal a maintainer burst (G011) will aggregate, and weight 0 until the benign corpus calibrates it.
+- **D005 Official-Repo Name Shadow.** A `pkgname` output that is exactly an established package, or a `conflicts` entry naming an established package unrelated to this one, is reported as **D005** (MEDIUM, weight 0). H064/D004 own the *added* `provides`/`replaces`/`conflicts`; this rule owns the name the recipe carries now, including a conflict whose target became an official package after it was declared. The `foo-git`/`foo` variant pattern is suppressed, and cold start fires nothing.
+- **P009 Prebuilt Deliverable Declared, and its M001 contradiction.** A recipe that declares it ships an upstream-built deliverable - a `-bin`/`-appimage`/`-wine` name, or a `source=` entry that is a prebuilt artifact - is reported as **P009** (INFO, weight 0, `--verbose`). `M001` now pairs it with **H066**: a package that declares an upstream-built binary while committing an ELF to the repository outside `source=()` is "the recipe says one thing and structurally does another". The fresh path now passes its declared claims to the M-series explicitly, so an undeclared `H066` cannot escalate on its own.
+
 ### Changed
 
 - **G009 accepts package entries and is now "Watchlisted Subject".** The operator watchlist can name a package directly under `packages` in `~/.config/trustsight/watchlist.json`, beside the existing salted-hash maintainer entries. A package name is already public in every record and report, so it is stored as written and `add_package()` needs no seeded database; the maintainer path and its privacy properties are unchanged. G009 keeps its id, uid and INFO/weight 0 status, and emits `params.subject` as `package` or `maintainer`.

@@ -73,6 +73,7 @@ def pseudo_rule_ids() -> list[str]:
         scoring.P_TAG_PINNED,
         scoring.P_TRUSTED_FORGE,
         scoring.P_NO_COMMIT_PIN,
+        scoring.P_PREBUILT,
     })
 
 

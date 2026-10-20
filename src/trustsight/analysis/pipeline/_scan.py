@@ -259,12 +259,14 @@ def scan_diff(
     # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
     from ..meta import alert_volume_finding, m_series_findings, m_tool_health
-    from ...scoring import declared_claims
+    from ...scoring import declared_claims, prebuilt_declared
 
+    prebuilt = prebuilt_declared(current_text)
     triggered_rules.extend(m_series_findings(
         triggered_rules, config,
         claims=declared_claims(
-            verification_evidence, aggregate_pinning, source_buckets)))
+            verification_evidence, aggregate_pinning, source_buckets,
+            prebuilt=prebuilt)))
     _volume = alert_volume_finding(triggered_rules, config)
     if _volume:
         triggered_rules.append(_volume)
@@ -275,6 +277,7 @@ def scan_diff(
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
+        prebuilt=prebuilt,
     )
 
     ioc_matches = ioc_baseline_matches(

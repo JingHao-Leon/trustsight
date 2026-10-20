@@ -485,6 +485,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     # --- naming and dependencies ---------------------------------------
     "H006": _C.NAMING_AND_DEPENDENCY,
     "H029": _C.NAMING_AND_DEPENDENCY,
+    "H104": _C.NAMING_AND_DEPENDENCY,
     "H048": _C.NAMING_AND_DEPENDENCY,
     "H053": _C.NAMING_AND_DEPENDENCY,
     "H059": _C.NAMING_AND_DEPENDENCY,
@@ -493,6 +494,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "D002": _C.NAMING_AND_DEPENDENCY,
     "D003": _C.NAMING_AND_DEPENDENCY,
     "D004": _C.NAMING_AND_DEPENDENCY,
+    "D005": _C.NAMING_AND_DEPENDENCY,
     # --- maintainer and metadata ---------------------------------------
     "H026": _C.MAINTAINER_AND_METADATA,
     "H037": _C.MAINTAINER_AND_METADATA,

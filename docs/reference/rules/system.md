@@ -98,7 +98,7 @@ be a script the recipe executes.
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X034, C001-C032, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X034, C001-C032, D001-D005 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -109,12 +109,12 @@ The U-series reads what a recipe declares about upstream. From the committed dep
 Rules only contribute to Tier A. Tiers B and C are computed independently and added to the score alongside the rule contributions.
 
 Tier D contributes nothing to the score. Declared verification is emitted as
-weight-0 `P001`-`P008` findings and reported to the reader: TrustSight never
+weight-0 `P001`-`P009` findings and reported to the reader: TrustSight never
 fetches, so it cannot confirm that a declared key signs anything, and a signal
 an attacker can assert for free must not be able to lower a score. See
 [B10](../../security.md#b10-positive-evidence-is-reported-never-credited).
 
-### Declared-practice findings (P001-P008) {#declared-practice}
+### Declared-practice findings (P001-P009) {#declared-practice}
 
 The P namespace reports practices the recipe *declares*, not risks that were
 found. The `P` prefix exists so a reader seeing `P0xx` in the output knows at
@@ -131,9 +131,10 @@ rendered from `DECLARED_REASONS`.
 | `P006` | Source pinned to a tag - the weaker pin, which `H033` exists to flag because a tag can be repointed |
 | `P007` | Source hosted on a trusted forge over HTTPS (`trusted_forge` bucket) |
 | `P008` | Source tracks a branch or unpinned ref, so upstream decides at build time what this compiles and runs |
+| `P009` | Recipe declares a prebuilt deliverable: a `-bin`/`-appimage`/`-wine` name or a prebuilt-artifact source. `M001` pairs it with `H066` (an undeclared committed ELF) |
 
-`P004` is skipped, so the family has seven members rather than eight. Four of
-them - `P002`, `P003`, `P005` and `P008` - render unprompted; the other three
+`P004` is skipped, so the family has eight members rather than nine. Four of
+them - `P002`, `P003`, `P005` and `P008` - render unprompted; the other four
 render under `--verbose`. Stating every declared practice on every package
 would bury the risk findings, which is the opposite of what the group is for,
 so the default set is the ones a reader would find *surprising by their
@@ -811,6 +812,11 @@ See [D002: Typosquatted Dependency](naming-and-dependency.md#d002).
 ### D004 {#d004}
 
 See [D004: Dependency Hijack Via Provides](naming-and-dependency.md#d004).
+
+
+### D005 {#d005}
+
+See [D005: Official-Repo Name Shadow](naming-and-dependency.md#d005).
 
 
 ### D003 {#d003}
@@ -1607,6 +1613,10 @@ See [H102: Maintainer Change With Signing Key Change](composition.md#h102).
 ### H103 {#h103}
 
 See [H103: Metadata And Recipe Disagree](integrity.md#h103).
+
+### H104 {#h104}
+
+See [H104: Placeholder Package](naming-and-dependency.md#h104).
 
 ### X024 {#x024}
 

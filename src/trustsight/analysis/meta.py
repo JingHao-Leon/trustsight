@@ -53,6 +53,9 @@ _CONTRADICTIONS: tuple[tuple[str, str, str], ...] = (
     ("P007", "H099",
      "a source is hosted on a trusted forge (P007) while H099 reports the "
      "host swapped under a kept local name"),
+    ("P009", "H066",
+     "the recipe declares a prebuilt deliverable (P009) while H066 reports "
+     "an ELF binary committed to the repository outside source=()"),
 )
 
 

@@ -91,8 +91,10 @@ from ..composition import (
     naming_cluster_annotation,
     naming_typosquat_finding,
 )
+from ..dependencies import name_shadow_findings
 from ..ioc_match import ioc_baseline_matches
 from ..maintainer import _check_untrusted_maintainer_takeover
+from ..placeholder import placeholder_finding
 from ..structural import (
     _structural_findings,
     partial_install_files,
@@ -599,6 +601,10 @@ def analyze_package(
         ),
     )
 
+    placeholder = placeholder_finding(head_pkgbuild)
+    if placeholder:
+        triggered_rules.append(placeholder)
+
     triggered_rules.extend(_meta_annotations(triggered_rules, config))
 
     if effective_observation_count() > 0:
@@ -734,12 +740,14 @@ def analyze_package(
     # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
     from ..meta import alert_volume_finding, m_series_findings, m_tool_health
-    from ...scoring import declared_claims
+    from ...scoring import declared_claims, prebuilt_declared
 
+    prebuilt = prebuilt_declared(head_pkgbuild)
     triggered_rules.extend(m_series_findings(
         triggered_rules, config,
         claims=declared_claims(
-            verification_evidence, aggregate_pinning, source_buckets)))
+            verification_evidence, aggregate_pinning, source_buckets,
+            prebuilt=prebuilt)))
     _volume = alert_volume_finding(triggered_rules, config)
     if _volume:
         triggered_rules.append(_volume)
@@ -750,6 +758,7 @@ def analyze_package(
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
+        prebuilt=prebuilt,
     )
 
     ioc_matches = ioc_baseline_matches(
@@ -948,6 +957,10 @@ def _make_fresh_analysis(
     parity = recipe_checksum_parity_finding(head_pkgbuild)
     if parity:
         triggered_rules.append(parity)
+    placeholder = placeholder_finding(head_pkgbuild)
+    if placeholder:
+        triggered_rules.append(placeholder)
+    triggered_rules.extend(name_shadow_findings(head_pkgbuild, pkg_name))
     triggered_rules.extend(
         apply_structural_rules("", current_text=head_pkgbuild, package_name=pkg_name)
     )
@@ -980,13 +993,17 @@ def _make_fresh_analysis(
     # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
     from ..meta import alert_volume_finding, m_series_findings
+    from ...scoring import declared_claims, prebuilt_declared
 
-    triggered_rules.extend(m_series_findings(triggered_rules, config))
+    prebuilt = prebuilt_declared(head_pkgbuild)
+    triggered_rules.extend(m_series_findings(
+        triggered_rules, config, claims=declared_claims(prebuilt=prebuilt)))
     _volume = alert_volume_finding(triggered_rules, config)
     if _volume:
         triggered_rules.append(_volume)
     score, breakdown, risk = calculate_score(
         triggered_rules, {}, novelty, config, coverage_gaps=gaps,
+        prebuilt=prebuilt,
     )
     fact = PackageFact(
         package_name=pkg_name,

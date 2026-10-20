@@ -22,7 +22,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 - R-series regex rules and H-series heuristics, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
 - H001/H002 checksum integrity rules (hard-coded, not TOML).
 - C001-C032 structural anomaly rules (checksum/source integrity heuristics).
-- D001-D004 dependency-graph rules.
+- D001-D005 dependency-graph rules.
 
 ### Availability
 
@@ -182,7 +182,7 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 | A | Structural | Yes | No | Positive | 40 (CRITICAL); a FATAL finding contributes weight 0 and names itself in the verdict label |
 | B | Priors/Context | Yes | No | Positive only | +30 (homograph); trusted forge is 0 |
 | C | History/Novelty | No : zero without a seed | Yes (×0→1) | Positive only | +15 (maintainer) |
-| D | Verification | Yes | No | Reported, never scored | 0 (`P001`-`P008`) |
+| D | Verification | Yes | No | Reported, never scored | 0 (`P001`-`P009`) |
 
 ---
 

@@ -1,3 +1,5 @@
+import re
+
 from .config import DEFAULT_NOVELTY_WEIGHTS, load_config
 from .coverage import GAP_REASONS, fail_closed, inconclusive_label, qualified_band
 from .schema import NoveltyContext, ScoreEntry
@@ -41,6 +43,7 @@ P_COMMIT_PINNED = "P005"
 P_TAG_PINNED = "P006"
 P_TRUSTED_FORGE = "P007"
 P_NO_COMMIT_PIN = "P008"
+P_PREBUILT = "P009"
 
 # Buckets whose membership is itself the declared fact.  Kept beside the
 # weights so that changing a weight cannot change which findings exist.
@@ -59,8 +62,56 @@ _EVIDENCE_IDS = {
     "gpg_verify_present": P_SIGNATURE_SOURCE,
 }
 
+#: Name suffixes that declare a repackaged upstream binary.  These are the AUR
+#: convention H066 excludes from its "committed ELF" clause.
+_PREBUILT_NAME_SUFFIXES = ("-bin", "-appimage", "-wine")
+
+#: The source-artifact extensions C005 reads; a source ending in one of these
+#: declares a prebuilt deliverable just as plainly as the name suffix does.
+_PREBUILT_ARTIFACT_RE = re.compile(
+    r"\.(?:bin|exe|elf|so|dll|dylib|appimage|deb|rpm|apk|msi|jar|run)"
+    r"(?:\?|#|$)",
+    re.IGNORECASE,
+)
+
+
+def prebuilt_declared(text: str | None) -> bool:
+    """True when the recipe declares it ships an upstream-built deliverable.
+
+    Two declarations count: a ``pkgname`` output with a prebuilt suffix
+    (``-bin``/``-appimage``/``-wine``), or a ``source=`` entry that is itself
+    a prebuilt artifact (C005's extension set).  This is a declared fact, not
+    a risk - P009 is weight 0.  It exists so M001 can pair the declaration
+    against a committed binary the recipe did not declare.
+    """
+    if not text:
+        return False
+    from .recipedoc import parse_recipe
+
+    try:
+        doc = parse_recipe(text, file="PKGBUILD")
+    except Exception:  # noqa: BLE001 - an unread recipe declares nothing
+        return False
+
+    names = list(doc.arrays.get("pkgname") or ())
+    if not names and doc.scalars.get("pkgname"):
+        names = [doc.scalars["pkgname"]]
+    for name in names:
+        if str(name).strip().strip("\"'").lower().endswith(
+                _PREBUILT_NAME_SUFFIXES):
+            return True
+
+    for field, entries in doc.arrays.items():
+        if field != "source" and not field.startswith("source_"):
+            continue
+        for entry in entries:
+            if _PREBUILT_ARTIFACT_RE.search(str(entry)):
+                return True
+    return False
+
+
 def declared_claims(verification_evidence=None, pinning_level: str = "",
-                    source_buckets=None) -> set[str]:
+                    source_buckets=None, prebuilt: bool = False) -> set[str]:
     """The P-series claim ids a run's declared facts imply.
 
     The same inputs :func:`calculate_score` turns into P findings, exposed as
@@ -78,6 +129,8 @@ def declared_claims(verification_evidence=None, pinning_level: str = "",
         claims.add(pin)
     if any(bucket in DECLARED_BUCKETS for bucket in (source_buckets or {}).values()):
         claims.add(P_TRUSTED_FORGE)
+    if prebuilt:
+        claims.add(P_PREBUILT)
     return claims
 
 
@@ -97,6 +150,10 @@ DECLARED_REASONS = {
     P_NO_COMMIT_PIN: (
         "source tracks a branch or unpinned ref; upstream decides at build "
         "time what this compiles and runs"
+    ),
+    P_PREBUILT: (
+        "the recipe declares a prebuilt deliverable (-bin/-appimage/-wine "
+        "name or a prebuilt-artifact source)"
     ),
 }
 
@@ -322,6 +379,7 @@ def calculate_score(
     verification_evidence: list[str] | None = None,
     pinning_level: str = "unpinned",
     coverage_gaps: list[str] | None = None,
+    prebuilt: bool = False,
 ) -> tuple[int, list[ScoreEntry], str]:
     """Calculate the final trust score from triggered rules and context.
 
@@ -525,6 +583,14 @@ def calculate_score(
             ScoreEntry(
                 rule_id=evidence_id, severity="INFO", weight=0,
                 reason=DECLARED_REASONS[evidence_id],
+            )
+        )
+
+    if prebuilt:
+        breakdown.append(
+            ScoreEntry(
+                rule_id=P_PREBUILT, severity="INFO", weight=0,
+                reason=DECLARED_REASONS[P_PREBUILT],
             )
         )
 

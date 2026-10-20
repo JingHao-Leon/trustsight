@@ -43,12 +43,14 @@ severity weights and the reserved identifier ranges.
 | [D002](#d002) | Typosquatted Dependency | HIGH |
 | [D003](#d003) | New Network-Using Makedepends | MEDIUM |
 | [D004](#d004) | Dependency Hijack Via Provides | HIGH |
+| [D005](#d005) | Official-Repo Name Shadow | MEDIUM |
 | [H006](#h006) | New Make/Opt/Check Dependency | - |
 | [H029](#h029-rule) | Package-Name Typosquat | HIGH |
 | [H048](#h048) | Dependency Vendored Into Source | HIGH |
 | [H053](#h053) | Name/Host Consensus Divergence | MEDIUM |
 | [H059](#h059) | Name/Repo Divergence | MEDIUM |
 | [H064](#h064) | Provides/Replaces Scope Expansion | HIGH |
+| [H104](#h104) | Placeholder Package | INFO |
 <!-- /generated: page-index -->
 
 ### H006: New Make/Opt/Check Dependency {#h006}
@@ -217,3 +219,23 @@ finding names the prefix and the host so the reader can judge that call.
 - **Category:** `source`
 
 - **Condition:** The package name and the repository it is built from share no meaningful token.
+
+### H104: Placeholder Package {#h104}
+
+- **Target:** programmatic (recipe text, 2-of-3 signals)
+- **Severity:** INFO (weight 0, report-only)
+- **Category:** `naming`
+
+- **Condition:** **Two of three** signals: `pkgver` is `0.0.0`; every `package`/`package_*` body ships nothing (only `echo`/`printf`/`true`/`:`, no install verb and no write into `$pkgdir`); and the declared checksum is a dummy sentinel (`DUMMY-FOR-INITIALIZATION`, a single repeated character, `SKIP`) or there is neither a source nor a checksum.
+
+A placeholder reserves a name in the AUR while installing nothing - it builds, runs, and ships an empty package. Individually it is inert, so the finding is not a payload claim: it states that the recipe claims a name it does not fill, which is worth a human's eye because a burst of them is a name-squatting campaign ([G011](correlation.md#g011)). The two-of-three threshold keeps a legitimate project pinned at a `0.0.0` release or an unusual-but-real package function from reading as a reservation. Weight 0 until the benign corpus calibrates it; read from the recipe text, so it fires identically whether the package is first seen, edited, or checked with `trustsight lint`.
+
+### D005: Official-Repo Name Shadow {#d005}
+
+- **Target:** programmatic (recipe text: pkgname/conflicts against official repos)
+- **Severity:** MEDIUM (weight 0, report-only)
+- **Category:** `dependency`
+
+- **Condition:** A ``pkgname`` output is exactly an established package, or a ``conflicts`` entry names an established package unrelated to this one.
+
+H064 and D004 own the *added* ``provides``/``replaces``/``conflicts``. This rule owns the name the recipe carries now: a split output whose name pacman already resolves elsewhere, or a conflict whose target became an official package after the recipe declared it. The variant carve-out is the ordinary pattern - ``foo-git`` conflicting ``foo`` is suppressed - so the finding names a name claim that stands alone. "Established" is official-repo membership, falling back to the dependency observation proxy exactly as H064 does, and cold start fires nothing. Weight 0 until the benign corpus calibrates it; the recipe's current text is read on the fresh path, the incremental path and ``trustsight lint``.
