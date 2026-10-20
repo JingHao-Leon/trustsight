@@ -421,7 +421,7 @@ def test_snapshot_manifest_bounds_total_members():
                 yield info
 
     fake = EndlessTar(10_000)
-    assert _snapshot_manifest(fake, max_members=5) == []
+    assert _snapshot_manifest(fake, max_members=5)[0] == []
     # At most `max_members` processed plus one already yielded by the
     # iterator when the check breaks the loop.
     assert fake.consumed <= 6

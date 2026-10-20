@@ -219,7 +219,8 @@ def _tar_with(members: int) -> tarfile.TarFile:
 
 def test_the_snapshot_manifest_stops_at_its_member_cap():
     """`getmembers()` parses the whole archive first; the walk is lazy now."""
-    manifest = corpus_fetch._snapshot_manifest(_tar_with(500), max_members=10)
+    manifest, _texts, _complete = corpus_fetch._snapshot_manifest(
+        _tar_with(500), max_members=10)
     assert len(manifest) == 10
 
 
@@ -425,7 +426,8 @@ def test_a_refused_snapshot_is_reported_as_a_coverage_gap(monkeypatch):
         corpus_fetch, "_http_get", side_effect=[buf.getvalue(), b"pkgname=demo\n"]
     ):
         (text, manifest, trailer, refused,
-         install, install_name) = corpus_fetch.fetch_pkgbuild_with_tree("demo")
+         install, install_name, manifest_texts,
+         manifest_complete) = corpus_fetch.fetch_pkgbuild_with_tree("demo")
 
     # The fallback still produced a PKGBUILD, so the run is not a failure -
     # which is exactly why the refusal has to be reported separately.

@@ -509,3 +509,80 @@ def test_u006_fires_when_a_lockfile_is_absent():
               "--- a/Cargo.lock\n+++ b/Cargo.lock\n@@ -1,1 +1,2 @@\n"
               " x\n+[[package]]\n")
     assert "U006" not in _ids(scan_diff(paired, package_name="p"))
+
+
+def test_tree_pairs_keep_remote_dependencies_only():
+    from trustsight.analysis.manifests import tree_remote_dependency_pairs
+
+    pairs, incomplete = tree_remote_dependency_pairs([
+        ("Cargo.toml", CARGO),
+    ])
+    assert (("evil", "evil.example")) in pairs
+    assert all(name != "serde" for name, _ in pairs)
+    assert not incomplete
+
+
+def test_tree_pairs_report_an_unreadable_manifest_as_incomplete():
+    from trustsight.analysis.manifests import tree_remote_dependency_pairs
+
+    pairs, incomplete = tree_remote_dependency_pairs([
+        ("Cargo.toml", CARGO),
+        ("package.json", "{"),
+    ])
+    assert pairs == {("evil", "evil.example")}
+    assert incomplete
+
+
+def test_tree_pairs_refuse_rather_than_truncate_at_the_pair_cap(monkeypatch):
+    from trustsight.analysis import manifests as m
+
+    monkeypatch.setattr(m, "MAX_UPSTREAM_DEP_PAIRS", 1)
+    text = "\n".join(
+        f'x{i} = {{ git = "https://h{i}.example/x.git" }}'
+        for i in range(3)
+    )
+    pairs, incomplete = m.tree_remote_dependency_pairs([
+        ("Cargo.toml", "[dependencies]\n" + text + "\n"),
+    ])
+    assert pairs == set()
+    assert incomplete
+
+
+def _tar_with_files(files):
+    import io
+    import tarfile
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tf:
+        for name, payload in files:
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            tf.addfile(info, io.BytesIO(payload))
+    buf.seek(0)
+    return tarfile.open(fileobj=buf, mode="r")
+
+
+def test_snapshot_reads_manifest_text_whole_and_keeps_heads_short():
+    from trustsight.full_aur.fetch import _snapshot_manifest
+
+    heads, texts, complete = _snapshot_manifest(_tar_with_files([
+        ("demo/PKGBUILD", b"pkgname=demo\n" * 20),
+        ("demo/Cargo.toml", CARGO.encode()),
+    ]))
+    assert complete
+    assert dict(texts)["demo/Cargo.toml"] == CARGO
+    head = dict(heads)["demo/Cargo.toml"]
+    assert len(head) <= 64
+    assert len(dict(heads)["demo/PKGBUILD"]) <= 64
+
+
+def test_snapshot_refuses_an_oversize_manifest_and_flags_incomplete(monkeypatch):
+    from trustsight.analysis import manifests
+    from trustsight.full_aur.fetch import _snapshot_manifest
+
+    monkeypatch.setattr(manifests, "MAX_UPSTREAM_MANIFEST_BYTES", 8)
+    heads, texts, complete = _snapshot_manifest(
+        _tar_with_files([("demo/Cargo.toml", CARGO.encode())]))
+    assert not complete
+    assert texts == []
+    assert dict(heads)["demo/Cargo.toml"]

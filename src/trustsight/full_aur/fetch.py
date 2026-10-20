@@ -310,15 +310,39 @@ def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
         return None
 
 
-def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[tuple[str, bytes]]:
-    """``(member_path, first_bytes)`` for each regular file in the tarball.
+def _snapshot_manifest(
+    tf: tarfile.TarFile, max_members: int = MAX_TAR_MEMBERS,
+) -> tuple[list[tuple[str, bytes]], list[tuple[str, str]], bool]:
+    """Heads, bounded manifest text, and whether the text is complete.
+
+    ``[(member_path, first_bytes)]`` for each regular file in the tarball,
+    plus ``[(member_path, text)]`` for committed dependency manifests (G004)
+    and a completeness flag.
 
     The AUR snapshot tarball comes from the AUR mirror, never from a
     PKGBUILD-declared ``source=`` URL, so reading it keeps the review path's
-    "no network, no execution" claim intact.  Only the head of each member
-    is read: H066 needs the magic bytes, not the whole file.
+    "no network, no execution" claim intact.  Heads stay at 64 bytes: H066
+    and the tree scanners need the magic bytes, not the whole file, and
+    handing them a manifest body would silently widen what those rules read.
+
+    Manifest text is read whole or not at all.  A member past the per-file
+    or per-package byte budget, or past the file-count budget, is refused:
+    reading its prefix and parsing that would report a complete dependency
+    set with its tail quietly removed, the seam A4/B2 forbid.  The caller
+    turns the incomplete flag into a coverage gap.
     """
+    from ..analysis.manifests import (
+        MAX_MANIFEST_BYTES,
+        MAX_UPSTREAM_MANIFEST_BYTES,
+        MAX_UPSTREAM_MANIFEST_FILES,
+        manifest_format,
+    )
+
     manifest: list[tuple[str, bytes]] = []
+    texts: list[tuple[str, str]] = []
+    complete = True
+    budget = MAX_UPSTREAM_MANIFEST_BYTES
+    text_files = 0
     # Count *iterations*, not appended files: a tar of directories,
     # symlinks or unreadable members leaves `len(manifest)` at zero while
     # the loop walks the whole archive, so a bound on the list does not
@@ -334,9 +358,22 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
             continue
         if f is None:
             continue
-        head = f.read(64)
-        manifest.append((member.name, head))
-    return manifest
+        if manifest_format(member.name) is None:
+            manifest.append((member.name, f.read(64)))
+            continue
+        too_large = (member.size > MAX_MANIFEST_BYTES
+                     or member.size > budget
+                     or text_files >= MAX_UPSTREAM_MANIFEST_FILES)
+        if too_large or not complete:
+            complete = False
+            manifest.append((member.name, f.read(64)))
+            continue
+        data = f.read(member.size)
+        manifest.append((member.name, data[:64]))
+        texts.append((member.name, data.decode("utf-8", "replace")))
+        budget -= len(data)
+        text_files += 1
+    return manifest, texts, complete
 
 
 def _fetch_snapshot_tarball(name: str) -> Optional[bytes]:
@@ -364,11 +401,12 @@ def fetch_pkgbuild_with_tree(
     name: str,
 ) -> tuple[
     Optional[str], Optional[list[tuple[str, bytes]]], Optional[dict], bool,
-    Optional[str], Optional[str],
+    Optional[str], Optional[str], Optional[list[tuple[str, str]]], bool,
 ]:
     """PKGBUILD text, the tree manifest, an H070 finding, a refusal flag,
-    the ``.install`` scriptlet text (or None), and that scriptlet's real
-    basename (or None).
+    the ``.install`` scriptlet text (or None), that scriptlet's real
+    basename (or None), bounded manifest text (or None), and whether that
+    text is complete.
 
     Downloads the snapshot tarball directly (GitHub's AUR mirror first, the
     AUR's own cgit second) so the corpus path sees the same committed file
@@ -397,7 +435,7 @@ def fetch_pkgbuild_with_tree(
         try:
             with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf:
                 pkgbuild = _pkgbuild_from_tarfile(tf, name)
-                manifest = _snapshot_manifest(tf)
+                manifest, manifest_texts, manifest_complete = _snapshot_manifest(tf)
                 if pkgbuild is not None:
                     # A fresh stream for the install file: reading the
                     # PKGBUILD has already consumed this one.
@@ -408,7 +446,8 @@ def fetch_pkgbuild_with_tree(
                     else:
                         install_text, install_name = None, None
                     return (pkgbuild, manifest, check_archive_trailer(body),
-                            False, install_text, install_name)
+                            False, install_text, install_name,
+                            manifest_texts, manifest_complete)
         except ReadTooLarge as e:
             # Not benign, and not silent: warning level, and the flag rides
             # out to the result so the analysis cannot read as complete.
@@ -420,7 +459,7 @@ def fetch_pkgbuild_with_tree(
             # bootstrap of tens of thousands of packages does not spam the
             # progress bar with one line per VCS/-bin package.
             log.debug("snapshot tarball for %s unusable: %s", name, e)
-    return fetch_pkgbuild(name), None, None, refused, None, None
+    return fetch_pkgbuild(name), None, None, refused, None, None, None, True
 
 
 def default_resume_path() -> Path:

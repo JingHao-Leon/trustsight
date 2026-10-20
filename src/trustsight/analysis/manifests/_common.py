@@ -8,9 +8,20 @@ from urllib.parse import urlsplit
 from ...buckets import canonical_host
 from ...tokenizer import split_lines
 
-__all__ = ['Dep', 'MAX_MANIFEST_BYTES', 'ManifestDoc', '_CARGO_REPLACE_RE', '_DEFAULT_REGISTRY_FRAGMENTS', '_FALLBACK_FILENAMES', '_FORGE_HOSTS', '_GIT_FIELD_RE', '_GIT_URL_RE', '_LEADING_KEY_RE', '_PEP508_URL_RE', '_REGISTRY_FIELD_RE', '_REGISTRY_KEY_RE', '_glob_rank', '_host', '_is_default_registry', '_live_text', '_matches', '_pep508', '_pep508_name', '_registry_host', '_table', '_url_source', 'manifest_filenames', 'manifest_format', 'upstream_redirect_signals', 'upstream_source_deps', 'upstream_source_hosts']
+__all__ = ['Dep', 'MAX_MANIFEST_BYTES', 'MAX_UPSTREAM_DEP_HOST_BYTES', 'MAX_UPSTREAM_DEP_NAME_BYTES', 'MAX_UPSTREAM_DEP_PAIRS', 'MAX_UPSTREAM_MANIFEST_BYTES', 'MAX_UPSTREAM_MANIFEST_FILES', 'ManifestDoc', '_CARGO_REPLACE_RE', '_DEFAULT_REGISTRY_FRAGMENTS', '_FALLBACK_FILENAMES', '_FORGE_HOSTS', '_GIT_FIELD_RE', '_GIT_URL_RE', '_LEADING_KEY_RE', '_PEP508_URL_RE', '_REGISTRY_FIELD_RE', '_REGISTRY_KEY_RE', '_glob_rank', '_host', '_is_default_registry', '_live_text', '_matches', '_pep508', '_pep508_name', '_registry_host', '_table', '_url_source', 'manifest_filenames', 'manifest_format', 'upstream_redirect_signals', 'upstream_source_deps', 'upstream_source_hosts']
 
 MAX_MANIFEST_BYTES = 512 * 1024
+
+# The corpus path reads manifest text from the snapshot tarball to answer
+# G004.  These bounds are per package and constants: together they cap the
+# bytes held in the fetch prefetch window and the dependency pairs a
+# hostile manifest can turn into database rows.  A package past a bound is
+# refused and reported as a coverage gap, never truncated and parsed.
+MAX_UPSTREAM_MANIFEST_BYTES = 256 * 1024
+MAX_UPSTREAM_MANIFEST_FILES = 64
+MAX_UPSTREAM_DEP_PAIRS = 4096
+MAX_UPSTREAM_DEP_NAME_BYTES = 256
+MAX_UPSTREAM_DEP_HOST_BYTES = 253
 
 _FALLBACK_FILENAMES: tuple[str, ...] = (
     "cargo::Cargo.toml",

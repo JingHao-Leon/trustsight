@@ -35,6 +35,11 @@ from ..manifest_syntax import (
 from ._common import (
     Dep,
     MAX_MANIFEST_BYTES,
+    MAX_UPSTREAM_DEP_HOST_BYTES,
+    MAX_UPSTREAM_DEP_NAME_BYTES,
+    MAX_UPSTREAM_DEP_PAIRS,
+    MAX_UPSTREAM_MANIFEST_BYTES,
+    MAX_UPSTREAM_MANIFEST_FILES,
     ManifestDoc,
     _CARGO_REPLACE_RE,
     _DEFAULT_REGISTRY_FRAGMENTS,
@@ -222,5 +227,51 @@ __all__ = [
     "upstream_source_deps",
     "upstream_source_hosts",
     "MAX_MANIFEST_BYTES",
+    "MAX_UPSTREAM_DEP_HOST_BYTES",
+    "MAX_UPSTREAM_DEP_NAME_BYTES",
+    "MAX_UPSTREAM_DEP_PAIRS",
+    "MAX_UPSTREAM_MANIFEST_BYTES",
+    "MAX_UPSTREAM_MANIFEST_FILES",
+    "tree_remote_dependency_pairs",
 ]
 
+
+def tree_remote_dependency_pairs(manifest_texts):
+    """``(pairs, incomplete)`` for committed manifests in a snapshot tree.
+
+    *manifest_texts* is ``[(path, text)]`` read from the AUR snapshot
+    tarball, or ``None`` when the fetch had no tree at all.  Only
+    dependencies carrying a remote host are returned: a default-registry
+    version bump is not the shared-upstream-dependency shape G004 joins, and
+    recording every registry name would make the feed churn with ordinary
+    dependency updates.
+
+    A refused or over-cap manifest makes the whole answer *incomplete*
+    rather than contributing a partial set.  The caller then preserves the
+    previous dependency snapshot and records a coverage gap: a truncated
+    manifest parsed as if whole is exactly the silent skip A4/B2 forbid.
+    """
+    if manifest_texts is None:
+        return set(), True
+    pairs: set[tuple[str, str]] = set()
+    incomplete = False
+    for path, text in manifest_texts:
+        doc = parse_manifest(path, text)
+        if doc is None:
+            continue
+        if doc.unresolved:
+            incomplete = True
+            continue
+        for dep in doc.dependencies:
+            if not dep.name or not dep.remote:
+                continue
+            name = str(dep.name)
+            host = str(dep.remote)
+            if (len(name.encode("utf-8", "replace")) > MAX_UPSTREAM_DEP_NAME_BYTES
+                    or len(host.encode("utf-8", "replace")) > MAX_UPSTREAM_DEP_HOST_BYTES):
+                incomplete = True
+                continue
+            pairs.add((name, host))
+            if len(pairs) > MAX_UPSTREAM_DEP_PAIRS:
+                return set(), True
+    return pairs, incomplete

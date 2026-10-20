@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import re
 
+from ..tokenizer import split_lines
+
 __all__ = ["placeholder_finding", "is_placeholder_recipe"]
 
 #: pkgver values that read as a not-yet-versioned reservation.
@@ -53,7 +55,7 @@ def _body_ships_nothing(body: str) -> bool:
     """
     from ..line_lex import strip_comment
 
-    for raw in body.splitlines():
+    for raw in split_lines(body):
         line = strip_comment(raw).strip()
         if not line:
             continue

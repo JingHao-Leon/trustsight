@@ -157,7 +157,7 @@ def fake_aur(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "fetch_metadata", lambda *a, **k: state["meta"])
     monkeypatch.setattr(
         pipeline, "fetch_pkgbuild_with_tree",
-        lambda base: ("pkgname=%s\npkgver=1.0\n" % base, None, None, False, None, None),
+        lambda base: ("pkgname=%s\npkgver=1.0\n" % base, None, None, False, None, None, None, True),
     )
     monkeypatch.setattr(pipeline, "save_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "clear_resume_state", lambda *a, **k: None)
@@ -198,6 +198,46 @@ def test_a_second_cycle_reports_the_takeover_once(fake_aur, monkeypatch):
 
     third = run_baseline_build()
     assert third.new_alerts == []
+
+
+def test_g004_fires_only_after_a_manifest_baseline(fake_aur, monkeypatch):
+    """The first observation of a package is a baseline, not an addition.
+
+    Two packages keep the same (empty) manifest on the bootstrap cycle, so
+    neither contributes an addition.  The next cycle both add the same
+    remote dependency, and only then does G004 join them.
+    """
+    import trustsight.full_aur.pipeline as pipeline
+    from trustsight.full_aur.pipeline import run_baseline_build
+
+    state = {"deps": "[dependencies]\n"}
+    monkeypatch.setattr(
+        pipeline, "fetch_pkgbuild_with_tree",
+        lambda base: (
+            "pkgname=%s\npkgver=1.0\n" % base, [], None, False,
+            None, None, [("Cargo.toml", state["deps"])], True,
+        ),
+    )
+    fake_aur["meta"] = {
+        "pkg": _entry("pkg", "alice", 1_800_000_000),
+        "other": _entry("other", "alice", 1_800_000_000),
+    }
+    first = run_baseline_build(bootstrap=True)
+    assert first.bootstrap
+    assert first.cluster_findings == []
+
+    state["deps"] = (
+        "[dependencies]\nevil = { git = \"https://evil.example/x.git\" }\n")
+    fake_aur["meta"] = {
+        "pkg": _entry("pkg", "alice", 1_800_000_100, version="2.0"),
+        "other": _entry("other", "alice", 1_800_000_100, version="2.0"),
+    }
+    second = run_baseline_build()
+    g004 = [f for f in second.cluster_findings if f["rule_id"] == "G004"]
+    assert len(g004) == 1
+    assert g004[0]["params"]["members"] == ["other", "pkg"]
+    assert g004[0]["params"]["dependency"] == "evil"
+    assert g004[0]["params"]["host"] == "evil.example"
 
 
 # --- bootstrap guard + per-cycle cap (safe-by-default corpus growth) ---

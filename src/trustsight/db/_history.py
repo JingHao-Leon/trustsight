@@ -6,7 +6,7 @@ from typing import Optional
 from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
 
-__all__ = ['MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
+__all__ = ['clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
 
 def get_history(package_id: int, limit: int = 20, *, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
     """Return recent analysis history for *package_id*, newest first.
@@ -157,8 +157,16 @@ def save_pkgbuild_snapshot(
     last_modified: int = 0,
     srcinfo_text: Optional[str] = None,
     install_text: Optional[str] = None,
+    manifest_deps: Optional[str] = None,
 ) -> None:
-    """Insert or update the PKGBUILD snapshot for *package_name*."""
+    """Insert or update the PKGBUILD snapshot for *package_name*.
+
+    *manifest_deps* is the JSON dependency set G004 compares against next
+    cycle.  ``None`` means "this caller did not observe a tree", so the
+    existing value is preserved: a baseline import (which has no live
+    manifest state) must not erase what the corpus learned, and must not
+    seed prior state it did not measure (A13).
+    """
     # Same guard as upsert_package.  These two tables are keyed by
     # package_name directly rather than through packages(id), so they were
     # the way round the reserved-name check: a baseline artifact, or an
@@ -170,17 +178,20 @@ def save_pkgbuild_snapshot(
         conn.execute(
             """INSERT INTO pkgbuild_snapshots
                (package_name, pkgbuild_text, srcinfo_text, install_text,
-                version, last_modified, captured_at)
-               VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                manifest_deps, version, last_modified, captured_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
                ON CONFLICT(package_name) DO UPDATE SET
                    pkgbuild_text = excluded.pkgbuild_text,
                    srcinfo_text = excluded.srcinfo_text,
                    install_text = excluded.install_text,
+                   manifest_deps = COALESCE(
+                       excluded.manifest_deps,
+                       pkgbuild_snapshots.manifest_deps),
                    version = excluded.version,
                    last_modified = excluded.last_modified,
                    captured_at = excluded.captured_at""",
             (package_name, pkgbuild_text, srcinfo_text, install_text,
-             version, last_modified),
+             manifest_deps, version, last_modified),
         )
         conn.commit()
 
@@ -412,6 +423,39 @@ def package_added_literals(package_name: str) -> list[tuple[str, int]]:
         ).fetchall()
     return [(r[0], int(r[1])) for r in rows]
 
+def clear_upstream_dep_additions() -> None:
+    """Drop the previous cycle's G004 additions.
+
+    The corpus writes nothing for a package it did not process, so an
+    append-only table would let a prior cycle's addition keep meeting a new
+    one indefinitely.  The feed is one cycle's state by construction: clear
+    it before the cycle analyses anything, then let each writer add only
+    what that package gained in this observation.
+    """
+    with get_connection() as conn:
+        conn.execute("DELETE FROM observed_upstream_deps")
+        conn.commit()
+
+def record_upstream_dep_additions(
+    package_name: str, pairs, observed_at: Optional[str] = None,
+) -> None:
+    """Record this cycle's ``(dependency, host)`` additions for a package."""
+    package_name = (package_name or "").strip()
+    if not package_name or not pairs:
+        return
+    with get_connection() as conn:
+        for pair in pairs:
+            name, host = str(pair[0]), str(pair[1])
+            if not name or not host:
+                continue
+            conn.execute(
+                """INSERT INTO observed_upstream_deps(
+                       package_name, dependency_name, host, observed_at)
+                   VALUES (?, ?, ?, COALESCE(?, datetime('now')))""",
+                (package_name, name, host, observed_at),
+            )
+        conn.commit()
+
 def record_property_transition(
     package_name: str, property_key: str,
     old_value, new_value, observed_at: Optional[str] = None,
@@ -468,13 +512,14 @@ def maintainer_first_seen(maintainer: str) -> Optional[str]:
 def correlation_feed(package_names) -> dict[str, dict]:
     """Per-package G-series inputs, read from the views.
 
-    ``{package: {hosts_gained, added_literals, maintainer,
-    adoption_predicates, adoption_observed_at}}``.  One pass over each view
+    ``{package: {hosts_gained, added_literals, upstream_dep_additions,
+    maintainer, adoption_predicates, adoption_observed_at}}``.  One pass over each view
     instead of a query per package, so correlation is O(cycle).
     """
     names = {str(n) for n in package_names if n}
     out = {
         name: {"hosts_gained": [], "added_literals": [],
+               "upstream_dep_additions": [],
                "maintainer": "", "adoption_predicates": [],
                "adoption_observed_at": ""}
         for name in names
@@ -490,6 +535,11 @@ def correlation_feed(package_names) -> dict[str, dict]:
                 "SELECT package_name, literal FROM added_literal_hashes"):
             if row[0] in out:
                 out[row[0]]["added_literals"].append(row[1])
+        for row in conn.execute(
+                "SELECT package_name, dependency_name, host "
+                "FROM upstream_dep_additions"):
+            if row[0] in out:
+                out[row[0]]["upstream_dep_additions"].append((row[1], row[2]))
         for row in conn.execute(
                 "SELECT package_name, maintainer, predicate, observed_at "
                 "FROM adoption_events ORDER BY observed_at"):

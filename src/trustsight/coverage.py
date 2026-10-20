@@ -43,6 +43,7 @@ DIFF_TRUNCATED = "diff_truncated"
 SCAN_TRUNCATED = "scan_truncated"
 LINE_TRUNCATED = "line_truncated"
 TREE_NOT_ANALYZED = "tree_not_analyzed"
+UPSTREAM_MANIFEST_INCOMPLETE = "upstream_manifest_incomplete"
 UNRESOLVED_SOURCE = "unresolved_source"
 UNRESOLVED_PARSE_TIME = "unresolved_parse_time"
 SNAPSHOT_REFUSED = "snapshot_refused"
@@ -66,6 +67,7 @@ GAPS = (
     PARTIAL_FILE_ANALYSIS,
     LINE_TRUNCATED,
     TREE_NOT_ANALYZED,
+    UPSTREAM_MANIFEST_INCOMPLETE,
     COMPANION_TRUNCATED,
     BINARY_METADATA,
     UNRESOLVED_SOURCE,
@@ -104,6 +106,12 @@ GAP_REASONS = {
     TREE_NOT_ANALYZED: (
         "the repository file manifest was unavailable, so only the PKGBUILD "
         "was examined"
+    ),
+    UPSTREAM_MANIFEST_INCOMPLETE: (
+        "a committed dependency manifest was larger than the read budget, or "
+        "there were more of them than the file limit, so its dependency set "
+        "was not recorded and the shared-upstream-dependency comparison "
+        "skipped it"
     ),
     COMPANION_TRUNCATED: (
         "a committed file the recipe names was larger than the companion "
@@ -425,6 +433,7 @@ def gaps_from(
     noextract_present: bool = False,
     partial_hunks: int = 0,
     partial_files: list[str] | None = None,
+    upstream_manifest_incomplete: bool = False,
 ) -> list[str]:
     """Assemble the gap list for one analysis, in a stable order."""
     gaps: list[str] = []
@@ -472,6 +481,12 @@ def gaps_from(
     # and "the manifest was unavailable" would read as an absent snapshot.
     if snapshot_refused:
         gaps.append(SNAPSHOT_REFUSED)
+    # A manifest the corpus could not read whole means the dependency set
+    # used for G004's comparison is absent, not empty: the package keeps
+    # its prior snapshot and the omission is visible rather than reading
+    # as "this package gained nothing".
+    if upstream_manifest_incomplete:
+        gaps.append(UPSTREAM_MANIFEST_INCOMPLETE)
     if unpinned_build_deps:
         gaps.append(UNPINNED_BUILD_DEPS)
     # Only a walk cut short by a ceiling, or one that could not analyse a
@@ -693,6 +708,9 @@ GAP_INCONCLUSIVE_REASONS = {
     ),
     RULESET_DRIFTED: (
         "installed rules differ from shipped: checks did not run as documented"
+    ),
+    UPSTREAM_MANIFEST_INCOMPLETE: (
+        "upstream manifest incomplete: shared-dependency additions not compared"
     ),
     STAGE_DEGRADED: (
         "an analysis stage failed on this input: its checks did not run"

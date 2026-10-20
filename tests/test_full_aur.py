@@ -86,7 +86,8 @@ def test_fetch_pkgbuild_with_tree_extracts_manifest():
         "icon.png": b"\x89PNG\r\n\x1a\n" + b"\x00" * 8,
     })
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer_finding, refused, install_text, install_name = F.fetch_pkgbuild_with_tree("demo")
+        (text, manifest, trailer_finding, refused, install_text, install_name,
+         manifest_texts, manifest_complete) = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None
@@ -107,7 +108,8 @@ def test_fetch_pkgbuild_with_tree_falls_back_to_cgit():
     from trustsight.full_aur import fetch as F
 
     with patch.object(F, "_http_get", side_effect=[None, None, b"pkgname=demo\n"]):
-        text, manifest, trailer_finding, refused, install_text, install_name = F.fetch_pkgbuild_with_tree("demo")
+        (text, manifest, trailer_finding, refused, install_text, install_name,
+         manifest_texts, manifest_complete) = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\n"
     assert manifest is None
@@ -143,7 +145,8 @@ def test_fetch_pkgbuild_with_tree_flags_trailing_archive_bytes():
 
     body = _snapshot_tarball("demo", "pkgname=demo\npkgver=1.0\n") + b"JUNK"
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer_finding, refused, install_text, install_name = F.fetch_pkgbuild_with_tree("demo")
+        (text, manifest, trailer_finding, refused, install_text, install_name,
+         manifest_texts, manifest_complete) = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None
@@ -178,14 +181,14 @@ def test_iter_prefetched_yields_none_for_a_failing_fetch():
     def fetch(name):
         if name == "boom":
             raise RuntimeError("network")
-        return (f"ok-{name}", None, None, False, None, None)
+        return (f"ok-{name}", None, None, False, None, None, None, True)
 
     out = dict(_iter_prefetched(["a", "boom", "b"], fetch, workers=4))
     # The placeholder must match the 6-tuple shape ``_store`` unpacks; a
     # 3-tuple here raised ValueError out of the analysis loop and aborted
     # the whole cycle.
-    assert out["boom"] == (None, None, None, False, None, None)
-    assert out["a"] == ("ok-a", None, None, False, None, None)
+    assert out["boom"] == (None, None, None, False, None, None, None, True)
+    assert out["a"] == ("ok-a", None, None, False, None, None, None, True)
 
 
 # --- polite fetching: rate cap + backoff on 429/5xx/reset ---
@@ -337,7 +340,7 @@ def test_a_not_vetted_package_survives_the_cycle_and_is_retried(monkeypatch):
                         lambda old, new: {"demo": "modified"})
     monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
-                        lambda *a, **k: ("pkgver=1\n", None, None, False, None, None))
+                        lambda *a, **k: ("pkgver=1\n", None, None, False, None, None, None, True))
     monkeypatch.setattr(pipeline, "get_pkgbuild_snapshot", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
     monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
@@ -445,7 +448,7 @@ def _stub_cycle(monkeypatch, pipeline, scores_by_name, order=None):
                         lambda old, new: {name: "modified" for name in meta})
     monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
-                        lambda *a, **k: ("pkgbuild", None, None, False, None, None))
+                        lambda *a, **k: ("pkgbuild", None, None, False, None, None, None, True))
     monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
     monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
     monkeypatch.setattr(pipeline, "save_resume_state", lambda state: None)
@@ -583,7 +586,7 @@ def _stub_since_cycle(monkeypatch, pipeline, packages):
     monkeypatch.setattr(pipeline, "diff_metadata", lambda old, new: {})
     monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
-                        lambda *a, **k: ("pkgbuild", None, None, False, None, None))
+                        lambda *a, **k: ("pkgbuild", None, None, False, None, None, None, True))
     monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
     monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
     monkeypatch.setattr(pipeline, "save_resume_state", lambda state: None)
@@ -836,6 +839,35 @@ def test_unchanged_install_scriptlet_is_not_represented_as_modified():
     assert any(e.rule_id == "R007" for e in changed.score_breakdown)
 
 
+def test_corpus_path_records_added_literals_for_g002():
+    """G002 joins added literals across packages; the corpus analysis path
+    must write them to the feed the cycle-end correlation reads."""
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import (
+        correlation_feed, init_db, package_added_literals,
+    )
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+
+    blob = "A" * 300
+    old_pkgbuild = "pkgname=demo\npkgver=1.0\n"
+    new_pkgbuild = (
+        f"pkgname=demo\npkgver=1.1\n# {blob}\n"
+        "source=('https://example.invalid/demo-1.1.tar.gz')\n"
+        "sha256sums=('aaaa')\n"
+    )
+    analyze_package_text(
+        pkg_name="demo", old_pkgbuild=old_pkgbuild,
+        new_pkgbuild=new_pkgbuild, maintainer="tester",
+        temporal=TemporalContext(), record=True,
+    )
+
+    assert blob in [lit for lit, _ in package_added_literals("demo")]
+    assert blob in correlation_feed(["demo"])["demo"]["added_literals"]
+
+
 def test_install_hunk_uses_the_scriptlets_real_name():
     """monsoon-git: the snapshot's scriptlet is ``monsoon.install`` while the
     package is ``monsoon-git``.  Naming the synthesized hunk after the package
@@ -949,7 +981,8 @@ def test_fetch_extracts_the_install_scriptlet():
         {"demo.install": b"post_install() {\n  true\n}\n"},
     )
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer, refused, install, install_name = F.fetch_pkgbuild_with_tree("demo")
+        (text, manifest, trailer, refused, install, install_name,
+         manifest_texts, manifest_complete) = F.fetch_pkgbuild_with_tree("demo")
 
     assert install == "post_install() {\n  true\n}\n"
     assert install_name == "demo.install"

@@ -1146,3 +1146,29 @@ def test_write_batch_inner_failure_does_not_discard_the_batch(db, tmp_path):
         except Exception:
             pass
     assert _committed_row(dbp, "kept") is not None
+
+
+def test_upstream_dep_feed_is_one_cycle_and_cleared(db):
+    from trustsight.db import (
+        clear_upstream_dep_additions,
+        correlation_feed,
+        record_upstream_dep_additions,
+    )
+
+    record_upstream_dep_additions("a", [("evil", "evil.example")])
+    assert correlation_feed(["a"])["a"]["upstream_dep_additions"] == [
+        ("evil", "evil.example")]
+    clear_upstream_dep_additions()
+    assert correlation_feed(["a"])["a"]["upstream_dep_additions"] == []
+
+
+def test_manifest_deps_null_preserves_the_previous_observation(db):
+    from trustsight.db import get_pkgbuild_snapshot, save_pkgbuild_snapshot
+
+    save_pkgbuild_snapshot("a", "pkgver=1", "1")
+    assert get_pkgbuild_snapshot("a")["manifest_deps"] is None
+    save_pkgbuild_snapshot(
+        "a", "pkgver=2", "2", manifest_deps='[["evil", "evil.example"]]')
+    save_pkgbuild_snapshot("a", "pkgver=3", "3", manifest_deps=None)
+    assert get_pkgbuild_snapshot("a")["manifest_deps"] == (
+        '[["evil", "evil.example"]]')

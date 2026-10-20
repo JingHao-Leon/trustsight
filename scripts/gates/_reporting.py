@@ -114,6 +114,15 @@ def gate_a_baseline_supplies_state_not_rules() -> Gate:
             name = _call_name(node).split(".")[-1]
             if name in forbidden:
                 problems.append(f"import_baseline calls {name}()")
+            # G004's prior dependency state is live observation, not
+            # artifact content: a signed baseline that could set it would
+            # let its author pre-seed "already seen" and suppress an
+            # addition in the cycle after import (A13).
+            if name == "save_pkgbuild_snapshot":
+                for keyword in node.keywords:
+                    if keyword.arg == "manifest_deps":
+                        problems.append(
+                            "import_baseline seeds manifest_deps")
     written = {
         _call_name(node).split(".")[-1]
         for node in ast.walk(fn)
@@ -479,6 +488,15 @@ def gate_declared_findings_fire_under_shipped_config() -> Gate:
         # A branch ref: makepkg resolves it when the package is built, so
         # what this compiles is whatever upstream has published by then.
         "P008": header + '+source=("git+https://ex.invalid/d.git#branch=main")\n',
+        # A prebuilt artifact: the recipe ships what upstream built, so the
+        # name and the source both declare it.
+        "P009": header + '+source=("https://ex.invalid/d.AppImage")\n',
+    }
+
+    # P009 is a declared fact of the recipe text, so it needs the full head
+    # recipe the way the CLI and analysis paths pass it.
+    current_texts = {
+        "P009": 'pkgname=demo\npkgrel=1\nsource=("https://ex.invalid/d.AppImage")\n',
     }
 
     problems = []
@@ -486,7 +504,8 @@ def gate_declared_findings_fire_under_shipped_config() -> Gate:
     with shipped_config():
         config, rules = load_config(), load_rules()
         for expected, diff in recipes.items():
-            fact = scan_diff(diff, rules=rules, config=config, package_name="demo")
+            fact = scan_diff(diff, rules=rules, config=config, package_name="demo",
+                             current_text=current_texts.get(expected))
             seen = {e.rule_id for e in fact.score_breakdown}
             fired[expected] = expected in seen
             if expected not in seen:

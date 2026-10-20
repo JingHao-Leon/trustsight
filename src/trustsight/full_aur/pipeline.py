@@ -1,5 +1,6 @@
 """Bootstrap and incremental corpus pipeline."""
 
+import json
 import logging
 import os
 import sys
@@ -33,12 +34,14 @@ from ..db import (
     activate_campaign,
     active_campaigns,
     checkpoint_wal,
+    clear_upstream_dep_additions,
     get_connection,
     get_metadata,
     record_alerts,
     get_pkgbuild_snapshot,
     latest_cycle_time,
     record_cycle_events,
+    record_upstream_dep_additions,
     is_reserved_name,
     save_package_profile,
     save_pkgbuild_snapshot,
@@ -470,9 +473,7 @@ def _correlation_records(
     a maintainer change between the two snapshots.  ``source_repos`` is the
     per-package source-repository set the sweep already computed, so G003 can
     tell a maintainer co-adopting one variant family (one shared repo, H052's
-    shape) from a coordinated takeover of unrelated packages.  Added-literals
-    have no corpus feed yet, so they are empty here (the G002 engine ships and
-    is unit-tested; the literal hash view is the pending corpus work).
+    shape) from a coordinated takeover of unrelated packages.
     """
     from ..db import correlation_feed, record_property_transition, write_batch
 
@@ -750,7 +751,7 @@ def _iter_prefetched(names, fetch_fn, workers: int):
     Analysis stays serial and ordered (novelty reads the observations earlier
     packages recorded), so only the fetch is parallelised: a bounded window of
     fetches is kept in flight and consumed in order.  A fetch that raises
-    yields ``(None, None, None, False, None, None)`` - the same shape ``_fetch_one``
+    yields ``(None, None, None, False, None, None, None, True)`` - the same shape ``_fetch_one``
     returns for a vanished package - rather than aborting the run.
     """
     names = list(names)
@@ -766,7 +767,7 @@ def _iter_prefetched(names, fetch_fn, workers: int):
             try:
                 result = future.result()
             except Exception:
-                result = (None, None, None, False, None, None)
+                result = (None, None, None, False, None, None, None, True)
             yield name, result
             if idx < len(names):
                 inflight.append((names[idx], pool.submit(fetch_fn, names[idx])))
@@ -863,6 +864,10 @@ def _run_baseline_build(
     if over_threshold is None:
         over_threshold = _OVER_BENIGN_P95
     _ensure_init()
+    # G004's feed is one cycle's additions, not an append-only log: clear
+    # it before any package is processed so a prior cycle's pair cannot
+    # meet this cycle's pair and re-fire the join.
+    clear_upstream_dep_additions()
     result = CycleResult()
     _log = _logger(json_output)
 
@@ -1008,7 +1013,7 @@ def _run_baseline_build(
     def _fetch_one(name):
         meta = new_meta.get(name)
         if meta is None:
-            return (None, None, None, False, None, None)
+            return (None, None, None, False, None, None, None, True)
         return fetch_pkgbuild_with_tree(_pkg_or_base(meta))
 
     def _store(name, fetched) -> str:
@@ -1022,7 +1027,8 @@ def _run_baseline_build(
             log.warning("skipping reserved package name %r", name)
             return "reserved"
         (new_pkgbuild, tree_manifest, trailer_finding, snapshot_refused,
-         install_text, install_name) = fetched
+         install_text, install_name, manifest_texts,
+         manifest_complete) = fetched
         if new_pkgbuild is None:
             log.debug("could not fetch PKGBUILD for %s (base: %s)", name, _pkg_or_base(meta))
             return "fetch_failed"
@@ -1032,6 +1038,34 @@ def _run_baseline_build(
         prev_last_modified: Optional[int] = (
             old_snapshot["last_modified"] if old_snapshot else None
         )
+        # G004 state: this cycle's committed remote dependencies, and the
+        # set the last recorded cycle saw.  No prior set (first observation,
+        # a baseline import, or a pre-migration row) is a baseline, not an
+        # empty history: every dependency would look "added" otherwise.
+        manifest_pairs: set[tuple[str, str]] = set()
+        manifest_deps_json: Optional[str] = None
+        manifest_incomplete = False
+        prior_deps: Optional[set[tuple[str, str]]] = None
+        if manifest_texts is not None:
+            from ..analysis.manifests import tree_remote_dependency_pairs
+            manifest_pairs, incomplete = tree_remote_dependency_pairs(
+                manifest_texts)
+            manifest_incomplete = incomplete or not manifest_complete
+            if not manifest_incomplete:
+                manifest_deps_json = json.dumps(
+                    sorted([list(pair) for pair in manifest_pairs]))
+        raw_prior = old_snapshot.get("manifest_deps") if old_snapshot else None
+        if raw_prior:
+            try:
+                decoded = json.loads(raw_prior)
+                if isinstance(decoded, list):
+                    prior_deps = {
+                        (str(pair[0]), str(pair[1]))
+                        for pair in decoded
+                        if isinstance(pair, (list, tuple)) and len(pair) == 2
+                    }
+            except (ValueError, TypeError):
+                prior_deps = None
         try:
             with write_batch():
                 fact = analyze_package_text(
@@ -1058,6 +1092,7 @@ def _run_baseline_build(
                     install_name=install_name,
                     old_install_text=(old_snapshot.get("install_text")
                                       if old_snapshot else None),
+                    upstream_manifest_incomplete=manifest_incomplete,
                 )
                 save_pkgbuild_snapshot(
                     package_name=name,
@@ -1065,7 +1100,11 @@ def _run_baseline_build(
                     version=fact.new_version or meta.get("Version", ""),
                     last_modified=meta.get("LastModified", 0),
                     install_text=install_text,
+                    manifest_deps=manifest_deps_json,
                 )
+                if manifest_deps_json is not None and prior_deps is not None:
+                    record_upstream_dep_additions(
+                        name, sorted(manifest_pairs - prior_deps))
                 save_package_profile(
                     package_name=name,
                     last_score=fact.final_score,

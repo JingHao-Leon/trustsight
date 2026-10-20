@@ -42,8 +42,9 @@ ANCHOR_RULE_IDS: frozenset[str] = frozenset({
 #: A PR that adds a new ``H`` id fails CI (the ``H-series intake is frozen``
 #: gate and ``tests/test_h_reduction.py``).  The set only ever shrinks: a
 #: retired id moves to :data:`RETIRED_RULE_IDS` and stays out of the freeze
-#: so its former id is never reused for a new rule.
-FROZEN_H_IDS = frozenset(f"H{n:03d}" for n in range(1, 104))
+#: so its former id is never reused for a new rule.  H104 was admitted
+#: deliberately, after the freeze, for the placeholder signal.
+FROZEN_H_IDS = frozenset(f"H{n:03d}" for n in range(1, 105))
 
 #: Retired H ids, mapped to the survivor that now carries their detection
 #: **Empty on purpose**: the overlap audit has been

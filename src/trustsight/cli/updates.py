@@ -212,12 +212,38 @@ def pending_channels() -> list[tuple[str, str, str]]:
     return pending
 
 
+#: Commands that pull the very data the pending notice would offer.  Asking
+#: them to pull first would run the same fetch twice in one invocation.
+_PULL_COMMANDS = {("seed", "fetch"), ("ioc", "update")}
+
+
+def _is_pull_command() -> bool:
+    argv = sys.argv[1:]
+    return len(argv) >= 2 and (argv[0], argv[1]) in _PULL_COMMANDS
+
+
+def _pull_pending(kinds: set[str]) -> None:
+    """Pull the pending baseline/IOC data through the shared verified path."""
+    from .. import channels
+
+    try:
+        notes = channels.auto_pull(
+            baselines="baseline" in kinds, iocs="ioc" in kinds)
+    except Exception as exc:  # noqa: BLE001 - a failed pull must not abort
+        print(f"trustsight: pull failed: {exc}", file=sys.stderr)
+        return
+    for note in notes:
+        print(f"trustsight: {note}", file=sys.stderr)
+
+
 def check_and_warn_pending() -> None:
     """Warn when a newer baseline or IOC release is waiting to be pulled.
 
-    Independent of the program-version notice and never prompts: the release
-    is data, not a reason to abort a command.  Goes silent once the pull is
-    recorded.  Stays silent on every failure.
+    Interactive operators are offered a one-key pull through the same
+    verified download/import path as ``seed fetch`` and ``ioc update``.  The
+    prompt is skipped when stdin/stderr is not a terminal (so a pipeline is
+    never blocked) and when the running command is itself a pull.  Goes
+    silent once the pull is recorded, and on every failure.
     """
     try:
         pending = pending_channels()
@@ -236,6 +262,17 @@ def check_and_warn_pending() -> None:
                 f"on {channel}. Pull with 'trustsight ioc update'.",
                 file=sys.stderr,
             )
+    if not pending or not _interactive() or _is_pull_command():
+        return
+    try:
+        print("trustsight: pull now? [y/N] ", file=sys.stderr, end="",
+              flush=True)
+        answer = input().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print(file=sys.stderr)
+        return
+    if answer in ("y", "yes"):
+        _pull_pending({kind for kind, _tag, _channel in pending})
 
 
 def _interactive() -> bool:

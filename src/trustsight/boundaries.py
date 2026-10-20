@@ -63,6 +63,7 @@ _GAP_KIND: dict[str, str] = {
     "tree_not_analyzed": BoundaryKind.UNREADABLE_TREE,
     "snapshot_refused": BoundaryKind.UNREADABLE_TREE,
     "companion_truncated": BoundaryKind.UNREADABLE_FILE,
+    "upstream_manifest_incomplete": BoundaryKind.UNREADABLE_FILE,
     "binary_metadata": BoundaryKind.UNREADABLE_FILE,
     "partial_file_analysis": BoundaryKind.PARTIAL_FILE,
     "unresolved_source": BoundaryKind.UNRESOLVED,

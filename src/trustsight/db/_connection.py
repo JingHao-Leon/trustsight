@@ -533,6 +533,23 @@ def init_db():
                 SELECT package_name, literal, literal_len, observed_at
                 FROM observed_added_literals;
 
+            /* G004's feed: the remote upstream dependencies each processed
+               package added this cycle, as (dependency, host) pairs.  The
+               table is cleared at cycle start and repopulated by the
+               corpus writer, so a row is always this cycle's addition and
+               a prior cycle's row cannot re-fire the join. */
+            CREATE TABLE IF NOT EXISTS observed_upstream_deps (
+                package_name TEXT NOT NULL,
+                dependency_name TEXT NOT NULL,
+                host TEXT NOT NULL,
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_upstream_deps_package
+                ON observed_upstream_deps(package_name);
+            CREATE VIEW IF NOT EXISTS upstream_dep_additions AS
+                SELECT package_name, dependency_name, host, observed_at
+                FROM observed_upstream_deps;
+
             CREATE VIEW IF NOT EXISTS adoption_events AS
                 SELECT pt.package_name AS package_name,
                        json_extract(pt.new_value, '$') AS maintainer,
@@ -589,6 +606,11 @@ _ADDED_COLUMNS = {
     # path can scan it for an unconditional root fetch/write at install time.
     "pkgbuild_snapshots": {
         "install_text": "TEXT",
+        # G004 compares this cycle's committed remote dependencies against
+        # the last recorded set.  Only the live corpus writer populates it;
+        # a baseline import leaves it NULL so a signed artifact cannot seed
+        # prior state and suppress an addition (A13).
+        "manifest_deps": "TEXT",
     },
     # M006 re-activation pressure: how often a campaign class has re-armed and
     # the observation span over which it did so.

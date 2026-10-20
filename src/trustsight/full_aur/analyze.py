@@ -306,6 +306,7 @@ def analyze_package_text(
     install_text: Optional[str] = None,
     install_name: Optional[str] = None,
     old_install_text: Optional[str] = None,
+    upstream_manifest_incomplete: bool = False,
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -473,6 +474,7 @@ def analyze_package_text(
         gaps = gaps_from(
             tree_analyzed=bool(tree_manifest),
             snapshot_refused=snapshot_refused,
+            upstream_manifest_incomplete=upstream_manifest_incomplete,
             deps_not_scanned=depth_result.truncated,
             ruleset_drifted=bool(drifted_shipped_rules()),
             degraded_stages=stage_failures(),
@@ -710,6 +712,7 @@ def analyze_package_text(
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_subs,
         snapshot_refused=snapshot_refused,
+        upstream_manifest_incomplete=upstream_manifest_incomplete,
         unpinned_build_deps=has_unpinned_build_deps(diff_text, new_pkgbuild),
         deps_not_scanned=depth_result.truncated,
         ruleset_drifted=bool(drifted_shipped_rules()),
@@ -788,6 +791,13 @@ def analyze_package_text(
             fact_json=json.dumps(fact_to_dict(fact)),
             triggered_rules=triggered_rules,
         )
+
+        # Keep the added encoded literals so G002 can join across packages
+        # at cycle end, the same feed the review path records.
+        from ..analysis.entropy import added_literals, added_text
+        from ..db import record_added_literals
+
+        record_added_literals(pkg_name, added_literals(added_text(diff_text)))
 
         # index this version's RecipeDoc arrays and scalars for
         # exact tuple history.  The index is analysis-side; the signed

@@ -27,10 +27,10 @@ supplies them), so the join logic is testable without a live corpus:
 
 Members are named in the finding; the roundup is one alert, not N.
 
-Live coverage caveat: only G001, G003 and G005 have a connected corpus feed
-today.  G002 (added literals) and G004 (upstream dependencies) ship and are
-unit-tested, but the views that would supply them are pending, so they cannot
-fire on a real ``full-aur`` cycle yet.  See the correlation rule reference.
+Live coverage caveat: G001, G002, G003 and G005 have a connected corpus feed
+today.  G004 (upstream dependencies) ships and is unit-tested, but the view
+that would supply it is pending, so it cannot fire on a real ``full-aur``
+cycle yet.  See the correlation rule reference.
 """
 
 from __future__ import annotations
