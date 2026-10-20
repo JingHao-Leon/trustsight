@@ -66,8 +66,8 @@ alone would delete detections the security model does not license removing.
 reduction. `tests/test_h_reduction.py` and the `H-series intake is frozen`
 security gate fail a PR that adds a new H id. A new detection must be filed as
 an instance of an existing H family, or into the series that fits its mechanism
-(`T` for history-backed rules, `T001`/`T002`; `C`, `D`, `X`, `E`, `I` or `M`
-otherwise). The freeze set only ever shrinks: a retired id moves to
+(`T` for temporal rules, `T001`-`T003` and `T006`-`T007`; `C`, `D`, `X`, `E`,
+`I` or `M` otherwise). The freeze set only ever shrinks: a retired id moves to
 `RETIRED_RULE_IDS` and stays out of the freeze, so its former id is never
 re-issued.
 

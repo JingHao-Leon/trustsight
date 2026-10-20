@@ -12,8 +12,9 @@ This is what makes a campaign visible: a "new CDN" is plausible once and
 damning when five unrelated packages add it in the same week. G finds the
 join, names the members, and fires **one** alert instead of N.
 
-G runs at cycle end in the full-AUR sweep, never on a single `review`; the
-input is collective and a single package cannot supply it.
+G runs at cycle end in the full-AUR sweep; the input is collective and a
+single package cannot supply it. G007 is the exception: a `review` run inside
+an active campaign reads that campaign's stored scope, so it fires there too.
 
 This is a reference page. For how weight and scope work, see
 [Rule System](system.md).
@@ -23,9 +24,9 @@ This is a reference page. For how weight and scope work, see
     The G002 (added-literal) and G004 (upstream-dependency) engines ship and
     are unit-tested, but the corpus views that would supply them
     (`added_literals`, `upstream_dep_additions`) are not yet connected to the
-    live `full-aur` sweep. On a real cycle today only **G001, G003 and G005**
-    can fire. Treat G002/G004 in any rule list as planned coverage, not active
-    watcher coverage.
+    live `full-aur` sweep. On a real cycle today **G001, G003, G005, G006,
+    G008, G009 and G010** can fire. Treat G002/G004 in any rule list as
+    planned coverage, not active watcher coverage.
 
 ## Reading a G finding
 

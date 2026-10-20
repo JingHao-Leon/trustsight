@@ -350,7 +350,7 @@ Derived properties: `flagged` (score above the 20-point threshold), `fully_vette
 
 ### `Finding`
 
-`rule_id`, `severity`, `weight`, `description`, `file`, `line`, `template`, `evidence`.
+`rule_id`, `rule_uid`, `severity`, `weight`, `description`, `file`, `line`, `template`, `evidence`. `rule_uid` is the permanent `TS-` identifier; a pseudo rule carries `null`.
 
 ### `SuppressedRule`
 

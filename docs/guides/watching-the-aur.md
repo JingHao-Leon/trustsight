@@ -196,9 +196,10 @@ ruleset sync writes the synced `rules.toml` (and any missing default file)
 back into it (the directory must be writable by the container's `ts` user,
 uid 1000). A read-only or unwritable mount logs `ruleset sync skipped:
 Permission denied` and keeps the rules the volume was created with, unless you
-set `TRUSTSIGHT_NO_SYNC_RULES=1` to skip the sync deliberately. The tokenizer's network-namespace
-isolation is not available in a default container; the process resource
-limits still apply, and the analysis itself needs no privileges.
+set `TRUSTSIGHT_NO_SYNC_RULES=1` to skip the sync deliberately. The
+tokenizer's network-namespace isolation is not available in a default
+container; the process resource limits still apply, and the analysis itself
+needs no privileges.
 
 A compose file with the same settings - a fixed container name, log
 rotation, and the timestamped log format - ships as

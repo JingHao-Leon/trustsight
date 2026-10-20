@@ -35,8 +35,8 @@ when a member actually impersonates a popular package.
 **G005 (Impersonation Campaign)** is the sharp end of this family: many
 name-clones of popular packages under one account. Not every G rule is live
 yet: **G002** and **G004** ship and are unit-tested, but their corpus feeds are
-pending, so on a real cycle only G001, G003 and G005 fire. See the
-[correlation reference](../reference/rules/correlation.md).
+pending, so on a real cycle G001, G003, G005, G006, G008, G009 and G010 fire.
+See the [correlation reference](../reference/rules/correlation.md).
 
 ## Campaign alerts (primed state)
 

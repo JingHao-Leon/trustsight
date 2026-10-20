@@ -457,19 +457,26 @@ own project's names from firing a scope-expansion rule.
 | `longitudinal.stability_floor` | Class C | `10` | Consecutive observations a property must hold before a change is reported at all. |
 | `t_key.min_observations` | T001 | `1` | Ecosystem signing keys recorded before T001 judges a new `validpgpkeys` fingerprint novel; below the floor the rule declines silently. |
 | `t_dom.min_observations` / `t_dom.window_days` | T002 | `1` / `30` | Domains recorded before T002 judges a maintainer domain novel, and the observation window that counts as "new". |
+| `t006.min_divergence_hours` | T006 | `24` | Hours the AUR `LastModified` may lead the git tip commit date before T006 reports a history rewrite. |
 | `e001.max_ratio` | E001 | *empty* | gzip ratio below which added lines read as repetitive/padded. Ships empty: silent until the calibration job or an operator sets it. |
 | `e002.min_fraction` / `e002.min_length` | E002 | *empty* / `64` | Fraction of added tokens that must be base64/base32/hex runs, and the run-length floor. |
 | `e003.min_entropy` / `e003.max_entropy` / `e003.min_bigram` / `e003.max_bigram` | E003 | *empty* | Unigram and bigram entropy band for newly assigned variable/function names; generated names sit low, packed names high. |
 | `g_host.min_packages` | G001 | `5` | Distinct packages that must add the same canonical host within the cycle window. |
 | `g_blob.min_length` / `g_blob.min_packages` | G002 | `256` / `2` | Length floor for a shared added literal and the number of unrelated packages that must carry it. |
 | `g_adopt.min_members` | G003 | `3` | Packages one maintainer key must adopt within the window for a coordinated-adoption finding. |
+| `g003.novel_days` / `g003.min_dormant` / `g003.dormant_days` | G003 | `30` / `2` / `180` | Window in which an adopter counts as novel, the dormant targets that escalate the finding to HIGH, and the age that makes a target dormant. |
+| `g008.min_packages` / `g008.window_days` / `g008.min_dormant` / `g008.dormant_days` | G008 | `5` / `7` / `3` / `180` | First-seen account adoption floor, its window, the dormant-target floor and the dormancy age. |
+| `g009.enabled` / `g009.path` | G009 | `true` / empty | Whether the watchlist is consulted, and the watchlist file (`~/.config/trustsight/watchlist.json` when empty). |
+| `g010.min_packages` / `g010.window_days` | G010 | `5` / `7` | Packages that must share one first-seen host, and the first-seen window. |
 | `m002.min_layers` | M002 | `3` | Distinct evidence categories that must fire (none above the alert bar) before M002 escalates the reported band one step. |
 
 The E-series thresholds (`e001`/`e002`/`e003`) ship **empty** by design: the
 series is silent until a threshold is set from the first corpus measurement
 (`scripts/entropy_calibrate.py` prints conservative floors in the calibration
-CI job). The T/G/M keys are not written to the shipped `thresholds.toml`, but
-are honoured if you add them; their code defaults are the table above.
+CI job). The `g003`, `g008`, `g009`, `g010` and `t006` tables ship in
+`thresholds.toml`. The older G keys (`g_host`, `g_blob`, `g_adopt`), the T
+keys (`t_key`, `t_dom`), `m002` and `cofire_pairs` are honoured if you add them,
+with the code defaults in the table above.
 
 ### `iocs.toml`
 
@@ -500,7 +507,7 @@ behaviour is a config key or a command flag.
 | `TRUSTSIGHT_SQLITE_BUSY_TIMEOUT` | A non-negative integer of milliseconds; an invalid value falls back to `30000` | How long a connection waits for a locked database before erroring. `30000` (the default) lets a `seed fetch` and a corpus cycle overlap without a spurious "database is locked"; raise it if a single cycle writes for longer. |
 | `TRUSTSIGHT_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` (case-insensitive); an unknown value falls back to `INFO` | The level of the watcher's log on stderr. |
 | `TRUSTSIGHT_LOG_TIMESTAMPS` | Any non-empty value | Prefix each log line with a timestamp and level, for an unattended watcher whose `docker logs` is the only record. |
-| `TRUSTSIGHT_NO_SYNC_RULES` | Any non-empty value | Skip the ruleset sync a `full-aur --watch` runs once at startup. By default the watch syncs `rules.toml` to the shipped rules the safe way (adds missing rules, fixes non-pattern drift and superseded patterns, never touches a pattern the user edited) and logs what it changed, so an unattended watcher never analyzes with a stale ruleset. |
+| `TRUSTSIGHT_NO_SYNC_RULES` | Any non-empty value | Skip the ruleset sync a `full-aur --watch` runs once at startup. By default the watch syncs `rules.toml` to the shipped rules the safe way (adds missing rules, fixes non-pattern drift and superseded patterns, never touches a pattern the user edited) and logs what it changed, so an unattended watcher never analyses with a stale ruleset. |
 | `TRUSTSIGHT_FEED_URL` | A URL | The signed feed ingest endpoint. The watcher POSTs every alert there as well as to ntfy, so the feed ingests directly instead of polling ntfy. Overrides `[notify] feed`; empty and no `[notify] feed` skips the feed sink. |
 | `TRUSTSIGHT_FEED_KEY` | A base64 PKCS#8 Ed25519 private key | Signs each feed POST (`webhook-id`, `webhook-timestamp`, `webhook-signature`). The feed holds only the public half, so a leaked feed secret cannot forge a document. With no key the feed sink is skipped and only ntfy is notified. |
 | `TRUSTSIGHT_FEED_KEY_ID` | A short identifier | Names the signing key so the feed can rotate (it accepts a current and a previous key). |

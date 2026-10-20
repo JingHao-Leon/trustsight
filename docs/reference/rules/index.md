@@ -66,7 +66,7 @@ generated from it by `scripts/build_rules_index.py`.
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
-32 rules detect tokenizer defeat and command reconstruction; see
+34 rules detect tokenizer defeat and command reconstruction; see
 [crossfire.md](crossfire.md) for the family boundary and rule descriptions.
 
 ## Reading a rule entry

@@ -384,7 +384,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 | X | **Crossfire** | Evasion detection | Severity only | Severity-based | When tokenizer reports evasion |
 | E | **Entropy** | Distribution of added content | Thresholds (ship empty) | Severity-based | When a configured distribution threshold is crossed |
 | T | **Temporal** | Ecosystem history and ledgers | Severity, thresholds | Severity-based | When history makes the change anomalous |
-| G | **Correlation** | Cross-package joins over the cycle | N/M/window per rule | Severity-based (G006/G007 weight 0) | At cycle end, never per package |
+| G | **Correlation** | Cross-package joins over the cycle | N/M/window per rule | Severity-based (G006/G007/G009/G010 weight 0) | At cycle end; G007 also on a run inside an active campaign |
 | I | **Indicator** | Membership in signed external data | Curator keys, cadence | Outside the score | On an indicator match |
 | M | **Meta** | Other rules' findings | Layer count, per-layer ceiling | Severity-based; M002/M003 weight 0 | After the ownership resolver |
 | A | **Artifact** | Built package manifest | Enable flag only | Outside the score (L9) | Only in the optional build lane |

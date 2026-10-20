@@ -38,16 +38,19 @@ the primed state end.
 
 - A G finding is a claim about a **set**, never about one package. The
   members still get the cluster alert and the campaign state, but membership
-  must not inflate any member's own score. G005 (impersonation) is the sharp,
-  scoring signal; the host/literal/dependency/adopter joins score the cluster,
-  and the neighbourhood and corroboration rules (G006, G007) are weight 0.
+  must not inflate any member's own score. G005 (impersonation) and G008
+  (first-seen adoption burst) are the sharp, scoring signals; the
+  host/literal/dependency/adopter joins score the cluster, and the
+  neighbourhood, corroboration, watchlist and first-seen-host rules (G006,
+  G007, G009, G010) are weight 0.
 - The evidence names the members and the shared **class** (a host, a literal
   length, a maintainer), never the shared content's meaning: a literal is
   reported by class and length, not printed.
 - One firing is one alert. If you see several G findings, you are looking at
   several distinct campaigns.
-- G runs at cycle end in the full-AUR sweep, never on a single `review`: the
-  input is collective, and one package cannot supply it.
+- G runs at cycle end in the full-AUR sweep: the input is collective, and one
+  package cannot supply it. G007 is the exception, reading an active
+  campaign's stored scope on a single `review` run.
 
 ### What each G rule means
 
@@ -60,6 +63,9 @@ the primed state end.
 | G005 Impersonation Campaign | the trigger | one account published many name-clones of far more popular packages |
 | G006 Neighborhood Under Campaign Alert | cytokine signalling | a package newly touched an active campaign's scope; weight 0, report-only |
 | G007 Campaign Corroboration | trained immunity | a run stands inside an active campaign's scope; weight 0 |
+| G008 First-Seen Account Adoption Burst | clonal recognition | a first-seen account adopted many dormant packages at once |
+| G009 Watchlisted Maintainer | operator memory | a package's maintainer is on the operator's curated watchlist; weight 0 |
+| G010 Shared First-Seen Host | clonal recognition (novelty join) | enough unrelated packages gained the same host the corpus had not met before; weight 0 |
 
 ## See also
 
