@@ -19,15 +19,6 @@ an active campaign reads that campaign's stored scope, so it fires there too.
 This is a reference page. For how weight and scope work, see
 [Rule System](system.md).
 
-!!! warning "Not yet live: G002 and G004"
-
-    The G002 (added-literal) and G004 (upstream-dependency) engines ship and
-    are unit-tested, but the corpus views that would supply them
-    (`added_literals`, `upstream_dep_additions`) are not yet connected to the
-    live `full-aur` sweep. On a real cycle today **G001, G003, G005, G006,
-    G008, G009 and G010** can fire. Treat G002/G004 in any rule list as
-    planned coverage, not active watcher coverage.
-
 ## Reading a G finding
 
 - The evidence names the members (package names), never the shared

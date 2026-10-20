@@ -250,7 +250,10 @@ def _anchor(heading: str) -> str:
         return explicit.group(1)
     text = re.sub(r"`([^`]*)`", r"\1", text)
     text = re.sub(r"\*\*?([^*]*)\*\*?", r"\1", text)
-    return _ATX_PUNCT_RE.sub("", text.lower()).replace(" ", "-")
+    # Punctuation removal can leave runs of spaces (and a heading may already
+    # contain hyphens); the renderer collapses both into one separator.
+    slug = _ATX_PUNCT_RE.sub("", text.lower())
+    return re.sub(r"[\s-]+", "-", slug).strip("-")
 
 _PERMISSION_PHRASES = (
     "no issues", "looks fine", "looks good", "nothing to review",

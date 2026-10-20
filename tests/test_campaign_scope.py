@@ -225,6 +225,62 @@ def _previous(meta, days=30):
             for name, entry in meta.items()}
 
 
+def _unrelated_meta(maintainer):
+    return {
+        name: {"Name": name, "PackageBase": name, "Maintainer": maintainer,
+               "Version": "1", "LastModified": _BURST_NOW, "NumVotes": 0}
+        for name in ("alpha", "bravo", "charlie")
+    }
+
+
+@pytest.mark.parametrize("old_meta", [None, {}])
+def test_first_observation_is_not_an_adoption(db, old_meta):
+    """A new package has no prior maintainer, so it must not be recorded as an
+    orphan-to-maintained H086 transition."""
+    from trustsight.analysis.correlation import correlate
+    from trustsight.db import get_connection
+    from trustsight.full_aur.pipeline import _correlation_records
+
+    new = _unrelated_meta("newowner")
+    records = _correlation_records(new, old_meta, set(new), None, {})
+
+    assert all(not record["adoption"] for record in records)
+    assert not [f for f in correlate(records, {}) if f["rule_id"] == "G003"]
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT COUNT(*) FROM property_transitions "
+            "WHERE property_key = 'maintainer'"
+        ).fetchone()[0]
+    assert rows == 0
+
+
+def test_orphan_adoption_is_still_recorded(db):
+    """A package that existed as an orphan is a real H086 adoption."""
+    from trustsight.analysis.correlation import correlate
+    from trustsight.full_aur.pipeline import _correlation_records
+
+    new = _unrelated_meta("newowner")
+    old = {name: {"Name": name, "Maintainer": ""} for name in new}
+    records = _correlation_records(new, old, set(new), None, {})
+
+    assert all(record["adoption"] for record in records)
+    assert all(record["adoption_predicates"] == ["H086"] for record in records)
+    g003 = [f for f in correlate(records, {}) if f["rule_id"] == "G003"]
+    assert len(g003) == 1
+    assert g003[0]["params"]["predicates"] == ["H086"]
+
+
+def test_maintainer_handover_is_still_recorded(db):
+    """A real ownership change between two maintainers stays H044."""
+    from trustsight.full_aur.pipeline import _correlation_records
+
+    new = {"alpha": {"Name": "alpha", "Maintainer": "newowner"}}
+    old = {"alpha": {"Name": "alpha", "Maintainer": "oldowner"}}
+    records = _correlation_records(new, old, {"alpha"}, None, {})
+
+    assert records[0]["adoption_predicates"] == ["H044"]
+
+
 def test_a_benign_attribute_burst_is_context_not_scored(db, thresholds):
     """One maintainer modifying six of their own packages is H055 - detected,
     but context: it is not an impersonation, so it scores nobody.  This is the

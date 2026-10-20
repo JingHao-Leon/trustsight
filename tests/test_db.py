@@ -868,6 +868,71 @@ def test_get_property_transitions_limits_to_the_newest(db):
     assert len(get_property_transitions("p", limit=0)) == 10
 
 
+def test_first_observation_repair_removes_only_first_submissions(db):
+    """The one-shot repair removes rows created for packages that were newly
+    added by the same maintainer, and leaves real orphan adoptions alone."""
+    from trustsight.db import get_connection
+
+    key = "maintainer_first_observation_repair_v1"
+    with get_connection() as conn:
+        conn.execute("DELETE FROM metadata WHERE key = ?", (key,))
+        conn.executemany(
+            "INSERT INTO cycle_events "
+            "(package_name, cycle_time, status, maintainer) "
+            "VALUES (?, 1, 'added', ?)",
+            [
+                ("newpkg", "m@x"),
+                ("orphanpkg", "old@x"),
+                ("handoverpkg", "old@x"),
+            ],
+        )
+        conn.executemany(
+            "INSERT INTO property_transitions "
+            "(package_name, property_key, old_value, new_value, observed_at) "
+            "VALUES (?, 'maintainer', ?, ?, datetime('now'))",
+            [
+                ("newpkg", '""', '"m@x"'),
+                ("orphanpkg", '""', '"new@x"'),
+                ("handoverpkg", '"old@x"', '"new@x"'),
+            ],
+        )
+        conn.commit()
+
+    init_db()
+
+    with get_connection() as conn:
+        left = {
+            row["package_name"]
+            for row in conn.execute(
+                "SELECT package_name FROM property_transitions "
+                "WHERE property_key = 'maintainer'"
+            )
+        }
+        stamped = conn.execute(
+            "SELECT value FROM metadata WHERE key = ?", (key,)
+        ).fetchone()[0]
+    assert left == {"orphanpkg", "handoverpkg"}
+    assert stamped == "1"
+
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO property_transitions "
+            "(package_name, property_key, old_value, new_value, observed_at) "
+            "VALUES ('laterpkg', 'maintainer', '\"\"', '\"m@x\"', "
+            "datetime('now'))"
+        )
+        conn.commit()
+
+    init_db()
+
+    with get_connection() as conn:
+        later = conn.execute(
+            "SELECT COUNT(*) FROM property_transitions "
+            "WHERE package_name = 'laterpkg'"
+        ).fetchone()[0]
+    assert later == 1, "the repair must run once, not delete on every init"
+
+
 def test_checkpoint_wal_is_best_effort(db):
     from trustsight.db import checkpoint_wal
 

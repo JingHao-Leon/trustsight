@@ -470,10 +470,12 @@ def _correlation_records(
 
     Gained hosts come from the ``source_hosts`` property timeline (the
     corpus already stores every change as JSON old/new values); adoption is
-    a maintainer change between the two snapshots.  ``source_repos`` is the
-    per-package source-repository set the sweep already computed, so G003 can
-    tell a maintainer co-adopting one variant family (one shared repo, H052's
-    shape) from a coordinated takeover of unrelated packages.
+    a maintainer change between two recorded snapshots.  A package absent
+    from the previous snapshot is a first observation, not an adoption.
+    ``source_repos`` is the per-package source-repository set the sweep
+    already computed, so G003 can tell a maintainer co-adopting one variant
+    family (one shared repo, H052's shape) from a coordinated takeover of
+    unrelated packages.
     """
     from ..db import correlation_feed, record_property_transition, write_batch
 
@@ -487,8 +489,11 @@ def _correlation_records(
     # transaction for the whole cycle's transitions, not one per package.
     with write_batch():
         for name in processed:
+            old_entry = (old_meta or {}).get(name)
+            if old_entry is None:
+                continue
             current = (new_meta.get(name) or {}).get("Maintainer") or ""
-            previous = (old_meta or {}).get(name, {}).get("Maintainer") or ""
+            previous = old_entry.get("Maintainer") or ""
             if current and current != previous:
                 record_property_transition(name, "maintainer", previous, current)
 
