@@ -11,6 +11,12 @@
 #
 #   mkdir -p trustsight-config
 #
+# The mount is writable because the watcher syncs `rules.toml` to the shipped
+# ruleset once at startup, and writes any missing default config file.  A
+# read-only mount makes that sync log `ruleset sync skipped: Permission denied`
+# and keeps analysing with the rules the volume was created with.  The
+# directory must be writable by the container's `ts` user (uid 1000).
+#
 services:
   trustsight-watch:
     image: ghcr.io/emiliano-go/trustsight:latest
@@ -23,7 +29,7 @@ services:
     pull_policy: always
     volumes:
       - trustsight-data:/home/ts/.local/share/trustsight
-      - ./trustsight-config:/home/ts/.config/trustsight:ro
+      - ./trustsight-config:/home/ts/.config/trustsight
     environment:
       # Timestamp and level on every log line, so `docker logs` shows when a
       # cycle ran, not only what it did.

@@ -182,7 +182,7 @@ The image is published to the GitHub Container Registry on every release:
 ```bash
 docker run -d --name trustsight-watch \
   -v trustsight-data:/home/ts/.local/share/trustsight \
-  -v $PWD/trustsight-config:/home/ts/.config/trustsight:ro \
+  -v $PWD/trustsight-config:/home/ts/.config/trustsight \
   --restart unless-stopped \
   ghcr.io/emiliano-go/trustsight:latest \
   full-aur --watch --interval 1800
@@ -191,7 +191,12 @@ docker run -d --name trustsight-watch \
 The volume holds the database, the corpus state and the resume file, so a
 container restart (or a new image) continues where the last cycle ended.
 Mount a config directory carrying your `config.toml` (and `[notify] webhook`)
-to keep settings out of the image. The tokenizer's network-namespace
+to keep settings out of the image; it is mounted writable because the startup
+ruleset sync writes the synced `rules.toml` (and any missing default file)
+back into it (the directory must be writable by the container's `ts` user,
+uid 1000). A read-only or unwritable mount logs `ruleset sync skipped:
+Permission denied` and keeps the rules the volume was created with, unless you
+set `TRUSTSIGHT_NO_SYNC_RULES=1` to skip the sync deliberately. The tokenizer's network-namespace
 isolation is not available in a default container; the process resource
 limits still apply, and the analysis itself needs no privileges.
 
