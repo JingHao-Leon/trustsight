@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import CACHE_DIR
+from .coverage import note_stage_failure
 from .sandbox.git_bounds import MAX_TOTAL_TRANSFER_BYTES
 
 _VALID_PKG_NAME = re.compile(r"^[a-zA-Z0-9@._+\-]+$")
@@ -168,7 +169,13 @@ def clone_or_fetch(pkg_name: str, upstream_mtime: Optional[int] = None):
     """
     repo_path(pkg_name)  # validate the name and its containment before any child runs
     from .release import offline
-    from .sandbox.git_client import GitProject, GitSandboxUnavailable, GitSession
+    from .sandbox.git_client import (
+        GitOpError,
+        GitProject,
+        GitSandboxUnavailable,
+        GitSession,
+        GitTransferTooLargeError,
+    )
 
     connect, transfer = _network_timeout_values()
     session = GitSession()
@@ -176,18 +183,30 @@ def clone_or_fetch(pkg_name: str, upstream_mtime: Optional[int] = None):
         result = session.open_fetch(
             pkg_name, str(CACHE_DIR), upstream_mtime, offline(), connect, transfer
         )
-        received = result.get("received_bytes", 0) if isinstance(result, dict) else 0
-        if isinstance(received, int) and received > 0:
-            _charge_transfer(received, 0)
     except GitSandboxUnavailable as exc:
         # A sandbox that cannot answer is the same class as a timed-out
         # fetch: the package was not brought up to date, so callers record a
         # coverage gap rather than analysing a stale or empty tree (B2).
         session.close()
         raise _TimeoutError(f"git sandbox unavailable: {exc}") from exc
+    except GitOpError as exc:
+        # The worker answered with an error, but a failed transfer may still
+        # have written bytes before it stopped.  Charge them, or repeated
+        # failures walk around MAX_TOTAL_TRANSFER_BYTES.
+        session.close()
+        received = getattr(exc, "received_bytes", 0)
+        if isinstance(received, int) and received > 0:
+            _charge_transfer(received, 0)
+        if isinstance(exc, GitTransferTooLargeError):
+            raise _TransferTooLargeError(
+                f"git transfer exceeded its byte ceiling: {exc}") from exc
+        raise _TimeoutError(f"git fetch did not complete: {exc}") from exc
     except Exception:
         session.close()
         raise
+    received = result.get("received_bytes", 0) if isinstance(result, dict) else 0
+    if isinstance(received, int) and received > 0:
+        _charge_transfer(received, 0)
     return GitProject(session, pkg_name, str(CACHE_DIR))
 
 
@@ -198,6 +217,10 @@ def get_head_commit(project) -> str:
     try:
         return project.head_commit()
     except GitOpError:
+        # "No HEAD" and "the worker could not answer" look identical to a
+        # caller that only sees "".  The latter is a skipped stage, so it is
+        # recorded rather than read as a repository with no commits.
+        note_stage_failure("git-head-read")
         return ""
 
 

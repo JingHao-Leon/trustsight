@@ -151,6 +151,45 @@ def test_progress_is_charged_as_a_delta_not_a_running_total():
     assert fetcher._transferred_bytes == 3_000_000
 
 
+def test_a_failed_transfer_still_charges_what_it_wrote(monkeypatch):
+    """Bytes on disk are charged even when the fetch did not complete.
+
+    A transfer aborted at the per-repo ceiling still wrote its prefix.  If
+    those bytes are not charged, repeated failures across ``MAX_DEPTH_NODES``
+    walk around ``MAX_TOTAL_TRANSFER_BYTES``.
+    """
+    from trustsight.sandbox import git_client
+
+    class _DeadSession:
+        def open_fetch(self, *_a, **_k):
+            raise git_client.GitTransferTooLargeError("transfer exceeded", 12_345)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(git_client, "GitSession", _DeadSession)
+    with pytest.raises(fetcher._TransferTooLargeError):
+        fetcher.clone_or_fetch("demo")
+    assert fetcher._transferred_bytes == 12_345
+
+
+def test_a_fetch_op_error_reads_as_an_incomplete_fetch(monkeypatch):
+    """The B2 path every caller already handles, not a bare runtime error."""
+    from trustsight.sandbox import git_client
+
+    class _DeadSession:
+        def open_fetch(self, *_a, **_k):
+            raise git_client.GitOpError("repository unavailable", 99)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(git_client, "GitSession", _DeadSession)
+    with pytest.raises(fetcher._TimeoutError):
+        fetcher.clone_or_fetch("demo")
+    assert fetcher._transferred_bytes == 99
+
+
 # ---------------------------------------------------------------------------
 # CPU: history length is chosen by the package author.
 # ---------------------------------------------------------------------------
