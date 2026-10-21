@@ -695,6 +695,41 @@ def test_h058_cross_name_distinct_owners_still_fire(thresholds):
     assert len(findings) == 1
 
 
+def test_h058_periodic_vcs_refresh_is_not_a_deviation(thresholds):
+    """A maintainer re-pulling every -git/-latest recipe in one sweep is a
+    periodic upstream refresh across unrelated upstreams, not an xz-style
+    surge onto packages the account did not already maintain."""
+    thresholds({"h058": {"min_history_cycles": 3, "z_score": 2.0, "min_activity": 2}})
+    names = ["alpha-bin-latest", "beta-git", "gamma-git",
+             "delta-git", "epsilon-git", "zeta-git"]
+    old = _meta(names, "alice", modified=NOW - 1000)
+    new = _meta(names, "alice", modified=NOW)
+    history = [{"maintainer": "alice", "cycle_time": c, "activity": 1}
+               for c in (1, 2, 3)]
+    repos = {name: {f"https://github.com/owner{i}/{name}.git"}
+             for i, name in enumerate(names)}
+    assert _fire("H058", new, old, maintainer_history=history,
+                 source_repos=repos) == []
+
+
+def test_h058_vcs_refresh_with_one_regular_package_still_fires(thresholds):
+    """The VCS stand-down is a whole-batch shape: one declared-version
+    package leaves the surge signal intact."""
+    thresholds({"h058": {"min_history_cycles": 3, "z_score": 2.0, "min_activity": 2}})
+    names = ["alpha-git", "beta-git", "gamma-git",
+             "delta-git", "epsilon-git", "regular-tool"]
+    old = _meta(names, "alice", modified=NOW - 1000)
+    new = _meta(names, "alice", modified=NOW)
+    history = [{"maintainer": "alice", "cycle_time": c, "activity": 1}
+               for c in (1, 2, 3)]
+    repos = {name: {f"https://github.com/owner{i}/{name}.git"}
+             for i, name in enumerate(names[:-1])}
+    repos["regular-tool"] = {"https://example.com/regular-tool-1.0.tar.gz"}
+    findings = _fire("H058", new, old, maintainer_history=history,
+                     source_repos=repos)
+    assert len(findings) == 1
+
+
 # --- H059 name/repo divergence -------------------------------------------------
 
 

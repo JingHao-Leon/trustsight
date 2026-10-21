@@ -610,6 +610,29 @@ def _name_repo_divergence_findings(snapshot: HistorySnapshot) -> list[dict]:
     return out
 
 
+#: Names whose version is taken from upstream automatically, so a rebuild
+#: gives them a new ``pkgver`` without the recipe changing.
+_AUTO_TRACKING_SUFFIX_RE = re.compile(
+    r"-(?:git|hg|svn|bzr|cvs|darcs|fossil|latest|nightly)$"
+)
+_AUTO_TRACKING_URL_RE = re.compile(r"\.git(?:[#?]|$)", re.IGNORECASE)
+
+
+def _is_auto_tracking(name: str, snapshot: HistorySnapshot) -> bool:
+    """True when *name*'s version tracks upstream instead of being declared.
+
+    ``-git``/``-latest`` names and ``.git`` sources take a new ``pkgver`` on
+    every upstream commit, so one sweep touches many unrelated upstreams by
+    construction.  That is a periodic refresh, not a surge.
+    """
+    if _AUTO_TRACKING_SUFFIX_RE.search(name):
+        return True
+    return any(
+        _AUTO_TRACKING_URL_RE.search(url)
+        for url in (snapshot.source_repos.get(name) or ())
+    )
+
+
 def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
     """H058 - a maintainer's activity deviates from their own baseline."""
     changes, new_meta = snapshot.changes, snapshot.new_meta
@@ -650,6 +673,13 @@ def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
         else:
             z = (len(members) - mean) / max(mean, 1.0)
         if z < z_score:
+            continue
+        # A periodic refresh of every auto-tracking recipe touches many
+        # unrelated upstreams at once: that is routine packager maintenance,
+        # not the xz-style surge onto packages the account did not already
+        # maintain.  A batch with any declared-version package keeps its
+        # signal.
+        if all(_is_auto_tracking(name, snapshot) for name in members):
             continue
         # A bulk packager bumping their own sibling packages in lockstep
         # (linux-lts510, -docs, -headers, ...) is one logical update spread

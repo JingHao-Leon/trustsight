@@ -186,7 +186,12 @@ burst. Bumping one project's own naming family in lockstep (a kernel's
 `-docs`/`-headers` splits, `foo`/`foo-bin`/`foo-qt` released together) is one
 logical update spread over several package names, not a deviation, so the
 rule stands down when every active package belongs to a single
-relatedness cluster.
+relatedness cluster. The same holds for a periodic refresh of every
+auto-tracking recipe: `-git`, `-latest` and `-nightly` names, and packages
+whose `source=` is a `.git` checkout, take a new `pkgver` from upstream on
+each sweep, so one cycle touches unrelated upstreams by construction. When
+every active package is auto-tracking the rule stands down; each rebuilt
+package is still analysed on its own for content.
 
 ### H074: Adopt-then-Modify {#h074}
 
