@@ -422,6 +422,11 @@ def _parse_time_fetch_patterns(config=None) -> list[re.Pattern]:
     # `sync_rules` appends missing rules the same way.
     frags = list(dict.fromkeys(
         (patterns.get("parse_time_fetch") or []) + DEFAULT_PARSE_TIME_FETCH))
+    # Each fragment already carries its own command-position prefix.  It
+    # must hold exactly one ``\s*``: two adjacent unbounded spaces let the
+    # engine split a whitespace run at every position, which is quadratic on
+    # a full line (A5/A14).  The shipped defaults are written that way; an
+    # operator's fragment is audited by ``scripts/regex_audit.py``.
     return [re.compile(f, re.IGNORECASE) for f in frags]
 
 

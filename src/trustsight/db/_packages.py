@@ -126,7 +126,8 @@ def _sanitize_maintainer(m: str) -> str:
     """Remove shell-injection patterns from maintainer strings."""
     m = re.sub(r'\$\([^)]*\)', '', m)
     m = re.sub(r'`[^`]*`', '', m)
-    m = re.sub(r'\s*<>\s*', '', m)
+    # The following whitespace collapse handles the space this used to eat.
+    m = m.replace('<>', '')
     m = re.sub(r'\s+', ' ', m).strip()
     return m
 

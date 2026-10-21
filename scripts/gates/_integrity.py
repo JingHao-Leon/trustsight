@@ -645,6 +645,10 @@ def gate_pattern_ioc_rejects_redos() -> Gate:
         problems.append("a nested-quantifier pattern was accepted")
     if compile_ioc_pattern(r"(a|aa)+$") is not None:
         problems.append("an ambiguous-alternation pattern was accepted")
+    # A multi-atom body (`\w+\s?`) is invisible to the narrow nested-atom
+    # detector and is just as catastrophic under the outer `+`.
+    if compile_ioc_pattern(r"(\w+\s?)+") is not None:
+        problems.append("a multi-atom quantified group was accepted")
     if compile_ioc_pattern("(") is not None:
         problems.append("an invalid regex was accepted")
     if compile_ioc_pattern("") is not None:

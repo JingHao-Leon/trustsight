@@ -115,9 +115,17 @@ def compile_ioc_pattern(pattern: str) -> re.Pattern | None:
         compiled = re.compile(pattern)
     except re.error:
         return None
-    from .regex_safety import has_nested_quantifier
+    from .regex_safety import (
+        has_nested_quantifier,
+        has_repeating_quantified_group,
+    )
 
     if has_nested_quantifier(pattern):
+        return None
+    # The narrower detector above only sees a single atom or class in the
+    # group.  ``(\w+\s?)+`` has a multi-atom body and is just as
+    # catastrophic, so the static IOC path uses the broader check.
+    if has_repeating_quantified_group(pattern):
         return None
     if _QUANTIFIED_ALTERNATION_RE.search(pattern):
         return None
