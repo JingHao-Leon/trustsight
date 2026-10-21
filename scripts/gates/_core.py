@@ -7,7 +7,7 @@ import json
 import re
 from pathlib import Path
 
-__all__ = ['Gate', 'HOSTILE', 'H_SERIES_REDUCTION_TARGET', 'ROOT', 'SRC', '_ANALYSIS_FETCH_ALLOWED', '_ARTIFACT_MODULES', '_ARTIFACT_READ_EXEMPT', '_ATX_PUNCT_RE', '_BOUNDED_IO_MODULE', '_BOUND_CONSTANTS', '_DYNAMIC_SQL_NODES', '_ENDPOINT_HOST', '_FORBIDDEN_CALLS', '_GIT_ALLOWED_IMPORTS', '_INLINE_CODE_RE', '_MD_LINK_RE', '_MIRROR_HOSTS', '_MIRROR_MODULES', '_NETWORK_CALLS', '_NETWORK_MODULES', '_PERMISSION_PHRASES', '_PERMISSION_REGEXES', '_RELEASE_HOSTS', '_RELEASE_MODULES', '_SHARED_ANALYSIS', '_URL_LITERAL_RE', '_anchor', '_call_name', '_demo_fact', '_enclosing_functions', '_h_series_live_ceiling', '_hostile_fact', '_hostile_result', '_parity_fact', '_python_files', '_rel', '_render_forget_list', '_render_inspect_text', '_render_list_rows', '_seed_ioc_baseline']
+__all__ = ['Gate', 'HOSTILE', 'H_SERIES_REDUCTION_TARGET', 'ROOT', 'SRC', '_ANALYSIS_FETCH_ALLOWED', '_ARTIFACT_MODULES', '_ARTIFACT_READ_EXEMPT', '_ATX_PUNCT_RE', '_BOUNDED_IO_MODULE', '_PATH_READ_MODULES', '_BOUND_CONSTANTS', '_DYNAMIC_SQL_NODES', '_ENDPOINT_HOST', '_FORBIDDEN_CALLS', '_GIT_ALLOWED_IMPORTS', '_INLINE_CODE_RE', '_MD_LINK_RE', '_MIRROR_HOSTS', '_MIRROR_MODULES', '_NETWORK_CALLS', '_NETWORK_MODULES', '_PERMISSION_PHRASES', '_PERMISSION_REGEXES', '_RELEASE_HOSTS', '_RELEASE_MODULES', '_SHARED_ANALYSIS', '_URL_LITERAL_RE', '_anchor', '_call_name', '_demo_fact', '_enclosing_functions', '_h_series_live_ceiling', '_hostile_fact', '_hostile_result', '_parity_fact', '_python_files', '_rel', '_render_forget_list', '_render_inspect_text', '_render_list_rows', '_seed_ioc_baseline']
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -82,6 +82,11 @@ _RELEASE_HOSTS = frozenset({"github.com", "api.github.com"})
 _RELEASE_MODULES = {"release.py"}
 
 _BOUNDED_IO_MODULE = "bounded_io.py"
+
+#: Modules whose local reads must go through ``bounded_io``.  ``doc_cache``
+#: reads a JSON file derived from attacker text, so ``read_text``/``read_bytes``
+#: here would bypass the cap the same way a bare ``read()`` does.
+_PATH_READ_MODULES = {"doc_cache.py"}
 
 _ARTIFACT_MODULES = (
     "db/_seed.py",
@@ -272,6 +277,7 @@ _BOUND_CONSTANTS = {
     "recipedoc.py": ["MAX_ALIGNMENT_CELLS"],
     "full_aur/properties.py": ["MAX_PROPERTY_ITEMS",
                                "MAX_PROPERTY_TRANSITIONS_PER_KEY"],
+    "doc_cache.py": ["MAX_DOC_CACHE_BYTES"],
     "expansion.py": ["_MAX_EXPANSION_PASSES", "_MAX_VALUE_LEN",
                      "_MAX_LINE_LEN", "_MAX_TABLE_BYTES", "_MAX_TEXT_LEN",
                      "_MAX_GLOB_PATTERN_LEN", "_MAX_GLOB_STEPS"],

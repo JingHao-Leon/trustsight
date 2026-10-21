@@ -5,9 +5,9 @@ import contextlib
 import io
 import re
 import time
-from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
+from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _PATH_READ_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
-__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
+__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
 
 def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
@@ -156,16 +156,27 @@ def gate_every_stream_read_is_bounded() -> Gate:
         if path.name == _BOUNDED_IO_MODULE:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        path_owned = path.name in _PATH_READ_MODULES
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
-            if not isinstance(node.func, ast.Attribute) or node.func.attr != "read":
+            if not isinstance(node.func, ast.Attribute):
                 continue
-            checked += 1
-            if not node.args and not node.keywords:
-                hits.append(f"{_rel(path)}:{node.lineno} unbounded read()")
+            if node.func.attr == "read":
+                checked += 1
+                if not node.args and not node.keywords:
+                    hits.append(f"{_rel(path)}:{node.lineno} unbounded read()")
+            elif path_owned and node.func.attr in ("read_text", "read_bytes"):
+                hits.append(
+                    f"{_rel(path)}:{node.lineno} unbounded {node.func.attr}()")
+    # The cache's only way to read an entry is the capped helper; a later
+    # refactor back to ``path.read_text`` would otherwise still leave the
+    # module in the set above with nothing to flag.
+    if "read_file_capped(" not in (SRC / "doc_cache.py").read_text(encoding="utf-8"):
+        hits.append("doc_cache.py does not use read_file_capped")
     return Gate("every stream read is bounded", not hits,
-                hits or f"{checked} read() calls, all sized")
+                hits or f"{checked} read() calls, all sized; document cache "
+                "reads through read_file_capped")
 
 def gate_artifact_reads_are_bounded() -> Gate:
     """A4: an artifact is bounded before it is materialised, not after.
@@ -319,6 +330,33 @@ def gate_terminal_output_is_inert() -> Gate:
             pipeline.log = saved
         return buffer.getvalue()
 
+    def stderr_log() -> str:
+        """The CLI's general log handler is the other log render path.
+
+        ``full_aur._logger`` covers the corpus progress sink; every other
+        ``log.warning``/``info`` record goes through ``_StderrHandler``.  A
+        record's message and its traceback can both carry input-controlled
+        text, and the handler must render both inert without turning one
+        value into two log lines (A10).
+        """
+        import logging
+        import sys
+
+        from trustsight.cli.app import _StderrHandler
+
+        buffer = io.StringIO()
+        saved = sys.stderr
+        sys.stderr = buffer
+        try:
+            handler = _StderrHandler()
+            handler.setFormatter(logging.Formatter("%(message)s"))
+            handler.emit(logging.LogRecord(
+                "trustsight.gate", logging.WARNING, __file__, 1,
+                "hostile %s", (HOSTILE + "\u202e\nforged verdict",), None))
+        finally:
+            sys.stderr = saved
+        return buffer.getvalue()
+
     renders = {
         "review rich": lambda: rich(
             lambda: review._render_results_rich([result], 1, False, True, True, False)),
@@ -341,6 +379,7 @@ def gate_terminal_output_is_inert() -> Gate:
             "matches": [{"package": HOSTILE, "surface": HOSTILE, "detail": HOSTILE}],
         })),
         "corpus sweep log": corpus_log,
+        "stderr log handler": stderr_log,
     }
 
     problems = []
@@ -354,6 +393,13 @@ def gate_terminal_output_is_inert() -> Gate:
             problems.append(f"{name}: escape sequence reached the terminal")
         if "VERDICT: CLEAN" in out and "[bold red]" not in out:
             problems.append(f"{name}: markup was interpreted, not printed")
+        if name == "stderr log handler":
+            if out.count("\n") != 1:
+                problems.append(f"{name}: a value forged an extra log line")
+            if any(ch in out for ch in (
+                    "\u202a", "\u202b", "\u202c", "\u202d", "\u202e",
+                    "\u2066", "\u2067", "\u2068", "\u2069")):
+                problems.append(f"{name}: bidi control reached the terminal")
     return Gate("terminal output is inert", not problems,
                 problems or sorted(renders))
 
@@ -817,6 +863,37 @@ def gate_tokenizer_worker_limit_failures_are_reported() -> Gate:
     return Gate("tokenizer worker limit failures are reported", not problems,
                 problems or "failures are returned, not swallowed")
 
+def gate_sandbox_core_limit_failure_refuses() -> Gate:
+    """A6/A16/B2: losing a core protection is a refusal, not a verdict.
+
+    Reporting a failed ``setrlimit`` is not enough: a worker that cannot set
+    address space, CPU or ``PR_SET_NO_NEW_PRIVS`` must not analyse a package
+    with weaker confinement than the verdict claims.  Secondary limits and
+    libgit2 settings remain ``degraded``; the core three refuse.
+    """
+    from unittest.mock import patch
+
+    from trustsight.sandbox import _spawn, expand_worker, git_worker
+
+    problems: list[str] = []
+    core = ["RLIMIT_AS not applied: OSError"]
+    if _spawn.core_sandbox_failures(core) != core:
+        problems.append("a core limit failure was not classified as fatal")
+    if _spawn.core_sandbox_failures([
+        "RLIMIT_FSIZE not applied: OSError",
+        "RLIMIT_NOFILE not applied: OSError",
+    ]):
+        problems.append("a secondary limit failure was classified as fatal")
+
+    for module, label in ((expand_worker, "tokenizer"), (git_worker, "git")):
+        with patch.object(module, "_apply_limits", return_value=core), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = module.main()
+        if code == 0:
+            problems.append(f"the {label} worker served after a core failure")
+    return Gate("sandbox core limit failure refuses the package", not problems,
+                problems or "core failures exit before serving")
+
 def gate_tokenizer_request_writes_are_bounded() -> Gate:
     """A4/A14: a request is capped, and its write has a deadline.
 
@@ -850,6 +927,61 @@ def gate_tokenizer_request_writes_are_bounded() -> Gate:
             problems.append(f"write_frame lacks {required}")
     return Gate("tokenizer request writes are bounded", not problems,
                 problems or "writes are select-bounded")
+
+def gate_sandbox_responses_are_capped_before_framing() -> Gate:
+    """A4/A14: both workers refuse an over-cap response while serialising.
+
+    The parent's response-read cap fires after the child has already built
+    and framed the whole payload.  The cap therefore belongs in the child,
+    while the body is serialised and before it is framed, and both workers
+    share one implementation so they cannot drift.  Behaviour is checked
+    too: naming the shared helper is not enough if the caller still builds
+    the whole body first.
+    """
+    import inspect
+    from unittest.mock import patch
+
+    from trustsight.sandbox import expand_worker, git_worker, protocol
+
+    problems: list[str] = []
+    shared = inspect.getsource(protocol.encode_response)
+    for required in ("iterencode", "MAX_RESPONSE_BYTES", "_response_too_large"):
+        if required not in shared:
+            problems.append(f"encode_response lacks {required}")
+
+    for module in (expand_worker, git_worker):
+        main_source = inspect.getsource(module.main)
+        if "protocol.frame(" not in main_source \
+                or "_encode_response(" not in main_source:
+            problems.append(
+                f"{module.__name__}.main does not frame the capped encoder")
+        if "protocol.encode(response)" in main_source:
+            problems.append(
+                f"{module.__name__}.main uses the legacy uncapped encode path")
+        encoder_source = inspect.getsource(module._encode_response)
+        if "protocol.encode_response(" not in encoder_source:
+            problems.append(
+                f"{module.__name__} does not delegate to encode_response")
+
+    with patch.object(protocol, "MAX_RESPONSE_BYTES", 1024):
+        huge = {"result": "x" * 10_000}
+        small = {"result": "ok"}
+        refusals = {
+            module.__name__: module._encode_response(huge)
+            for module in (expand_worker, git_worker)
+        }
+        for name, body in refusals.items():
+            if b"response exceeds" not in body:
+                problems.append(f"{name} did not refuse an oversized response")
+            if b"xxxx" in body:
+                problems.append(f"{name} carried the oversized payload")
+        if len(set(refusals.values())) != 1:
+            problems.append("the two workers refuse with different bodies")
+        for module in (expand_worker, git_worker):
+            if b'"result"' not in module._encode_response(small):
+                problems.append(f"{module.__name__} refused a small response")
+    return Gate("sandbox responses are capped before framing", not problems,
+                problems or "both workers cap during serialisation")
 
 def gate_tokenizer_pool_wait_is_bounded() -> Gate:
     """A6/A14: a saturated pool refuses at a deadline, never blocks forever.
