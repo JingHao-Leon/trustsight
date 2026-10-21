@@ -34,7 +34,7 @@ from ..db import (
     activate_campaign,
     active_campaigns,
     checkpoint_wal,
-    clear_upstream_dep_additions,
+    clear_correlation_feeds,
     get_connection,
     get_metadata,
     record_alerts,
@@ -48,6 +48,7 @@ from ..db import (
     set_metadata,
     write_batch,
 )
+from ..safe_text import clean
 from ..schema import TemporalContext
 from ..scoring import risk_level
 from ..tokenizer import TokenizerUnavailable
@@ -105,6 +106,11 @@ _NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061", "G006", "G010"}
 #: otherwise they are context.  Without this, a maintainer updating six of
 #: their own packages reads as a campaign.
 _IMPERSONATION_GATED_RULES = frozenset({"H052", "H055"})
+
+#: G rules that corroborate a campaign.  The report-only members of the
+#: family (G006/G007/G009/G010) never prime campaign state.
+_CAMPAIGN_RULES = frozenset(
+    {"G001", "G002", "G003", "G004", "G005", "G008"})
 
 
 def _since_cursor() -> Optional[int]:
@@ -271,12 +277,13 @@ def _campaign_identity(finding: dict) -> tuple[str, dict[str, list[str]]] | None
     if not isinstance(finding, dict):
         return None
     rule_id = str(finding.get("rule_id", ""))
-    if not rule_id.startswith("G"):
-        return None
-    # G010 is a first-seen-host census, not a corroborated campaign: a host
-    # being new is not evidence, and priming campaign state from it would
-    # let a weight-0 contact event escalate through the neighbourhood (G006).
-    if rule_id == "G010":
+    # Only corroborating G rules prime campaign state.  G006/G007 are
+    # report-only context, G009 is the operator's watchlist (a human note,
+    # not a detected cluster) and G010 is a first-seen-host census.  Letting
+    # any of them activate a campaign would spend a bounded
+    # `max_active_campaigns` slot on a weight-0 observation and could refuse
+    # a real cluster (A14, campaign state).
+    if rule_id not in _CAMPAIGN_RULES:
         return None
     params = finding.get("params", {}) or {}
     if not isinstance(params, dict):
@@ -304,8 +311,18 @@ def _campaign_identity(finding: dict) -> tuple[str, dict[str, list[str]]] | None
     dependency = str(params.get("dependency", "") or "")
     if dependency:
         scope["dependencies"] = [dependency]
-    key = (params.get("host") or params.get("literal")
-           or params.get("dependency") or params.get("maintainer") or "")
+    if rule_id == "G004":
+        # G004 joins on the (name, host) pair; keying on the name alone
+        # collapsed two different remotes that happen to share a name.
+        key = f"{dependency}:{host}"
+    else:
+        key = (params.get("host") or params.get("literal")
+               or params.get("literal_sha256")
+               or params.get("dependency") or params.get("maintainer") or "")
+    # The key carries a host or maintainer the input chose.  Bound it and
+    # strip control characters before it becomes a database key and a log
+    # field; a legitimate value is unchanged (A10, A14).
+    key = clean(str(key))[:200]
     return f"{rule_id}:{key}", scope
 
 
@@ -372,7 +389,10 @@ def _report_reactivation_pressure(alerts: dict, log) -> None:
 
     for note in campaign_reactivation_notes(
             reactivation_pressure(min_interval)):
-        log.warning("%s: %s", note["rule_id"], note["match"])
+        # A campaign id embeds the host or maintainer the cluster joined on,
+        # so the note is package-controlled text reaching a terminal (A10).
+        log.warning("%s: %s", clean(str(note["rule_id"])),
+                    clean(str(note["match"])))
 
 
 def _report_expired_campaigns(log) -> None:
@@ -385,8 +405,8 @@ def _report_expired_campaigns(log) -> None:
     from ..db import expired_unannounced, mark_expiry_announced
 
     for campaign in expired_unannounced():
-        log(f"campaign {campaign['campaign_id']} lapsed after "
-            f"{campaign['ttl_obs']} observation(s); no longer priming runs")
+        log(clean(f"campaign {campaign['campaign_id']} lapsed after "
+                  f"{campaign['ttl_obs']} observation(s); no longer priming runs"))
         mark_expiry_announced(campaign["campaign_id"])
 
 
@@ -477,16 +497,23 @@ def _correlation_records(
     family (one shared repo, H052's shape) from a coordinated takeover of
     unrelated packages.
     """
-    from ..db import correlation_feed, record_property_transition, write_batch
+    from ..db import (
+        correlation_feed,
+        record_adoption_event,
+        record_property_transition,
+        write_batch,
+    )
 
     repo_index = source_repos or {}
+    cycle_observed_at = datetime.now(timezone.utc).isoformat()
 
-    # record this cycle's maintainer transitions so the
-    # adoption_events view serves G003.  H044 is an ownership transition
-    # between two recorded maintainers; H086 is the orphan-to-maintained
-    # shape (the prior snapshot held no maintainer).  H074 (mass adoption) is
-    # the cross-package aggregation G003 itself performs.  Batched: one
-    # transaction for the whole cycle's transitions, not one per package.
+    # record this cycle's maintainer transitions so the adoption_events view
+    # serves G003.  H044 is an ownership transition between two recorded
+    # maintainers; H086 is the orphan-to-maintained shape (the prior snapshot
+    # held no maintainer).  The per-cycle row is what G003 joins on, so a
+    # package re-processed with an unchanged maintainer - or one whose
+    # adoption was recorded months ago - cannot re-arm a campaign.  Batched:
+    # one transaction for the whole cycle's transitions, not one per package.
     with write_batch():
         for name in processed:
             old_entry = (old_meta or {}).get(name)
@@ -496,6 +523,9 @@ def _correlation_records(
             previous = old_entry.get("Maintainer") or ""
             if current and current != previous:
                 record_property_transition(name, "maintainer", previous, current)
+                record_adoption_event(
+                    name, current, "H044" if previous else "H086",
+                    cycle_observed_at)
 
     feed = correlation_feed(processed)
     records: list[dict] = []
@@ -505,6 +535,9 @@ def _correlation_records(
         meta = new_meta.get(name) or {}
         records.append({
             "package": name,
+            # A pkgbase's split outputs are one project, not several
+            # unrelated packages meeting at a host/literal/dependency.
+            "pkgbase": str(meta.get("PackageBase") or name),
             "hosts_gained": sorted(set(info.get("hosts_gained", ()))),
             # The literal feed G002 joins across packages is the view.
             "added_literals": list(info.get("added_literals", ())),
@@ -625,7 +658,7 @@ def _run_corpus_sweep(
         # because every slot holds a live TTL must be visible, not silent.
         log.warning(
             "campaign cap reached; %d campaign(s) not activated this cycle: %s",
-            len(refused), ", ".join(sorted(refused)),
+            len(refused), clean(", ".join(sorted(refused))),
         )
     findings.extend(_neighborhood_elevation(records))
 
@@ -704,14 +737,23 @@ class CycleResult:
 
 
 def _logger(json_output: bool):
+    """The cycle's progress log, rendered inert.
+
+    This is a terminal render path like any other: a cluster finding's
+    ``match`` carries the gained host, maintainer or dependency name, all of
+    which the input controls.  ``clean`` strips escape sequences, control
+    bytes and bidi overrides before the message reaches stderr (A10).  The
+    JSON lane is sanitised too, because a consumer may render the string
+    later; escaping the document keeps it valid either way.
+    """
     if json_output:
         import json as _json
 
         def _log(msg):
-            print(_json.dumps({"msg": msg}))
+            print(_json.dumps({"msg": clean(msg)}))
     else:
         def _log(msg):
-            log.info(msg)
+            log.info(clean(msg))
     return _log
 
 
@@ -869,10 +911,11 @@ def _run_baseline_build(
     if over_threshold is None:
         over_threshold = _OVER_BENIGN_P95
     _ensure_init()
-    # G004's feed is one cycle's additions, not an append-only log: clear
-    # it before any package is processed so a prior cycle's pair cannot
-    # meet this cycle's pair and re-fire the join.
-    clear_upstream_dep_additions()
+    # Every G-series feed is one cycle's transitions, not an append-only log:
+    # clear them before any package is processed so a prior cycle's host,
+    # literal, adoption or upstream pair cannot meet this cycle's and re-fire
+    # the join (or keep a lapsed campaign primed).
+    clear_correlation_feeds()
     result = CycleResult()
     _log = _logger(json_output)
 

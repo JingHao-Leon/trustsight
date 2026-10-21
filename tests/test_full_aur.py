@@ -865,7 +865,11 @@ def test_corpus_path_records_added_literals_for_g002():
     )
 
     assert blob in [lit for lit, _ in package_added_literals("demo")]
-    assert blob in correlation_feed(["demo"])["demo"]["added_literals"]
+
+    import hashlib
+    digest = hashlib.sha256(blob.encode()).hexdigest()[:32]
+    assert (digest, len(blob)) in correlation_feed(
+        ["demo"])["demo"]["added_literals"]
 
 
 def test_install_hunk_uses_the_scriptlets_real_name():
@@ -1082,3 +1086,29 @@ def test_the_banner_names_the_effective_webhook(tmp_path, monkeypatch, caplog):
                            notify_url="https://ntfy.sh/example-topic")
 
     assert "alert webhook: configured" in caplog.text
+
+
+def test_the_corpus_log_is_inert_for_a_hostile_cluster(monkeypatch):
+    """A11 input reaches the progress log through a finding's match string.
+
+    The log is a render path like any renderer: a hostile maintainer or host
+    must not be able to repaint the terminal from a G-series line (A10).
+    """
+    from trustsight.full_aur import pipeline
+
+    lines: list[str] = []
+
+    class _Recorder:
+        def info(self, msg, *args):
+            lines.append(msg % args if args else str(msg))
+
+    monkeypatch.setattr(pipeline, "log", _Recorder())
+    pipeline._logger(False)(
+        "  G001 (HIGH) Shared Gained Host: gained host "
+        "\x1b[2Jevil.example\x9b31m\nforged verdict"
+    )
+    assert len(lines) == 1
+    assert "\x1b" not in lines[0]
+    assert "\x9b" not in lines[0]
+    assert "\n" not in lines[0]
+    assert "evil.example" in lines[0]

@@ -348,3 +348,46 @@ def test_a_full_campaign_cap_reports_the_refused_campaign(db):
     refused = _activate_campaigns(findings, config)
     assert len(refused) == 1
     assert refused[0].startswith("G001:")
+
+
+def test_g002_clusters_have_distinct_campaign_identities():
+    """Every shared literal used to collapse into ``G002:`` because the
+    finding carried no key.  The digest is the key, never the content."""
+    from trustsight.full_aur.pipeline import _campaign_identity
+
+    one = {"rule_id": "G002", "params": {
+        "members": ["a", "b"], "literal_sha256": "d1", "literal_length": 300}}
+    two = {"rule_id": "G002", "params": {
+        "members": ["c", "d"], "literal_sha256": "d2", "literal_length": 300}}
+    assert _campaign_identity(one)[0] != _campaign_identity(two)[0]
+    assert "d1" in _campaign_identity(one)[0]
+
+
+def test_g004_identity_includes_the_host():
+    from trustsight.full_aur.pipeline import _campaign_identity
+
+    one = {"rule_id": "G004", "params": {
+        "members": ["a", "b"], "dependency": "evil", "host": "one.example"}}
+    two = {"rule_id": "G004", "params": {
+        "members": ["c", "d"], "dependency": "evil", "host": "two.example"}}
+    assert _campaign_identity(one)[0] != _campaign_identity(two)[0]
+
+
+def test_report_only_g009_never_primes_a_campaign():
+    """G009 is the operator's watchlist note, not a detected cluster.  It
+    must not consume a bounded campaign slot or activate scope."""
+    from trustsight.full_aur.pipeline import _campaign_identity
+
+    finding = {"rule_id": "G009", "params": {
+        "members": ["xsp"], "subject": "maintainer", "label": "note"}}
+    assert _campaign_identity(finding) is None
+
+
+def test_a_campaign_id_is_bounded_and_control_free():
+    from trustsight.full_aur.pipeline import _campaign_identity
+
+    finding = {"rule_id": "G001", "params": {
+        "members": ["a", "b"], "host": "evil\x1b[2J" + "x" * 500}}
+    campaign_id, _scope = _campaign_identity(finding)
+    assert "\x1b" not in campaign_id
+    assert len(campaign_id) <= 200 + len("G001:")
