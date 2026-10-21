@@ -645,3 +645,70 @@ def test_the_variable_table_refuses_past_the_byte_cap(monkeypatch):
         engine._variable_table_with_spans(["a=" + "x" * 64])
     with pytest.raises(ValueError, match="variable table exceeds"):
         engine._variable_table_with_spans(["arr=('" + "x" * 64 + "')"])
+
+
+def test_a_many_wildcard_glob_is_matched_without_backtracking():
+    """A glob with many wildcards is answered in a bounded table pass.
+
+    The same shape used to become ``.*a.*a...`` and spend seconds
+    backtracking.  The matcher is table-driven, so it resolves the expansion
+    normally and quickly; it is not refused just for being complex.
+    """
+    import time
+
+    from trustsight._tokenizer_engine import resolve_expansions
+
+    pattern = "*a" * 8 + "b"
+    started = time.monotonic()
+    resolved, fully = resolve_expansions(
+        "${x##" + pattern + "}", {"x": "a" * 4096}
+    )
+    assert time.monotonic() - started < 1.0
+    assert fully
+    assert resolved == "a" * 4096
+
+    # The same matcher still finds a real multi-star match.
+    resolved, fully = resolve_expansions(
+        "${x//*a*ab/Y}", {"x": "zzabzzab"}
+    )
+    assert (resolved, fully) == ("Y", True)
+
+
+def test_substitution_cannot_allocate_past_the_line_bound():
+    """${x//a/<huge>} is O(value x replacement); it is refused, not run."""
+    import time
+
+    from trustsight._tokenizer_engine import resolve_expansions
+
+    body = "${x//a/" + "b" * 50_000 + "}"
+    started = time.monotonic()
+    resolved, fully = resolve_expansions(body, {"x": "a" * 8000})
+    assert time.monotonic() - started < 1.0
+    assert not fully
+    assert resolved == body
+
+
+def test_parent_resolver_obeys_the_same_bounds():
+    """The shared resolver is used outside the sandbox; it must bound too."""
+    import time
+
+    from trustsight.expansion import resolve_text, text_variable_table
+
+    text = "x=" + "a" * 8000 + "\nsource=(\"${x//a/" + "b" * 50_000 + "}\")\n"
+    table = text_variable_table(text)
+    started = time.monotonic()
+    resolved = resolve_text(text, table)
+    assert time.monotonic() - started < 1.0
+    assert resolved == text
+    assert "x" in table
+
+
+def test_a_table_value_past_the_bound_is_unknown_not_truncated():
+    from trustsight.expansion import text_variable_table
+    from trustsight._tokenizer_engine import _variable_table
+
+    text = "x=" + "a" * 9000 + "\nsource=($x)\n"
+    assert "x" not in text_variable_table(text)
+
+    variables, _arrays = _variable_table(["x=" + "a" * 9000])
+    assert "x" not in variables

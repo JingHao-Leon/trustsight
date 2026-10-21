@@ -3,11 +3,16 @@
 import re
 import threading
 
-__all__ = ['_ARRAY_ASSIGNMENT_RE', '_ASSIGNMENT_RE', '_MAX_EXPANSION_PASSES', '_MAX_LINE_LEN', '_MAX_TABLE_BYTES', '_MAX_VALUE_LEN', '_MEMO_ENTRIES', '_VAR_REF_RE', '_memo', '_memoised', '_split_top_level', '_tail_continues']
+__all__ = ['_ARRAY_ASSIGNMENT_RE', '_ASSIGNMENT_RE', '_MAX_ARRAY_ENTRIES', '_MAX_EXPANSION_PASSES', '_MAX_LINE_LEN', '_MAX_TABLE_BYTES', '_MAX_VALUE_LEN', '_MEMO_ENTRIES', '_VAR_REF_RE', '_memo', '_memoised', '_split_top_level', '_tail_continues']
 
-# The cap now lives with the shared resolver so the analysis and the worker
+# The bounds live with the shared resolver so the analysis and the worker
 # read one value; re-exported here for the engine's own imports.
-from ..expansion import _MAX_EXPANSION_PASSES  # noqa: E402
+from ..expansion import (  # noqa: E402
+    _MAX_EXPANSION_PASSES,
+    _MAX_LINE_LEN,
+    _MAX_TABLE_BYTES,
+    _MAX_VALUE_LEN,
+)
 
 _memo = threading.local()
 
@@ -68,8 +73,7 @@ def _split_top_level(body: str) -> list[str]:
     from ..analysis.crossfire import _split_commands
     return _split_commands(body)
 
-_MAX_VALUE_LEN = 8192
-
-_MAX_LINE_LEN = 65536
-
-_MAX_TABLE_BYTES = 1 << 20
+#: An array may contribute at most this many entries to the table.  Without
+#: it, one 5 MiB line of tiny words builds a multi-million-element list
+#: before the table-size check is ever reached.
+_MAX_ARRAY_ENTRIES = 4096

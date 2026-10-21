@@ -1,9 +1,10 @@
 """Extracted from _tokenizer_engine.py: _variables."""
 
+import itertools
 import re
 from functools import lru_cache
 import shlex
-from ._common import _ARRAY_ASSIGNMENT_RE, _ASSIGNMENT_RE, _MAX_LINE_LEN, _MAX_TABLE_BYTES, _MAX_VALUE_LEN, _VAR_REF_RE, _split_top_level, _tail_continues
+from ._common import _ARRAY_ASSIGNMENT_RE, _ASSIGNMENT_RE, _MAX_ARRAY_ENTRIES, _MAX_LINE_LEN, _MAX_TABLE_BYTES, _MAX_VALUE_LEN, _VAR_REF_RE, _split_top_level, _tail_continues
 from ._expansion import resolve_expansions
 from ._quotes import reconstruct_literals
 
@@ -162,8 +163,18 @@ def _collect_array_entries(
     refused = False
     parts: list[str] = []
     offsets: list[int] = []
+    collected = 0
     i = start_idx
-    for line_offset, line in enumerate([rest] + additions[start_idx + 1 :]):
+    # No tail slice: one array assignment per line made copying the remaining
+    # list quadratic in the number of added lines.
+    remaining = itertools.islice(additions, start_idx + 1, None)
+    for line_offset, line in enumerate(itertools.chain((rest,), remaining)):
+        if collected + len(line) > _MAX_TABLE_BYTES:
+            # Same refusal the table-size check raises later: an array this
+            # large cannot be folded into a static value.
+            raise ValueError(
+                f"variable table exceeds {_MAX_TABLE_BYTES} bytes; refusing"
+            )
         content: list[str] = []
         j = 0
         # A ``#`` that opens a comment (unquoted, at a word boundary) runs to
@@ -243,7 +254,9 @@ def _collect_array_entries(
             content.append(ch)
             boundary = ch.isspace() or ch in ";|&("
             j += 1
-        parts.append("".join(content))
+        content_text = "".join(content)
+        parts.append(content_text)
+        collected += len(content_text)
         offsets.append(line_offset)
         if depth == 0:
             break
@@ -255,6 +268,12 @@ def _collect_array_entries(
             for token, line_no in _split_with_lines("\n".join(parts)):
                 if not token:
                     continue
+                if len(entries) >= _MAX_ARRAY_ENTRIES or len(token) > _MAX_VALUE_LEN:
+                    # Refuse, never keep a partial list: the array's contents
+                    # are statically unknown from here on (A6).
+                    refused = True
+                    entries, entry_lines = [], []
+                    break
                 index = min(max(line_no - 1, 0), len(offsets) - 1)
                 entries.append(token)
                 entry_lines.append(start_idx + offsets[index])
@@ -431,11 +450,15 @@ def _variable_table_with_spans(
             # line on, so whatever a previous assignment left is dropped:
             # a stale value would be a wrong analysis, while an absent one
             # reads as "not seen" (A6).
-            if "$(" not in value and "`" not in value:
-                if op == "+=":
-                    var_table[name] = var_table.get(name, "") + value
-                else:
-                    var_table[name] = value
+            merged_value = (
+                var_table.get(name, "") + value if op == "+=" else value
+            )
+            if (
+                "$(" not in value
+                and "`" not in value
+                and len(merged_value) <= _MAX_VALUE_LEN
+            ):
+                var_table[name] = merged_value
                 scalar_lines[name] = i
                 ever_kept.add(name)
             else:
