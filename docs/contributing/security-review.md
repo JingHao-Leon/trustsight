@@ -61,7 +61,7 @@ a check that samples.
    catches the sixth producer someone adds next year; calling the four you know
    about does not.
 5. **When only a behavioural gate is possible, loop over the sites** rather
-   than picking one. `terminal output is inert` renders through six paths and
+   than picking one. `terminal output is inert` renders through seven paths and
    names them in its output, so the gate's own result says what it covered.
 6. **If a path cannot be called without a CLI invocation, extract it.** A
    renderer that cannot be exercised cannot be gated, and an uncoverable path
@@ -79,10 +79,11 @@ Worth knowing when you are relying on one:
 `SQL is parameterised`, `declared source URLs are never fetched`,
 `every result declares its coverage`, `a baseline supplies state, not rules`,
 `doc cross-references resolve`, `critical paths are synchronised`,
+`sandbox responses are capped before framing`,
 `every cited invariant is defined`, and `docs/security.md matches the gates`.
 
-**Behavioural, loop over every known site:** `terminal output is inert` (six
-renderers), `reserved names are refused by every writer` (three writers),
+**Behavioural, loop over every known site:** `terminal output is inert` (seven
+renderers, including the CLI stderr log handler), `reserved names are refused by every writer` (three writers),
 `FATAL rules cannot be switched off` (every shipped FATAL rule).
 
 **Structural, over a named set of modules:** `artifact reads are bounded before
@@ -103,7 +104,7 @@ hostile input is bounded`, and `differ output is deterministic`.
 end to end rather than any single matcher, because that is the only place both
 rule engines are reached.
 
-The tokenizer and regex checks are deliberately separate from the broad rule matching gate. `tokenizer hostile-input smoke is deterministic` exercises fixed hostile expansion cases, while `regex patterns pass adversarial audit` audits configured and source patterns against bounded probes. The sandbox checks are separate too: `tokenizer request writes are bounded` fails a direct `stdin.write`, and `tokenizer worker limit failures are reported` mirrors the git worker's `degraded` rule. The differ gates exercise hostile URL and malformed-hunk input and verify stable output order. When adding a new parser or input-bound constant, add both a focused adversarial test and a gate or structural check, then document the bound in A4 or A5.
+The tokenizer and regex checks are deliberately separate from the broad rule matching gate. `tokenizer hostile-input smoke is deterministic` exercises fixed hostile expansion cases, while `regex patterns pass adversarial audit` audits configured and source patterns against bounded probes. The sandbox checks are separate too: `tokenizer request writes are bounded` fails a direct `stdin.write`, `tokenizer worker limit failures are reported` mirrors the git worker's `degraded` rule, and `sandbox core limit failure refuses the package` proves a lost address-space, CPU or no-new-privileges limit stops the worker instead of weakening the verdict. The differ gates exercise hostile URL and malformed-hunk input and verify stable output order. When adding a new parser or input-bound constant, add both a focused adversarial test and a gate or structural check, then document the bound in A4 or A5.
 
 ## When you add an invariant
 

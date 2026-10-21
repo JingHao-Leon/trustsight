@@ -133,10 +133,16 @@ The request write and the response read share one deadline. The write goes
 through `protocol.write_frame`, which puts the descriptor in non-blocking mode
 and waits for writability with `select`, so a child that stops reading stdin
 cannot hold the parent in a blocking write. Resource-limit setup returns the
-limits that could not be applied; every response carries them in `degraded`
-and the client logs the degradation once. A swallowed `setrlimit` therefore
-cannot read as full protection. As with the git worker, these are
-resource-bounded subprocesses rather than an OS sandbox.
+limits that could not be applied. A failed `RLIMIT_AS`, `RLIMIT_CPU` or
+`PR_SET_NO_NEW_PRIVS` is fatal: the worker exits before serving, and the
+client reports the package as not vetted. The remaining limits arrive in
+`degraded` and the client logs them once, so a swallowed `setrlimit` cannot
+read as full protection. The response is serialised under
+`MAX_RESPONSE_BYTES` and framed only if it fits: `protocol.encode_response`
+stops at the cap while the body is built, so a wide projection is a contained
+`TokenizerUnavailable` refusal rather than a frame the parent reads and
+discards. The git worker uses the same encoder. As with the git worker, these
+are resource-bounded subprocesses rather than an OS sandbox.
 
 The sandbox covers the whole tokenizer module, so `split_lines` and
 `join_line_continuations` are sandboxed too, not only the expansion

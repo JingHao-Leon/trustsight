@@ -342,9 +342,9 @@ Package-controlled text never becomes SQL and never becomes a terminal control s
 
 ### The cache is an optimization, never an authority
 
-A miss, version mismatch or malformed entry falls back to a fresh parse. The cache never answers in place of the parser.
+A miss, version mismatch, malformed entry or oversized entry falls back to a fresh parse. The cache never answers in place of the parser, and it never chooses how much the read allocates: entries are read through `read_file_capped` under `MAX_DOC_CACHE_BYTES` (16 MiB), and a payload over that cap is not stored.
 
-**Enforced by:** `doc_cache.py` and `diffdoc.from_dict`.
+**Enforced by:** `doc_cache.py`, `diffdoc.from_dict` and the bounded-read gate.
 
 ### Only JSON, never pickle
 

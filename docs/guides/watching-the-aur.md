@@ -222,7 +222,9 @@ over the alerting bar, and any new cluster alert. The output is unbuffered
 
 `TRUSTSIGHT_LOG_TIMESTAMPS=1` prefixes each line with a timestamp and level -
 useful when the container is the only record. `TRUSTSIGHT_LOG_LEVEL` raises or
-lowers verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
+lowers verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Log records are rendered
+inert like every other terminal surface: a maintainer name, URL, path or
+exception message cannot inject control sequences or forge an extra log line.
 
 The image runs rootless and ships no pacman, which makes it the
 cold-environment reference: every measurement inside it is the reproducible

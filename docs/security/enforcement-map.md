@@ -35,7 +35,7 @@ python scripts/security_gates.py
 | `the default output is not headline-shaped` | Guarantees | the default inspect render volunteers no score |
 | `one network host, declared` | A3 | endpoint constants: `aur.archlinux.org` everywhere, `api.github.com` and `github.com` only in `release.py` |
 | `every request has a timeout` | A4 | `urlopen` call sites |
-| `every stream read is bounded` | A4, A14 | source-wide AST scan for a `read()` with no size |
+| `every stream read is bounded` | A4, A14 | source-wide AST scan for a `read()` with no size, plus `read_text`/`read_bytes` in the document cache; `doc_cache.py` reads through `read_file_capped` under `MAX_DOC_CACHE_BYTES` |
 | `artifact reads are bounded before verification` | A4 | `db.py`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
 | `H-series intake is frozen` | internal | `categories.RULE_CATEGORIES` |
@@ -62,12 +62,14 @@ python scripts/security_gates.py
 | `tokenizer module is isolated` | A6 | no `src/` module imports `_tokenizer_engine` except `sandbox/expand_worker.py` |
 | `tokenizer worker startup is isolated` | A6 | the worker launches `-I` with no `PYTHON*` environment, so no `sitecustomize` runs at startup |
 | `git worker startup is isolated` | A16 | the git worker launches `-I` with a minimal environment, so no `sitecustomize` runs at startup |
-| `git worker limit failures are reported` | A16 | `sandbox/git_worker._apply_limits` and `_harden_libgit2` return the protections that could not be set, and the client surfaces `degraded` rather than swallowing them; this is a **resource-bounded subprocess boundary, not an OS sandbox** (no separate UID, network namespace or seccomp) |
+| `git worker limit failures are reported` | A16 | `sandbox/git_worker._apply_limits` returns every protection that could not be set; a lost `RLIMIT_AS`/`RLIMIT_CPU`/`PR_SET_NO_NEW_PRIVS` refuses the worker, and `_harden_libgit2` plus secondary limits surface as `degraded`; this is a **resource-bounded subprocess boundary, not an OS sandbox** (no separate UID, network namespace or seccomp) |
 | `every cited invariant is defined` | model parity | every `A<n>` cited by this map has a matching paragraph in `docs/security/program-under-attack.md` |
-| `tokenizer worker limit failures are reported` | A6 | `sandbox/expand_worker._apply_limits` returns the limits that could not be set and attaches `degraded` to every response; the client logs it rather than inferring protection from silence |
+| `tokenizer worker limit failures are reported` | A6 | `sandbox/expand_worker._apply_limits` returns every limit that could not be set; secondary limits attach `degraded` to every response and the client logs them rather than inferring protection from silence |
+| `sandbox core limit failure refuses the package` | A6, A16, B2 | `sandbox/_spawn.core_sandbox_failures` names the fatal set; both workers exit before serving when `RLIMIT_AS`, `RLIMIT_CPU` or `PR_SET_NO_NEW_PRIVS` failed, so the client refuses and the package is NOT vetted |
 | `every child process gets an explicit environment` | A6 | every `subprocess` call in `src/` passes `env=minimal_env()`, so no inherited startup-hook or loader-injection variable (`PYTHONPATH`, `LD_PRELOAD`, ...) reaches a child |
 | `tokenizer pool waits are bounded` | A6, A14 | `sandbox/client.py` refuses a saturated pool at a finite deadline rather than blocking forever |
 | `tokenizer request writes are bounded` | A4, A14 | `sandbox/protocol.write_frame` writes under a `select` deadline, so a child that stops reading stdin cannot hold the parent in a blocking write; both sandbox clients also refuse a frame past `MAX_FRAME_BYTES` before writing it |
+| `sandbox responses are capped before framing` | A4, A14 | both workers serialise through `protocol.encode_response`, which stops at `protocol.MAX_RESPONSE_BYTES` during `iterencode` and frames only a body that fits; the parent's response-read cap remains a backstop |
 | `a dead tokenizer child fails the package` | A6, B2 | `sandbox/client.py` raises `TokenizerUnavailable`; the batch runner reports the package as NOT vetted |
 | `regex patterns pass adversarial audit` | A5, A14 | configured rules, source `re.compile` literals, inline `re.match`/`re.search`/... literals (anchored calls measured with the method they use), assembled patterns, and config-derived fragments; the shipped defaults are audited, not a stale local `patterns.toml` |
 | `untrusted text is sanitised where it is rendered` | A1, B7 | every CLI render path: `safe_text.clean` rather than the weaker `unicode.strip_ansi`, and values wrapped rather than passed to Rich as bare strings |
@@ -76,7 +78,7 @@ python scripts/security_gates.py
 | `no path-based archive extraction` | A8 | `full_aur/fetch.py`, `db._extract_v2_archive` |
 | `release artifacts and tags use the verified commit` | release consistency | `.github/workflows/publishing.yml` builds from the checked-out target and refuses a tag that points elsewhere; `scripts/verify_release.py` rebuilds `HEAD` |
 | `SQL is parameterised` | A9 | `db.py` |
-| `terminal output is inert` | A10 | `safe_text.py`, `cli/`, and the `full_aur` progress log sink |
+| `terminal output is inert` | A10 | `safe_text.py`, `cli/`, the `full_aur` progress log sink, and the CLI `_StderrHandler` (message and traceback text) |
 | `freshness uses local marker` | A11 | `sandbox/git_project._is_current`, `sandbox/git_project.last_fetch_time` |
 | `a seed cannot rewrite the database` | A12 | `db.import_seed` |
 | `hashed maintainers protect privacy` | P1 | `db.maintainers_hashed`, `seed_meta.salt` |
