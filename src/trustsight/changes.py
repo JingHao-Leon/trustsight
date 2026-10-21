@@ -430,7 +430,11 @@ def _version_facts(pre, post) -> VersionFacts:
     )
 
 
-def change_delta(diff_text: str, pkgbase: str = "") -> ChangeDelta:
+def change_delta(
+    diff_text: str,
+    pkgbase: str = "",
+    current_text: str | None = None,
+) -> ChangeDelta:
     """Build the ``ChangeDelta`` for *diff_text*.
 
     The one construction site: parse the diff once, project the pre/post
@@ -444,7 +448,10 @@ def change_delta(diff_text: str, pkgbase: str = "") -> ChangeDelta:
 
     *pkgbase* lets the normalised ``added_dependencies`` view apply the
     same self-output filter ``deps.extract_dependency_changes`` uses; the
-    rules pass the analysed package name.
+    rules pass the analysed package name.  *current_text*, when it is the
+    authoritative post-state recipe, validates those claims against the
+    arrays the change actually leaves behind (see
+    ``deps.extract_dependency_changes``).
     """
     from .diffdoc import parse_diff
     from .differ import (
@@ -482,7 +489,9 @@ def change_delta(diff_text: str, pkgbase: str = "") -> ChangeDelta:
     }
     from .deps import extract_dependency_changes
 
-    extracted = extract_dependency_changes(diff_text, pkgbase)
+    extracted = extract_dependency_changes(
+        diff_text, pkgbase, current_text=current_text
+    )
     added_dependencies = {
         name: tuple(sorted(extracted.get(name, ())))
         for name in _DEP_ALL_FIELDS

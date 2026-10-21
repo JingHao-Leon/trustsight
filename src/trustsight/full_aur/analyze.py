@@ -598,7 +598,8 @@ def analyze_package_text(
         raw_indices=raw_indices,
     )
     triggered_rules.extend(metadata_findings)
-    change_delta_obj = change_delta(clamp_text(diff_text), pkg_name)
+    change_delta_obj = change_delta(clamp_text(diff_text), pkg_name,
+                                current_text=new_pkgbuild)
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
@@ -815,7 +816,9 @@ def analyze_package_text(
         if maintainer:
             update_package_maintainer(pkg_name, maintainer)
 
-    dependency_changes = extract_dependency_changes(diff_text, pkg_name)
+    dependency_changes = extract_dependency_changes(
+        diff_text, pkg_name, current_text=new_pkgbuild
+    )
     fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
     with_changes(fact, diff_text)
     if record:

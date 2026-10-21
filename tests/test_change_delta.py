@@ -303,3 +303,14 @@ def test_dependency_facts_are_a_normalised_view_beside_the_raw_delta():
         dependency_changes={"depends": {"glibc"}},
     )
     assert any("depends: +glibc" in e for e in summarise(fact, text))
+
+
+def test_change_delta_validates_added_dependencies_against_the_post_state():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgname=demo\n+depends=('ghost')\n"
+    )
+    delta = change_delta(
+        diff, "demo", current_text="pkgname=demo\ndepends=('real')\n"
+    )
+    assert delta.added_dependencies["depends"] == ()

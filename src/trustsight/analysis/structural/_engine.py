@@ -97,7 +97,8 @@ def _structural_findings(
     if delta is None:
         from ...changes import change_delta
 
-        delta = change_delta(diff_text, package_name)
+        delta = change_delta(diff_text, package_name,
+                                     current_text=current_text)
     # Distinct name: the local ``delta`` is reused below for per-array
     # ``ArrayDelta`` values, and the shared change object must survive that.
     cdelta = delta

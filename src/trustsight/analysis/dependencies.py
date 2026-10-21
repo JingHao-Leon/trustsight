@@ -53,17 +53,22 @@ def _is_widely_provided(name: str, config: dict) -> bool:
     return dependency_observation_count(name) >= _widely_provided_threshold(config)
 
 
-def _added_deps(diff_text, package_name, delta) -> dict[str, set[str]]:
+def _added_deps(diff_text, package_name, delta,
+                current_text=None) -> dict[str, set[str]]:
     """The normalised added dependency names, from the shared delta or the
     extractor. One construction site: the delta and the rules
-    read the same facts."""
+    read the same facts.  The fallback validates against *current_text* too,
+    so every path that has the post recipe agrees about hunk-boundary
+    ambiguity."""
     if delta is not None:
         return {f: set(v) for f, v in delta.added_dependencies.items()}
-    return extract_dependency_changes(diff_text, package_name)
+    return extract_dependency_changes(
+        diff_text, package_name, current_text=current_text
+    )
 
 
 def _scope_expansion_findings(diff_text, package_name, config, add,
-                              delta=None) -> None:
+                              delta=None, current_text=None) -> None:
     """Newly claimed ``provides``/``replaces`` naming an established or widely
     provided package unrelated to *package_name* (H064).
 
@@ -77,7 +82,9 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
     The added names come from the shared ``ChangeDelta`` when *delta* is
     given; otherwise the extractor runs here.
     """
-    added_deps = _added_deps(diff_text, package_name, delta)
+    added_deps = _added_deps(
+        diff_text, package_name, delta, current_text=current_text
+    )
     # `conflicts` belongs beside the other two.  All three insert this
     # package in front of a name the ecosystem relies on: `provides` and
     # `replaces` claim to *be* it, and `conflicts` makes pacman refuse to
@@ -179,7 +186,9 @@ def name_shadow_findings(text: str, package_name: str,
 
 def _dependency_findings(diff_text, package_name, config, add, current_text=None,
                          delta=None) -> None:
-    added_deps = _added_deps(diff_text, package_name, delta)
+    added_deps = _added_deps(
+        diff_text, package_name, delta, current_text=current_text
+    )
     # A split package's own outputs are new to the AUR by construction;
     # D001/H030 must not read a dependency on them as an outside name.
     self_outputs = declared_package_names(current_text) if current_text else set()
@@ -202,7 +211,10 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                 f"diff adds {len(novel)} novel/rare deps: {novel}",
                 n_novel=len(novel), novel_names=", ".join(novel))
 
-    _scope_expansion_findings(diff_text, package_name, config, add, delta=delta)
+    _scope_expansion_findings(
+        diff_text, package_name, config, add,
+        delta=delta, current_text=current_text,
+    )
 
     for shadow in name_shadow_findings(
         current_text or "", package_name,

@@ -123,7 +123,8 @@ def scan_diff(
         resolved_indices=resolved_indices,
         raw_indices=raw_indices,
     )
-    change_delta_obj = change_delta(clamp_text(diff_text), package_name)
+    change_delta_obj = change_delta(clamp_text(diff_text), package_name,
+                                current_text=current_text)
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
@@ -319,7 +320,9 @@ def scan_diff(
         final_score=score,
         ioc_matches=ioc_matches,
     )
-    deps_added = extract_dependency_changes(diff_text, package_name)
+    deps_added = extract_dependency_changes(
+        diff_text, package_name, current_text=current_text
+    )
     fact.dependency_changes = {k: sorted(v) for k, v in deps_added.items() if v}
     fact.resolution_coverage = resolution_coverage(
         resolved_strings, unresolved_strings, triggered_rules, load_rules())

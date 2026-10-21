@@ -846,3 +846,99 @@ def test_a_source_rename_never_reads_as_a_dependency():
     )
     added = extract_dependency_changes(diff, "nui-sftp")
     assert added["makedepends"] == {"clang", "extra"}, added["makedepends"]
+
+
+# --- hunk-boundary projection vs the authoritative post recipe ---
+
+_BOUNDARY_POST = """pkgname=demo
+pkgver=1.0
+pkgrel=1
+depends=('glibc' 'polkit')
+makedepends=('git')
+optdepends=(
+  'glib2: settings integration'
+)
+source=(
+  'README.md'
+  'LICENSE'
+  'test_vscode_update.py'
+  'test_code_setup.py'
+  'create-directory'
+)
+"""
+
+_BOUNDARY_DIFF = HEADER + """@@ -2,7 +2,7 @@
+ pkgname=demo
+ pkgver=1.0
+ pkgrel=1
+-depends=('glibc')
++depends=('glibc' 'polkit')
+ makedepends=('git')
+ optdepends=(
+   'glib2: settings integration'
+@@ -20,6 +20,8 @@
+   'README.md'
+   'LICENSE'
+   'test_vscode_update.py'
++'test_code_setup.py'
++'create-directory'
+ )
+"""
+
+
+def test_hunk_boundary_claims_are_validated_against_the_post_recipe():
+    """A hunk ending on `optdepends=(` must not adopt the next hunk's
+    `source=(...)` entries.  The diff alone cannot tell; the post recipe can."""
+    from trustsight.changes import change_delta
+
+    added = extract_dependency_changes(
+        _BOUNDARY_DIFF, "demo", current_text=_BOUNDARY_POST
+    )
+    assert added["depends"] == {"polkit"}
+    assert added["optdepends"] == set()
+
+    delta = change_delta(_BOUNDARY_DIFF, "demo", current_text=_BOUNDARY_POST)
+    assert delta.added_dependencies["depends"] == ("polkit",)
+    assert delta.added_dependencies["optdepends"] == ()
+
+
+def test_hunk_boundary_phantom_does_not_fire_d001_or_h030(
+        seeded_db, enabled, rules):
+    record_dependency_names(["polkit"] * 10)
+    fact = scan_diff(
+        _BOUNDARY_DIFF, rules=rules, config=enabled,
+        package_name="demo", current_text=_BOUNDARY_POST,
+    )
+    ids = {e.rule_id for e in fact.score_breakdown}
+    assert "D001" not in ids
+    assert "H030" not in ids
+    assert fact.dependency_changes.get("optdepends") in (None, [])
+
+
+def test_post_validation_covers_arch_arrays_and_constraints():
+    new = "pkgname=demo\ndepends_x86_64=('libfoo>=1.2')\n"
+    diff = HEADER + "+depends_x86_64+=('libfoo>=1.2')\n"
+    added = extract_dependency_changes(diff, "demo", current_text=new)
+    assert added["depends"] == {"libfoo"}
+
+
+def test_post_validation_skips_an_unresolved_array():
+    """A `$` entry cannot be compared; keeping the claim is the safe side."""
+    new = 'pkgname=demo\ndepends=("$dep")\n'
+    diff = HEADER + "+depends=('newdep')\n"
+    added = extract_dependency_changes(diff, "demo", current_text=new)
+    assert added["depends"] == {"newdep"}
+
+
+def test_post_validation_returns_diff_claims_when_the_recipe_cannot_parse(
+        monkeypatch):
+    import trustsight.recipedoc as recipedoc
+
+    def boom(_text, **_kwargs):
+        raise ValueError("cannot parse")
+
+    monkeypatch.setattr(recipedoc, "parse_recipe", boom)
+    diff = HEADER + "+depends=('newdep')\n"
+    assert extract_dependency_changes(
+        diff, "demo", current_text="pkgname=demo\n"
+    )["depends"] == {"newdep"}

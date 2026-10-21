@@ -402,13 +402,55 @@ def _with_context_assignments(diff_text: str, marker: str = "+") -> str:
     return "\n".join(out)
 
 
+def _post_dependency_names(recipe, field: str) -> set[str] | None:
+    """Names in *field*'s post-state family, or ``None`` when unsafe.
+
+    The diff projection is ambiguous where two hunks meet: a hunk that ends
+    on an ``optdepends=(`` opener and the next hunk's ``source=(...)`` body
+    look like one array.  The whole post recipe settles that without
+    guessing, so claims are intersected with the names this field actually
+    holds after the change - including its ``field_<arch>`` arrays.
+
+    ``None`` means the comparison is unsafe, not that the field is empty: a
+    ``$``-bearing entry (the typed table does not resolve array entries)
+    could stand for a claimed name, so that field keeps its diff-derived
+    claims rather than losing a real addition.
+    """
+    entries = [
+        entry
+        for key, values in recipe.arrays.items()
+        if key == field or key.startswith(field + "_")
+        for entry in values
+    ]
+    if any("$" in entry for entry in entries):
+        return None
+    if field in ("provides", "replaces", "conflicts"):
+        # Lazy import: changes imports this module lazily inside
+        # change_delta, and the relational fold is its shared helper.
+        from .changes import _resolve_relational
+
+        entries = list(_resolve_relational(tuple(entries), recipe.scalars))
+        if any("$" in entry for entry in entries):
+            return None
+    return {normalize_dependency(entry) for entry in entries}
+
+
 def extract_dependency_changes(
-    diff_text: str, pkgbase: str = ""
+    diff_text: str,
+    pkgbase: str = "",
+    current_text: str | None = None,
 ) -> dict[str, set[str]]:
     """Return ``{field: {added names}}`` for a PKGBUILD diff.
 
     Variables are resolved first, so ``depends=("$_pkgname-x11")`` is
     compared as its expanded value where that value is known.
+
+    When *current_text* is the authoritative post-state PKGBUILD, each claim
+    is intersected with the names that field actually holds after the change.
+    A hunk boundary can make one dependency array look like the continuation
+    of another; the full recipe answers that without guessing.  A parse
+    failure returns the unvalidated diff result, so validation never becomes
+    a new refusal path.
     """
     # Resolved so that depends=("$_pkgname-x11") is compared by its real
     # name where the value is known; positions are preserved.  Context
@@ -439,4 +481,16 @@ def extract_dependency_changes(
             added[f] = {n for n in names if not is_ignorable(n)}
         else:
             added[f] = {n for n in names if not is_ignorable(n, pkgbase)}
+
+    if current_text and current_text.strip():
+        try:
+            from .recipedoc import parse_recipe
+
+            recipe = parse_recipe(current_text)
+        except Exception:
+            return added
+        for field in DEP_FIELDS:
+            actual = _post_dependency_names(recipe, field)
+            if actual is not None:
+                added[field] = added[field] & actual
     return added

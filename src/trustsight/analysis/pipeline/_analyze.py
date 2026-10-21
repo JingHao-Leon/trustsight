@@ -516,7 +516,8 @@ def analyze_package(
             previous_diff = ""
     # /: one change-as-data construction, shared
     # by the structural rules and the stored `change` object.
-    change_delta_obj = change_delta(clamp_text(diff_text), pkg_name)
+    change_delta_obj = change_delta(clamp_text(diff_text), pkg_name,
+                                current_text=head_pkgbuild)
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
@@ -840,7 +841,9 @@ def analyze_package(
     # they are settled before the history write: the stored fact_json is
     # what the review cache (#20) serves back, and it must read exactly
     # like the fact this run returns.
-    dependency_changes = extract_dependency_changes(diff_text, pkg_name)
+    dependency_changes = extract_dependency_changes(
+        diff_text, pkg_name, current_text=head_pkgbuild
+    )
     fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
     fact.resolution_coverage = resolution_coverage(
         resolved_strings, unresolved_strings, triggered_rules, load_rules())
