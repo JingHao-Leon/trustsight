@@ -13,7 +13,7 @@ import time
 import pygit2
 import pytest
 
-from trustsight.sandbox import git_worker as gw
+from trustsight.sandbox import git_project, git_worker as gw
 
 
 @pytest.fixture
@@ -147,8 +147,9 @@ def test_a_failed_fetch_keeps_the_cached_clone(repo, cache, monkeypatch):
         raise pygit2.GitError("connection reset")
 
     monkeypatch.setattr(pygit2.Remote, "fetch", explode)
-    with pytest.raises(pygit2.GitError):
+    with pytest.raises(gw._TransferAborted) as caught:
         gw._open_fetch(_payload(cache))
+    assert caught.value.received_bytes == 0
     assert path.exists(), "a failed fetch deleted a usable clone"
 
 
@@ -272,6 +273,37 @@ def test_tree_files_reports_incomplete_when_capped(cache, monkeypatch):
     assert len(result["files"]) == 2
 
 
+def test_the_tree_walk_stops_at_the_entry_cap(cache, monkeypatch):
+    """A14: the entry cap bounds the walk, not just the returned list.
+
+    The cap used to be applied after `collect_tree_files` had walked the
+    whole tree, so a repository of millions of tiny blobs built the entire
+    list before the worker truncated it.  Blobs here are large enough to be
+    streamed, and `BlobIO` is a canary: a read past the cap proves the walk
+    did not stop.
+    """
+    repo = pygit2.init_repository(str(cache / "cap"), bare=True)
+    builder = repo.TreeBuilder()
+    for index in range(3):
+        builder.insert(f"f{index}", repo.create_blob(b"x" * (600 * 1024)),
+                       pygit2.GIT_FILEMODE_BLOB)
+    sig = pygit2.Signature("t", "t@example.invalid")
+    oid = str(repo.create_commit("refs/heads/master", sig, sig, "c",
+                                 builder.write(), []))
+    reads = []
+
+    class _Canary:
+        def __init__(self, *_a, **_k):
+            reads.append(True)
+            raise RuntimeError("read past the cap")
+
+    monkeypatch.setattr(git_project.pygit2, "BlobIO", _Canary)
+    files, complete = git_project.collect_tree_files(repo, oid, max_entries=2)
+    assert len(reads) == 2, "the walk read past its entry cap"
+    assert len(files) == 0
+    assert complete is False
+
+
 def test_walk_and_commit_meta(cache):
     repo = pygit2.init_repository(str(cache / "hist"))
     c1 = _commit_files(repo, {"PKGBUILD": b"v1\n"}, [])
@@ -355,6 +387,18 @@ def test_an_oversized_response_is_refused_not_framed(monkeypatch):
     assert b'"result"' in small
     huge = gw._encode_response({"result": "x" * 1000})
     assert b"exceeds" in huge and b"xxxx" not in huge
+
+
+def test_a_surrogate_in_a_response_is_sanitised_not_raised():
+    """A path or message git stores as invalid UTF-8 must not kill the loop.
+
+    `json.dumps(..., ensure_ascii=False).encode("utf-8")` raises on a lone
+    surrogate, and the encoder sits outside the handler that turns a defect
+    into an error frame.  The encoded value is what travels.
+    """
+    payload = gw._encode_response({"result": "a\udcffb"})
+    assert b"\\udcff" not in payload
+    assert b"?" in payload
 
 
 def test_read_blob_head_refuses_an_unknown_declared_size():

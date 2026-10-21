@@ -41,6 +41,31 @@ def test_a_healthy_startup_reports_nothing(monkeypatch):
     assert git_worker._apply_limits() == []
 
 
+def test_a_libgit2_setting_that_fails_is_reported(monkeypatch):
+    """A16: strict verification failing to turn on must not read as on."""
+    from trustsight.sandbox import git_worker
+
+    class _RefusingSettings:
+        def __setattr__(self, name, value):
+            raise ValueError("denied")
+
+        def enable_strict_object_creation(self, value=True):
+            raise ValueError("denied")
+
+        def enable_strict_hash_verification(self, value=True):
+            raise ValueError("denied")
+
+    monkeypatch.setattr(git_worker.pygit2, "settings", _RefusingSettings())
+    monkeypatch.setattr(git_worker.tempfile, "mkdtemp",
+                        lambda **_k: "/tmp/trustsight-test-home")
+    monkeypatch.setattr(git_worker.atexit, "register", lambda *_a, **_k: None)
+
+    failures = git_worker._harden_libgit2()
+    assert len(failures) == 4
+    assert any("pack object ceiling" in f for f in failures)
+    assert any("strict hash verification" in f for f in failures)
+
+
 def test_the_response_carries_the_degraded_list(monkeypatch):
     from trustsight.sandbox import git_worker
 

@@ -149,3 +149,32 @@ def test_walk_round_trip(cache):
         session.close()
     assert {c["id"] for c in commits} == {c1, c2}
     assert {m["id"] for m in meta} == {c1, c2}
+
+
+def test_an_oversized_request_is_refused_before_it_is_written(cache, monkeypatch):
+    """A4: the parent caps its own frame, rather than learning from EOF.
+
+    The worker refuses an over-cap frame by exiting, which the parent sees as
+    an opaque closed channel.  The reason is still known on this side.
+    """
+    session = git_client.GitSession()
+    try:
+        monkeypatch.setattr(git_client.protocol, "MAX_FRAME_BYTES", 32)
+        with pytest.raises(git_client.GitSandboxUnavailable, match="exceeds"):
+            session.request("head", {"pkg": "x" * 100, "cache_dir": str(cache)})
+    finally:
+        session.close()
+
+
+def test_a_worker_past_its_cpu_allowance_is_retired(cache, monkeypatch):
+    """A16/A14: retire below RLIMIT_CPU, so the failure has the right owner."""
+    session = git_client.GitSession()
+    try:
+        monkeypatch.setattr(git_client, "_worker_cpu_seconds",
+                            lambda _pid: 10**6)
+        session.head("demo", str(cache))
+        assert session._closed, "a worker past its CPU allowance stayed alive"
+        with pytest.raises(git_client.GitSandboxUnavailable, match="retired"):
+            session.head("demo", str(cache))
+    finally:
+        session.close()
