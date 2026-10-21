@@ -74,3 +74,24 @@ def test_the_response_carries_the_degraded_list(monkeypatch):
         "degraded": ["RLIMIT_AS not applied: OSError"]}
     monkeypatch.setattr(git_worker, "_DEGRADED", [])
     assert git_worker._attach_degraded({}) == {}
+
+
+def test_a_core_limit_failure_refuses_before_serving(monkeypatch):
+    from trustsight.sandbox import git_worker
+
+    monkeypatch.setattr(
+        git_worker,
+        "_apply_limits",
+        lambda: ["RLIMIT_CPU not applied: OSError"],
+    )
+    assert git_worker.main() == 3
+
+
+def test_secondary_limit_failures_stay_degraded():
+    from trustsight.sandbox import _spawn
+
+    failures = [
+        "RLIMIT_FSIZE not applied: OSError",
+        "RLIMIT_NOFILE not applied: OSError",
+    ]
+    assert _spawn.core_sandbox_failures(failures) == []

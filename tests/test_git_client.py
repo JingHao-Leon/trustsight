@@ -178,3 +178,21 @@ def test_a_worker_past_its_cpu_allowance_is_retired(cache, monkeypatch):
             session.head("demo", str(cache))
     finally:
         session.close()
+
+
+def test_a_worker_that_exits_at_startup_is_a_refusal(monkeypatch):
+    import io
+    from types import SimpleNamespace
+
+    session = object.__new__(git_client.GitSession)
+    session.proc = SimpleNamespace(
+        poll=lambda: 3, stdin=io.BytesIO(), stdout=io.BytesIO()
+    )
+    session._closed = False
+    session._retired = ""
+    monkeypatch.setattr(session, "close", lambda: None)
+
+    with pytest.raises(
+        git_client.GitSandboxUnavailable, match="exited during startup"
+    ):
+        session.request("head", {})

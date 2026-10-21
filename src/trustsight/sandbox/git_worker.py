@@ -36,6 +36,7 @@ from pathlib import Path
 import pygit2
 
 from trustsight.sandbox import protocol
+from trustsight.sandbox._spawn import core_sandbox_failures
 from trustsight.sandbox.git_bounds import (
     GIT_COMMIT_META_MAX_OIDS,
     GIT_DIFF_MAX_CONTEXT_LINES,
@@ -630,28 +631,15 @@ def _handle(body: bytes) -> dict:
 
 
 def _encode_response(response: dict) -> bytes:
-    """Serialise *response*, refusing one past the response byte cap.
+    """Serialise *response* under the shared response byte cap.
 
-    Refusing here, before framing, means a wide projection cannot make the
-    parent read a frame it must reject, nor this worker hold an unbounded
-    reply (A4/A14).
+    The cap lives in :func:`trustsight.sandbox.protocol.encode_response` so
+    both workers apply the same bound while the body is built, before it is
+    framed (A4/A14).  Refusing there means a wide projection cannot make the
+    parent read a frame it must reject, nor this worker materialise an
+    unbounded reply.
     """
-    try:
-        payload = json.dumps(
-            response, separators=(",", ":"), ensure_ascii=False
-        ).encode("utf-8", errors="replace")
-    except Exception as exc:  # a defect here is a refusal, not a dead loop
-        payload = json.dumps(
-            {"error": f"response could not be serialised: "
-                      f"{type(exc).__name__}"},
-            separators=(",", ":"),
-        ).encode("ascii")
-    if len(payload) > protocol.MAX_RESPONSE_BYTES:
-        payload = json.dumps(
-            {"error": "response exceeds the response byte cap"},
-            separators=(",", ":"),
-        ).encode("utf-8")
-    return payload
+    return protocol.encode_response(response)
 
 
 def _attach_degraded(response: dict) -> dict:
@@ -668,7 +656,16 @@ def _attach_degraded(response: dict) -> dict:
 
 def main() -> int:
     global _DEGRADED
-    _DEGRADED = _apply_limits() + _harden_libgit2()
+    limit_failures = _apply_limits()
+    core = core_sandbox_failures(limit_failures)
+    if core:
+        print(
+            "trustsight-git-sandbox-refused: " + "; ".join(core),
+            file=sys.stderr,
+            flush=True,
+        )
+        return 3
+    _DEGRADED = limit_failures + _harden_libgit2()
     try:
         os.chdir("/")
     except OSError:

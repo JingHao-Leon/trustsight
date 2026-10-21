@@ -138,6 +138,11 @@ class _Worker:
     def request(self, body: bytes) -> bytes:
         if self.proc is None or self.proc.stdin is None or self.proc.stdout is None:
             raise _WorkerError("worker is not running")
+        if self.proc.poll() is not None:
+            raise _WorkerError(
+                "worker exited during startup" if not self.requests
+                else "worker exited"
+            )
         deadline = time.monotonic() + REQUEST_TIMEOUT_SECONDS
         try:
             protocol.write_frame(

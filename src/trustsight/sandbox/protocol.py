@@ -44,13 +44,57 @@ class FrameError(Exception):
     """A frame was short, oversize, or not framed at all."""
 
 
+def encode_response(obj: object, max_bytes: int | None = None) -> bytes:
+    """Serialise *obj* under the response byte cap; return the body.
+
+    The cap is applied *while* the body is built, not to the finished
+    string: ``iterencode`` yields the projection in chunks and the
+    accumulator stops as soon as the running total passes the ceiling.  An
+    over-cap projection therefore costs the cap plus one chunk, rather than
+    materialising the whole reply and then refusing it.  The parent's
+    response-read cap remains the backstop for a worker that bypasses this.
+
+    A body that cannot be encoded is a named error body, and a lone
+    surrogate is replaced rather than raising: both turn a defect into a
+    refusal frame instead of a dead worker.
+    """
+    cap = MAX_RESPONSE_BYTES if max_bytes is None else min(
+        max_bytes, MAX_RESPONSE_BYTES)
+    if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
+        raise ValueError("max_bytes must be a positive integer")
+    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    out = bytearray()
+    try:
+        for chunk in encoder.iterencode(obj):
+            out.extend(chunk.encode("utf-8", errors="replace"))
+            if len(out) > cap:
+                return _response_too_large()
+    except Exception as exc:  # a defect here is a refusal, not a dead worker
+        return json.dumps(
+            {"error": f"response could not be serialised: "
+                      f"{type(exc).__name__}"},
+            separators=(",", ":"),
+        ).encode("ascii")
+    return bytes(out)
+
+
+def _response_too_large() -> bytes:
+    """The small body both workers send when a response passes the cap."""
+    return json.dumps(
+        {"error": "response exceeds the response byte cap"},
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
 def encode(obj: object) -> bytes:
-    """Serialise *obj* as one frame.  ``ensure_ascii`` is off so the diff
-    round-trips byte-for-byte; the analysis decodes with ``errors=replace``,
-    so there are no lone surrogates to fail UTF-8 encoding."""
-    return frame(json.dumps(
-        obj, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8"))
+    """Serialise *obj* as one capped frame.
+
+    ``ensure_ascii`` is off so the diff round-trips byte-for-byte; the
+    analysis decodes with ``errors=replace``, so there are no lone
+    surrogates to fail UTF-8 encoding.  The capped body is what is framed,
+    so this convenience path cannot bypass :func:`encode_response`.
+    """
+    return frame(encode_response(obj))
 
 
 def frame(body: bytes) -> bytes:

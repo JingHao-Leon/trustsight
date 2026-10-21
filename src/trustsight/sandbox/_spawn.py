@@ -16,12 +16,35 @@ from pathlib import Path
 
 from ..subproc import minimal_env
 
-__all__ = ["launch_args", "spawn_isolated", "WORKER_ROOT"]
+__all__ = [
+    "CORE_SANDBOX_FAILURES",
+    "launch_args",
+    "core_sandbox_failures",
+    "spawn_isolated",
+    "WORKER_ROOT",
+]
 
 
 #: The directory a worker inserts on ``sys.path`` to import this package - the
 #: tree this process already imported from, not a path an attacker chose.
 WORKER_ROOT = str(Path(__file__).resolve().parents[2])
+
+#: A worker that loses one of these is not the populated-by-default subprocess
+#: the design assumes.  It refuses to serve rather than analyse a package with
+#: weaker confinement than the verdict claims (A6/A16/B2).
+CORE_SANDBOX_FAILURES = (
+    "RLIMIT_AS",
+    "RLIMIT_CPU",
+    "PR_SET_NO_NEW_PRIVS",
+)
+
+
+def core_sandbox_failures(failures: list[str]) -> list[str]:
+    """The subset of *failures* that makes a worker refuse to start."""
+    return [
+        failure for failure in failures
+        if failure.startswith(CORE_SANDBOX_FAILURES)
+    ]
 
 
 def launch_args(module: str) -> list[str]:

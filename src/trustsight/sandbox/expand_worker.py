@@ -22,7 +22,9 @@ itself):
 A limit that could not be applied is returned to the parent in every
 response's ``degraded`` field and logged, rather than swallowed: the
 isolation is weaker than the design intends and the operator must be able
-to see that.
+to see that.  The core protections are stricter: if address space, CPU or
+``PR_SET_NO_NEW_PRIVS`` could not be set, the worker exits before serving,
+and the client reports the package as NOT vetted.
 """
 
 import ctypes
@@ -32,6 +34,7 @@ import sys
 
 from trustsight import _tokenizer_engine as engine
 from trustsight.sandbox import protocol
+from trustsight.sandbox._spawn import core_sandbox_failures
 
 #: Address-space ceiling.  The engine's own bounds are 64 KiB for a line,
 #: 8 KiB for a value and 1 MiB for the variable table, so 512 MiB is far
@@ -178,9 +181,29 @@ def _attach_degraded(response: dict) -> dict:
     return response
 
 
+def _encode_response(response: dict) -> bytes:
+    """Serialise *response* under the shared response byte cap.
+
+    The parent advertises a response read cap, but by the time it fires the
+    child has already built and framed the whole payload.  The cap belongs
+    here, while the body is serialised and before it is framed, and it is
+    shared with the git worker so the two sandboxes cannot disagree (A4/A14).
+    """
+    return protocol.encode_response(response)
+
+
 def main() -> int:
     global _DEGRADED
-    _DEGRADED = _apply_limits()
+    failures = _apply_limits()
+    core = core_sandbox_failures(failures)
+    if core:
+        print(
+            "trustsight-tokenizer-sandbox-refused: " + "; ".join(core),
+            file=sys.stderr,
+            flush=True,
+        )
+        return 3
+    _DEGRADED = failures
     try:
         os.chdir("/")
     except OSError:
@@ -195,7 +218,7 @@ def main() -> int:
             return 0
         response = _attach_degraded(_handle(body))
         try:
-            stdout.write(protocol.encode(response))
+            stdout.write(protocol.frame(_encode_response(response)))
             stdout.flush()
         except (BrokenPipeError, OSError):
             return 1

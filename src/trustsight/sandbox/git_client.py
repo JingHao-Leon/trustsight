@@ -134,6 +134,9 @@ class GitSession:
                 timeout: float = GIT_OP_TIMEOUT_SECONDS) -> dict:
         if self._closed or self.proc.stdin is None or self.proc.stdout is None:
             raise GitSandboxUnavailable(self._retired or "session is not running")
+        if self.proc.poll() is not None:
+            self.close()
+            raise GitSandboxUnavailable("git worker exited during startup")
         body = json.dumps({"op": op, **payload}, separators=(",", ":"),
                           ensure_ascii=False).encode("utf-8")
         # The worker refuses an over-cap frame by exiting, which the parent

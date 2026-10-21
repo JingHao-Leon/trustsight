@@ -276,3 +276,114 @@ def test_degraded_limits_are_reported_once(monkeypatch, caplog):
     assert client._send("lines", "x") == ["x"]
     assert worker.degraded == ["RLIMIT_AS not applied: OSError"]
     assert "degraded" in caplog.text
+
+
+def test_core_sandbox_failures_are_the_fatal_set():
+    from trustsight.sandbox import _spawn
+
+    assert _spawn.core_sandbox_failures([
+        "RLIMIT_AS not applied: OSError",
+        "RLIMIT_CPU not applied: OSError",
+        "PR_SET_NO_NEW_PRIVS not applied: prctl failed",
+        "RLIMIT_FSIZE not applied: OSError",
+        "RLIMIT_NOFILE not applied: OSError",
+    ]) == [
+        "RLIMIT_AS not applied: OSError",
+        "RLIMIT_CPU not applied: OSError",
+        "PR_SET_NO_NEW_PRIVS not applied: prctl failed",
+    ]
+    assert _spawn.core_sandbox_failures([
+        "RLIMIT_FSIZE not applied: OSError",
+        "RLIMIT_NOFILE not applied: OSError",
+    ]) == []
+
+
+def test_a_core_limit_failure_refuses_before_serving(monkeypatch):
+    from trustsight.sandbox import expand_worker
+
+    monkeypatch.setattr(
+        expand_worker,
+        "_apply_limits",
+        lambda: ["RLIMIT_AS not applied: OSError"],
+    )
+    assert expand_worker.main() == 3
+
+
+def test_the_worker_process_refuses_when_setrlimit_fails():
+    """The real child exits before answering a request, not with a limit lost."""
+    import subprocess
+    import sys
+
+    from trustsight.sandbox._spawn import WORKER_ROOT
+
+    code = (
+        "import resource, sys;"
+        f"sys.path.insert(0, {WORKER_ROOT!r});"
+        "resource.setrlimit = lambda *_a: "
+        "(_ for _ in ()).throw(OSError('denied'));"
+        "from trustsight.sandbox import expand_worker;"
+        "raise SystemExit(expand_worker.main())"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", code],
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 3
+    assert b"tokenizer-sandbox-refused" in result.stderr
+
+
+def test_a_worker_that_exits_at_startup_is_a_refusal():
+    worker = client._Worker()
+    worker.proc = SimpleNamespace(
+        poll=lambda: 3, stdin=io.BytesIO(), stdout=io.BytesIO()
+    )
+    with pytest.raises(client._WorkerError, match="exited during startup"):
+        worker.request(b"{}")
+
+
+def test_an_oversized_response_is_refused_not_framed(monkeypatch):
+    """A4/A14: both workers stop at the cap while serialising.
+
+    The parent's read cap fires after the child has built and framed the
+    whole reply.  The child must refuse first, and the two workers must
+    agree on the refusal so neither can drift back to the uncapped path.
+    """
+    from trustsight.sandbox import expand_worker, git_worker, protocol
+
+    monkeypatch.setattr(protocol, "MAX_RESPONSE_BYTES", 1024)
+    huge = {"result": "x" * 10_000}
+    bodies = {
+        module.__name__: module._encode_response(huge)
+        for module in (expand_worker, git_worker)
+    }
+    for name, body in bodies.items():
+        assert b"response exceeds" in body, name
+        assert b"xxxx" not in body, name
+    assert len(set(bodies.values())) == 1
+
+    small = {"result": "ok"}
+    assert expand_worker._encode_response(small) == git_worker._encode_response(small)
+
+
+def test_a_surrogate_in_a_tokenizer_response_is_sanitised():
+    """A lone surrogate is replaced, not raised, in both workers."""
+    from trustsight.sandbox import expand_worker, git_worker
+
+    for module in (expand_worker, git_worker):
+        body = module._encode_response({"result": "a\udcffb"})
+        assert b"\\udcff" not in body
+        assert b"?" in body
+
+
+def test_the_legacy_encode_path_is_capped(monkeypatch):
+    """`protocol.encode` must not remain an uncapped way to frame a reply."""
+    from trustsight.sandbox import protocol
+
+    monkeypatch.setattr(protocol, "MAX_RESPONSE_BYTES", 1024)
+    framed = protocol.encode({"result": "x" * 10_000})
+    (length,) = protocol.HEADER.unpack(framed[:protocol.HEADER.size])
+    assert length == len(framed) - protocol.HEADER.size
+    assert length <= 1024
+    assert b"response exceeds" in framed
