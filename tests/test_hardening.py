@@ -789,3 +789,16 @@ def test_malformed_urls_are_survivable(url):
     from trustsight.buckets import classify_urls
 
     assert isinstance(classify_urls([url]), dict)
+
+
+def test_a_non_utf8_diff_path_is_sanitised_not_returned_with_a_surrogate():
+    """A path git stores as arbitrary bytes must not carry a lone surrogate.
+
+    Measuring with ``errors="replace"`` and returning the original string
+    left the surrogate in place, and the worker's JSON encoder raised on it.
+    """
+    from trustsight.differ import _bounded_path
+
+    out = _bounded_path("a\udcffb")
+    assert "\udcff" not in out
+    assert out == "a?b"

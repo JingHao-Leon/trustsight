@@ -33,10 +33,16 @@ def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
     return parse_diff_lines(split_lines(diff_text)).line_map()
 
 def _bounded_path(path: str) -> str:
-    """A path bounded for retention in a summary."""
+    """A path bounded and made UTF-8 safe for retention in a summary.
+
+    Measuring with ``errors="replace"`` but returning the original string
+    left a surrogate in the path (a filename git stores as arbitrary bytes),
+    and the worker's JSON encoder then raised on it.  The sanitised value is
+    what travels.
+    """
     encoded = path.encode("utf-8", errors="replace")
     if len(encoded) <= MAX_DIFF_PATH_BYTES:
-        return path
+        return encoded.decode("utf-8")
     return encoded[:MAX_DIFF_PATH_BYTES].decode("utf-8", errors="ignore")
 
 def generate_diff_bounded(

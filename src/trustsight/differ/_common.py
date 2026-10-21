@@ -17,7 +17,7 @@ def _clean_url(token: str) -> str:
     # the closing `>` in the token, and a source URL with a `>` on the end
     # is a URL no bucket or novelty lookup will ever recognise.  The
     # closing bracket is punctuation, not part of the address.
-    token = re.sub(r"[\)<>]+$", "", token)
+    token = token.rstrip(")<>")
     token = re.sub(r"[\)]+", ")", token)
     # Trailing braces from a nested shell default (`${A:-${B:-https://x}}`)
     # are shell syntax, but the `}` closing a `${var}` inside the URL is
@@ -26,7 +26,10 @@ def _clean_url(token: str) -> str:
     excess = token.count("}") - token.count("{")
     if trailing and excess > 0:
         token = token[:len(token) - min(trailing, excess)]
-    token = re.sub(r"[,;\s]+$", "", token)
+    end = len(token)
+    while end and (token[end - 1] in ",;" or token[end - 1].isspace()):
+        end -= 1
+    token = token[:end]
     return token
 
 _SOURCE_ARRAY_START_RE = re.compile(
