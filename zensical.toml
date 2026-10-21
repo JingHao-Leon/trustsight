@@ -85,6 +85,11 @@ Security = [
 ]
 
 [[project.nav]]
+Standards = [
+  {Standards = "standards.md"},
+]
+
+[[project.nav]]
 Tutorial = [
   {Installation = "tutorial/installation.md"},
   {Quickstart = "tutorial/quickstart.md"},

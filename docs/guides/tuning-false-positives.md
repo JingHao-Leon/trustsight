@@ -4,6 +4,14 @@
 
 No rule is perfect. Some may fire on patterns that are normal for your package set but would be suspicious elsewhere. This guide explains how to identify over-firing rules and what to do about them.
 
+## Two kinds of false positive
+
+A **benign false positive** is a rule hit on a genuine bad practice by the packager, where the package itself is not malicious. The finding is real; the practice is undesirable, and the rule is doing its job. The fix belongs with the packager, or the finding is documented as a known false positive.
+
+A **malicious false positive** is a bad rule trigger: the rule fired with no bad practice or malicious behaviour behind it. A misread option, an allowlist gap, or a counting or grouping error is a malicious false positive. The fix belongs in the detection shape, and it ships with the true-positive twin.
+
+The term names a false positive of the *maliciousness* claim, not a malicious false positive. The normative definitions are in [Standards](../standards.md#false-positive-vocabulary).
+
 ## Step 1: Check fire rates
 
 Start from the measured corpus fire rates in [Fire Rates](../explanation/fire-rates.md), then check how often the rule fires across your own reviewed packages:
@@ -143,6 +151,7 @@ the other member before assuming the cluster is the same false positive.
 
 ## See also
 
+- [Standards](../standards.md) - the normative rules, including why a detection is never tuned for a package
 - [Configuring rules and weights](configuring-rules-and-weights.md)
 - [Rules reference](../reference/rules/index.md)
 - [Cold start and maturity](../explanation/cold-start-and-maturity.md)

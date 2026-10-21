@@ -103,9 +103,13 @@ _LEGACY_RULE_SECTION = "experimental_rules"
 _warned_legacy_section = False
 
 
+#: A non-empty install= value: `tool.install`, `"$pkgname.install"`,
+#: `'${pkgname}.install'`.  A bare or empty-quoted assignment declares no hook.
+_INSTALL_VALUE = r"""["']?[^\s"']+"""
+
 _INSTALL_FILE_IN_DIFF_RE = re.compile(
-    r"(?:^|\n)(?:\+\s*install\s*=|"
-    r"(?:---|^\+\+\+)\s+[ab]/.+\.install)\b",
+    r"(?:^|\n)(?:\+[ \t]*install[ \t]*=[ \t]*" + _INSTALL_VALUE + r"|"
+    r"(?:---|^\+\+\+)\s+[ab]/.+\.install\b)",
     re.MULTILINE,
 )
 
@@ -115,7 +119,9 @@ def _has_install_hook(diff_text: str) -> bool:
         return True
     from ..differ import _post_diff_lines
     post = "\n".join(_post_diff_lines(diff_text))
-    return bool(re.search(r"^\s*install\s*=", post, re.MULTILINE))
+    return bool(re.search(
+        r"^[ \t]*install[ \t]*=[ \t]*" + _INSTALL_VALUE,
+        post, re.MULTILINE))
 
 
 def _url_domain(url: str) -> str:

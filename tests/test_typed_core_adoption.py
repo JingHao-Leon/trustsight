@@ -24,6 +24,8 @@ PINNED_LOOPS = {
     "analysis/delivery/_payloads.py": 1,  # payload file content, not a diff
     # H093 reads a committed file's payload text, moved from delivery.
     "analysis/persistence_engine.py": 1,
+    # H104 reads a package function body (recipe text), not a diff walk.
+    "analysis/placeholder.py": 1,
     "analysis/ioc.py": 1,          # whole-file text -> synthetic added lines
     "analysis/ioc_match.py": 1,    # same constructor
     "differ/_sources.py": 2,       # local_source_names/urls_from_pkgbuild_text

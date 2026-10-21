@@ -13,6 +13,10 @@ category** (what kind of evidence its finding is), and an **evidence tier**
 **Finding.** One rule's report that it matched, with the file, side and line it
 matched. A run produces a list of findings; the report groups and reads them.
 
+**Benign false positive.** A rule hit on a genuine bad practice by the packager, where the package itself is not malicious. The finding is real; the practice is undesirable, and the fix belongs with the packager or in a documented known false positive. See [Standards](../standards.md#false-positive-vocabulary).
+
+**Malicious false positive.** A bad rule trigger: the rule fired with no bad practice or malicious behaviour behind it. A misread option, an allowlist gap, or a counting or grouping error is a malicious false positive; the fix belongs in the detection shape and ships with the true-positive twin. See [Standards](../standards.md#false-positive-vocabulary).
+
 **Rule family (series).** How a rule reaches its conclusion: a regex match
 (`R`), a structural invariant over parsed documents (`C`), a graph walk (`D`),
 a heuristic (`H`), an evasion or refusal check (`X`), a statistic (`E`), a

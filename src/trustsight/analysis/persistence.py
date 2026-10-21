@@ -160,7 +160,7 @@ _MKTEMP_RE = re.compile(r"\bmktemp\b")
 #: the write-target scan, but `perl -pi`/`ruby -i` are not, so the same edit
 #: through them walked past H076.
 _INPLACE_EDIT_RE = re.compile(
-    r"\b(?:perl|ruby)\b[^\n;&|]*?-[A-Za-z]*i[A-Za-z]*\b.*?(\S+)\s*$")
+    r"\b(?:perl|ruby)\b[^\n;&|]*?(?<![\w-])-[0-9A-Za-z]*i[0-9A-Za-z]*\b.*?(\S+)\s*$")
 #: An inline interpreter `open(..., "a"/"w")` against an absolute path - a
 #: write the shell-command target scan cannot see.
 _INLINE_OPEN_WRITE_RE = re.compile(

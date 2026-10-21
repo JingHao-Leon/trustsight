@@ -214,6 +214,29 @@ def test_h049_source_host_change():
     assert "H049" in _ids("", [b])
 
 
+def test_h049_groups_host_and_org_into_one_finding_showing_both():
+    b1 = _pb("source_hosts", {"github.com"}, {"evil.example"})
+    b2 = _pb("source_orgs", {"github.com/org"}, {"evil.example/org"})
+    findings = [
+        f for f in longitudinal_findings("", "pkg", [b1, b2], {})
+        if f["rule_id"] == "H049"
+    ]
+    assert len(findings) == 1
+    finding = findings[0]
+    assert "source_hosts" in finding["match"]
+    assert "source_orgs" in finding["match"]
+    assert finding["evidence"]["keys"] == ["source_hosts", "source_orgs"]
+    assert {t["key"] for t in finding["evidence"]["triggers"]} == {
+        "source_hosts", "source_orgs"}
+
+
+def test_h049_is_quiet_when_the_sources_are_removed():
+    """Source removal is H002's subject, not a host change."""
+    b1 = _pb("source_hosts", {"github.com"}, set())
+    b2 = _pb("source_orgs", {"github.com/org"}, set())
+    assert _ids("", [b1, b2]) == set()
+
+
 def test_h050_version_scheme_is_context():
     b = _pb("version_scheme", "semver", "hash")
     r = longitudinal_findings("", "pkg", [b], {})

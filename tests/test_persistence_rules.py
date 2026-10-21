@@ -474,6 +474,30 @@ def test_h076_ignores_heredoc_bodies():
     assert "H076" not in ids
 
 
+def test_h076_ignores_installer_long_options_ending_in_i():
+    """`--dest-dir` is not an in-place flag, even though it ends in `-dir`.
+
+    diakonos resolved ruby with a command substitution and passed the install
+    root through upstream's `--conf-dir /etc`; the rule read the `-dir` inside
+    the long option as `-i` and reported a host `/etc` write that install.rb
+    actually stages under `$pkgdir`.
+    """
+    ids = rule_ids(structural(_diff(
+        "package() {\n"
+        "  ruby=$(test -x /usr/bin/ruby && echo /usr/bin/ruby || which ruby)\n"
+        "  $ruby install.rb --dest-dir \"$pkgdir\" --prefix /usr --conf-dir /etc\n"
+        "}\n"
+    )))
+    assert "H076" not in ids
+
+
+def test_h076_still_fires_on_an_interpreter_inplace_flag():
+    ids = rule_ids(structural(_diff(
+        "package() {\n  perl -pi -e 's/x/y/' /etc/profile\n}\n"
+    )))
+    assert "H076" in ids
+
+
 def test_h076_counts_as_a_persistence_stage_for_h043():
     from trustsight.analysis.composition import _STAGE_OF
     assert _STAGE_OF["H076"] == "persistence"

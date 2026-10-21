@@ -24,6 +24,7 @@ Class-D calibration gate are the proof.
 
 from __future__ import annotations
 
+import re
 import statistics
 from dataclasses import dataclass, field
 from typing import Callable
@@ -249,6 +250,32 @@ def _repo_path_tokens(url: str) -> set[str]:
             if len(piece) >= 3:
                 tokens.add(piece)
     return tokens
+
+
+def _repo_path_words(url: str) -> list[str]:
+    """Ordered words from a source URL's path, for acronym matching."""
+    rest = url.split("://", 1)[-1]
+    path = rest.split("/", 1)[1] if "/" in rest else ""
+    words: list[str] = []
+    for piece in re.split(r"[/._-]+", path):
+        # Split camelCase so `QualcommSoftwareCenter` is three words, not one.
+        for word in re.findall(
+                r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+", piece):
+            word = word.lower()
+            if len(word) >= 2:
+                words.append(word)
+    return words
+
+
+def _is_acronym(token: str, words: list[str]) -> bool:
+    """True when *token* is the initials of consecutive *words*."""
+    token = token.lower()
+    if not 2 <= len(token) <= 5:
+        return False
+    for start in range(len(words) - len(token) + 1):
+        if all(words[start + i][0] == ch for i, ch in enumerate(token)):
+            return True
+    return False
 
 
 def _ownership_transitions(old_meta: dict, new_meta: dict) -> dict[str, tuple[str, str]]:
@@ -535,9 +562,10 @@ def _name_host_divergence_findings(snapshot: HistorySnapshot) -> list[dict]:
 
 def _name_repo_divergence_findings(snapshot: HistorySnapshot) -> list[dict]:
     """H059 - package name and source repo share no token."""
-    from ..deps import _package_stem
+    from ..deps import _ecosystem_prefixes, _package_stem
 
     changes, source_repos = snapshot.changes, snapshot.source_repos
+    prefixes = _ecosystem_prefixes()
     out: list[dict] = []
     for name, status in changes.items():
         if status != "added":
@@ -545,7 +573,8 @@ def _name_repo_divergence_findings(snapshot: HistorySnapshot) -> list[dict]:
         repos = source_repos.get(name) or set()
         if not repos:
             continue
-        tokens = {t for t in _package_stem(name).split("-") if len(t) >= 3}
+        stem_parts = _package_stem(name).split("-")
+        tokens = {t for t in stem_parts if len(t) >= 3}
         if len(tokens) < 2:
             continue
         repo_tokens = set()
@@ -556,6 +585,17 @@ def _name_repo_divergence_findings(snapshot: HistorySnapshot) -> list[dict]:
         overlapping = any(
             t in rt or rt in t for t in tokens for rt in repo_tokens
         )
+        if not overlapping:
+            # A short leading token is often the vendor's acronym
+            # (qsc = Qualcomm Software Center), which shares no literal
+            # token with the URL but is the project's own name.
+            lead = next(
+                (t for t in stem_parts
+                 if len(t) >= 3 and t not in prefixes), ""
+            )
+            if lead and any(
+                    _is_acronym(lead, _repo_path_words(repo)) for repo in repos):
+                overlapping = True
         if not overlapping:
             out.append(_cluster(
                 "H059",

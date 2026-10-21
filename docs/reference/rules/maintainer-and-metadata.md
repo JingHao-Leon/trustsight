@@ -118,7 +118,9 @@ silently disappeared. `H063` owns the introduction; `C030` the removal.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
 
-- **Condition:** A long-stable `source_hosts` or `source_orgs` set changed.
+- **Condition:** A long-stable `source_hosts` or `source_orgs` set changed to a non-empty set.
+
+Source removal is not a host change: when the new set is empty, H002 owns the finding and H049 stays quiet. When both `source_hosts` and `source_orgs` change in one cycle, they are two views of the same source set, so H049 emits one finding that shows both triggers and scores once.
 
 ### H050: Version Scheme Changed {#h050}
 

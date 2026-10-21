@@ -126,23 +126,13 @@ Overlaps [R007](install-and-persist.md#r007), which matches any line mentioning 
 - **Severity:** INFO (weight 0)
 - **Category:** `context`
 
-- **Condition:** The PKGBUILD declares an `install=` file, or the diff touches
-  a `*.install` file.
+- **Condition:** The PKGBUILD declares a non-empty `install=` file, or the diff touches a `*.install` file.
 
-An `.install` scriptlet runs code **as root** at install time. H023 is pure
-context - "this package has a root-time hook" - not an accusation. It is the
-metadata a human wants when weighing other signals.
+An `.install` scriptlet runs code **as root** at install time. H023 is pure context - "this package has a root-time hook" - not an accusation. It is the metadata a human wants when weighing other signals.
 
-**Origin:** mirrors pnpm's `allowBuilds`/`strictDepBuilds` - every package
-manager that distinguishes "declares a privileged post-install step" from
-"does not" treats that distinction as primary metadata. pnpm blocks all build
-scripts by default; H023 is the review-side equivalent - flagging `.install`
-hooks so a human can weigh them.
+**Origin:** mirrors pnpm's `allowBuilds`/`strictDevBuilds` - every package manager that distinguishes "declares a privileged post-install step" from "does not" treats that distinction as primary metadata. pnpm blocks all build scripts by default; H023 is the review-side equivalent - flagging `.install` hooks so a human can weigh them.
 
-**Overlap guard:** R007 already fires on *install added*. H023 fires on
-*install present* (existing or added). If R007 fires, H023 is redundant for
-that diff; the two must not both surface as separate findings for the same
-event.
+**Overlap guard:** R007 already fires on *install added*. H023 fires on *install present* (existing or added). If R007 fires, H023 is redundant for that diff; the two must not both surface as separate findings for the same event. A bare `install=` with no value declares no hook and does not fire H023.
 
 ### H035: Foreign Package Manager In Install Hook {#h035}
 

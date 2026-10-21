@@ -36,6 +36,8 @@ from ..findings import stamp
 
 # Property keys each rule owns.  H037 claims the tracked-but-quoted residue
 # (license, install_hook_present); ``depends`` is H048's (needs the diff).
+_H049_KEYS = ("source_hosts", "source_orgs")
+
 _RULE_FOR_KEY = {
     "configure_flags": "H047",
     "source_hosts": "H049",
@@ -110,6 +112,46 @@ def _vendored_in_diff(diff_text: str, removed_deps: set[str]) -> set[str]:
     return vendored
 
 
+def _h049_findings(breaks: list) -> list[dict]:
+    """One H049 finding for the source property changes in this cycle.
+
+    ``source_hosts`` and ``source_orgs`` are two views of the same source
+    set, so they score once and both triggers are reported.  A change to an
+    empty set is source removal, which H002 owns; it is not a host change.
+    """
+    changed = []
+    for break_ in breaks:
+        old, new = _changed_by(break_)
+        if not new:
+            continue
+        changed.append((break_, old, new))
+    if not changed:
+        return []
+    keys = [key for key in _H049_KEYS if any(b.key == key for b, _, _ in changed)]
+    triggers = [
+        {
+            "key": break_.key,
+            "stable_for_n": break_.stable_for_n,
+            "old": sorted(old),
+            "new": sorted(new),
+        }
+        for break_, old, new in changed
+    ]
+    stable_for_n = min(break_.stable_for_n for break_, _, _ in changed)
+    return [stamp({
+        "rule_id": "H049", "name": "Source Host Changed",
+        "severity": "MEDIUM", "category": "source",
+        "match": f"source {', '.join(keys)} changed after "
+                 f"{stable_for_n} stable obs",
+        "params": {
+            "key": ", ".join(keys),
+            "keys": keys,
+            "stable_for_n": stable_for_n,
+            "triggers": triggers,
+        },
+    })]
+
+
 def longitudinal_findings(
     diff_text: str,
     package_name: str,
@@ -124,9 +166,15 @@ def longitudinal_findings(
     """
     config = config or {}
     floor = _stability_floor(config)
-    findings: list[dict] = []
-    for break_ in breaks:
-        if break_.weight <= 0.0 or break_.stable_for_n < floor:
+    gated = [
+        break_ for break_ in breaks
+        if break_.weight > 0.0 and break_.stable_for_n >= floor
+    ]
+    findings: list[dict] = _h049_findings(
+        [break_ for break_ in gated if break_.key in _H049_KEYS]
+    )
+    for break_ in gated:
+        if break_.key in _H049_KEYS:
             continue
         findings.extend(_finding_for_break(diff_text, break_, config))
     return findings
@@ -158,15 +206,6 @@ def _finding_for_break(diff_text, break_, config) -> list[dict]:
             "match": f"configure_flags changed security flags after "
                      f"{break_.stable_for_n} stable obs: {sec_changed}",
             "params": {"flags": ", ".join(sec_changed),
-                       "stable_for_n": break_.stable_for_n},
-        })]
-
-    if rule_id == "H049":
-        return [stamp({
-            "rule_id": "H049", "name": "Source Host Changed",
-            "severity": "MEDIUM", "category": "source",
-            "match": f"source {key} changed after {break_.stable_for_n} stable obs",
-            "params": {"key": key,
                        "stable_for_n": break_.stable_for_n},
         })]
 

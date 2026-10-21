@@ -2,7 +2,7 @@
 
 # Writing a Rule
 
-TrustSight has two rule namespaces to avoid identifier collision:
+The normative standards for a rule change are in [Standards](../standards.md); this page is the practical guide. TrustSight has two rule namespaces to avoid identifier collision:
 
 | Namespace | IDs          | Defined in       | Editable by users | Purpose                     |
 |-----------|--------------|------------------|-------------------|-----------------------------|

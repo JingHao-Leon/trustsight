@@ -2,6 +2,8 @@
 
 # Configuration Reference
 
+The compatibility standards for shipped defaults, config sync and overrides are in [Standards](../standards.md#configuration-and-compatibility).
+
 ## File locations
 
 | Path | Purpose |

@@ -823,3 +823,36 @@ def test_qoder_project_bucket_is_not_an_unknown_source():
     assert "SOURCE_BUCKET" not in ids
     assert "C005" not in ids
     assert "C011" not in ids
+# --- H023: a bare install= declares no hook ---------------------------------
+# 2026-10-21 watcher review: cargo-fframes ships `install=` with no value;
+# the post-text arm read the bare assignment as a declared .install file and
+# reported a hook that pacman would never run.
+
+def test_h023_ignores_a_bare_install_assignment_in_the_diff():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -0,0 +1,2 @@\n"
+            "+pkgname=cargo-fframes\n+install=\n")
+    assert "H023" not in _ids(
+        diff, current_text="pkgname=cargo-fframes\ninstall=\n")
+
+
+def test_h023_ignores_a_bare_install_assignment_in_the_post_text():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n"
+            "-pkgver=1.2.0\n+pkgver=1.3.0\n")
+    assert "H023" not in _ids(
+        diff, current_text="pkgname=cargo-fframes\npkgver=1.3.0\ninstall=\n")
+
+
+def test_h023_ignores_an_empty_quoted_install_assignment():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -0,0 +1,2 @@\n"
+            "+pkgname=demo\n+install=\"\"\n")
+    assert "H023" not in _ids(
+        diff, current_text='pkgname=demo\ninstall=""\n')
+
+
+def test_h023_still_fires_when_a_named_hook_is_present():
+    """H023 is the "hook present" context finding; R007 owns "hook added"."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+            " pkgname=demo\n-pkgver=1\n+pkgver=2\n"
+            " install=demo.install\n")
+    assert "H023" in _ids(
+        diff, current_text="pkgname=demo\npkgver=2\ninstall=demo.install\n")

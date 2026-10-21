@@ -218,7 +218,7 @@ finding names the prefix and the host so the reader can judge that call.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
 
-- **Condition:** The package name and the repository it is built from share no meaningful token.
+- **Condition:** The package name and the repository it is built from share no meaningful token. A leading name token that is the acronym of consecutive words in the repository path (for example `qsc` for `Qualcomm Software Center`) counts as a match.
 
 ### H104: Placeholder Package {#h104}
 

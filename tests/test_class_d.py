@@ -737,6 +737,32 @@ def test_h059_matching_repo_is_quiet(thresholds):
         "chrome-helper": {"https://github.com/acme/chrome-helper"}}) == []
 
 
+def test_h059_accepts_a_vendor_acronym(thresholds):
+    """qsc-cli: `qsc` is the initials of Qualcomm Software Center, which the
+    repo path spells out but never repeats as a token."""
+    thresholds({})
+    old = _snapshot(["base"], "alice")
+    new = copy.deepcopy(old)
+    new["qsc-cli"] = _snapshot(["qsc-cli"], "alice")["qsc-cli"]
+    repo = (
+        "https://softwarecenter.qualcomm.com/api/download/software/tools/"
+        "Qualcomm_Software_Center/Linux/Debian/1.28.3/"
+        "QualcommSoftwareCenter1.28.3.Linux-x86.deb")
+    assert _fire("H059", new, old, source_repos={"qsc-cli": {repo}}) == []
+
+
+def test_h059_still_fires_when_the_leading_token_is_not_an_acronym(thresholds):
+    thresholds({})
+    old = _snapshot(["base"], "alice")
+    new = copy.deepcopy(old)
+    new["foo-cli"] = _snapshot(["foo-cli"], "alice")["foo-cli"]
+    repo = (
+        "https://softwarecenter.qualcomm.com/api/download/software/tools/"
+        "Qualcomm_Software_Center/Linux/Debian/1.28.3/"
+        "QualcommSoftwareCenter1.28.3.Linux-x86.deb")
+    assert len(_fire("H059", new, old, source_repos={"foo-cli": {repo}})) == 1
+
+
 @pytest.mark.parametrize("name,repo", [
     ("gtaiv-eflc-fusionfix-bin",
      "https://github.com/ThirteenAG/GTAIV.EFLC.FusionFix/archive/v1.0.tar.gz"),

@@ -2,7 +2,7 @@
 
 # Part C: The enforcement map
 
-Each row is one invariant, the gate that proves it, and where the behaviour lives. Run them all with:
+The broader project standards are in [Standards](../standards.md); this page maps the security subset to the gates that prove it. Each row is one invariant, the gate that proves it, and where the behaviour lives. Run them all with:
 
 ```bash
 python scripts/security_gates.py

@@ -2,8 +2,7 @@
 
 # Releasing
 
-How a TrustSight version reaches users, and why the source tarball is built
-here rather than taken from GitHub.
+The release standards are in [Standards](../standards.md#release-and-process-standards). How a TrustSight version reaches users, and why the source tarball is built here rather than taken from GitHub.
 
 ## The source is a release asset, not a generated archive
 
