@@ -35,7 +35,13 @@ from pathlib import Path
 
 __all__ = ["add_entry", "add_package", "default_path", "import_release",
            "load_packages", "load_release_maintainers", "load_release_packages",
-           "load_watchlist", "local_hash", "watchlist_hashes"]
+           "load_watchlist", "local_hash", "local_hash_many",
+           "watchlist_hashes"]
+
+#: The operator's file is trusted, but a corrupt or runaway file must not
+#: decide how much memory the sweep spends (A4/A14).  Exceeding it is an
+#: unreadable watchlist, which is already the documented empty case.
+MAX_WATCHLIST_BYTES = 1024 * 1024
 
 
 def default_path() -> Path:
@@ -46,10 +52,14 @@ def default_path() -> Path:
 
 
 def _read(path) -> dict:
+    from .bounded_io import ReadTooLarge, read_file_capped
+
     target = Path(path) if path else default_path()
     try:
-        data = json.loads(target.read_text())
-    except (OSError, ValueError):
+        raw = read_file_capped(
+            target, MAX_WATCHLIST_BYTES, "watchlist")
+        data = json.loads(raw.decode("utf-8"))
+    except (OSError, ValueError, UnicodeDecodeError, ReadTooLarge):
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -115,6 +125,26 @@ def local_hash(name: str) -> str | None:
     if not salt:
         return None
     return _hash_maintainer_value(name, salt)
+
+
+def local_hash_many(names) -> dict[str, str]:
+    """Hash several names under this installation's salt in one DB read.
+
+    G009 used to call :func:`local_hash` per package, opening a connection
+    and re-reading the salt for every record in a full-AUR sweep.  One salt
+    read and one loop is the same result without the per-row connection.
+    """
+    from .db import get_connection
+    from .db._connection import _get_salt, _hash_maintainer_value
+
+    keys = {str(name).strip() for name in names or () if str(name).strip()}
+    if not keys:
+        return {}
+    with get_connection() as conn:
+        salt = _get_salt(conn)
+    if not salt:
+        return {}
+    return {name: _hash_maintainer_value(name, salt) for name in keys}
 
 
 def add_entry(name: str, label: str = "", path=None) -> str:

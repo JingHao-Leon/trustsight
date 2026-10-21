@@ -130,28 +130,32 @@ def record_cycle_contacts(records, cycle_time: int, observed_at: str) -> dict:
     Returns ``{"records": [ContactRecord], "hosts_new": set}``.  ``hosts_new``
     is the hosts this cycle introduced to the corpus, G010's novelty join.
     """
-    from .db import record_contact, record_host
+    from .db import record_contact, record_host, write_batch
 
     entries: list[ContactRecord] = []
     hosts_new: set = set()
     seen: set = set()
-    for record in records or ():
-        package = str(record.get("package", ""))
-        maintainer = str(record.get("maintainer", "") or "")
-        for kind, value in contact_candidates(record):
-            key = (package, kind, value)
-            if key in seen:
-                continue
-            seen.add(key)
-            new = record_contact(package, kind, value, cycle_time, observed_at,
-                                 maintainer)
-            if kind == "host" and record_host(value, observed_at):
-                hosts_new.add(value)
-            entries.append(ContactRecord(
-                contact_id=contact_id(package, kind, value, cycle_time),
-                contact_kind=kind, contact_value=value,
-                first_seen_cycle=int(cycle_time), first_seen_utc=observed_at,
-                basis="ledger" if new else "matched", package=package))
+    # One transaction for the cycle's first contacts.  Each writer commits
+    # itself; a sweep that meets thousands of new contacts would otherwise
+    # pay one WAL append per row.
+    with write_batch():
+        for record in records or ():
+            package = str(record.get("package", ""))
+            maintainer = str(record.get("maintainer", "") or "")
+            for kind, value in contact_candidates(record):
+                key = (package, kind, value)
+                if key in seen:
+                    continue
+                seen.add(key)
+                new = record_contact(package, kind, value, cycle_time,
+                                     observed_at, maintainer)
+                if kind == "host" and record_host(value, observed_at):
+                    hosts_new.add(value)
+                entries.append(ContactRecord(
+                    contact_id=contact_id(package, kind, value, cycle_time),
+                    contact_kind=kind, contact_value=value,
+                    first_seen_cycle=int(cycle_time), first_seen_utc=observed_at,
+                    basis="ledger" if new else "matched", package=package))
     return {"records": entries, "hosts_new": hosts_new}
 
 

@@ -291,9 +291,11 @@ def _tokenize_desc(desc: str) -> list[str]:
 
 def _extract_host_org(url: str, hosts: set[str], orgs: set[str]) -> None:
     from urllib.parse import urlparse
+
+    from ..buckets import canonical_host
     try:
         parsed = urlparse(url)
-        host = parsed.hostname
+        host = canonical_host(parsed.netloc) if parsed.netloc else ""
         if host:
             hosts.add(host)
             path = parsed.path.strip("/")
@@ -372,6 +374,35 @@ def update_properties(
             "VALUES (?,?,?,?,?)",
             (package, key, old_ser, ser, observed_at),
         )
+        if key == "source_hosts":
+            # G001's per-cycle feed: only hosts this transition introduced.
+            # The row is cleared at cycle start, so a host gained in an
+            # earlier cycle cannot re-join a later one.  The stamp is local:
+            # ``observed_at`` above is derived from package-controlled AUR
+            # metadata and must not decide the window (A11).
+            try:
+                old_hosts = set(json.loads(old_ser or "[]"))
+                new_hosts = set(json.loads(ser or "[]"))
+            except (TypeError, ValueError):
+                old_hosts, new_hosts = set(), set()
+            gained = sorted(new_hosts - old_hosts)
+            if gained:
+                from datetime import datetime, timezone
+
+                from ..db import record_gained_hosts
+
+                try:
+                    record_gained_hosts(
+                        package, gained,
+                        datetime.now(timezone.utc).isoformat(), conn=conn)
+                except Exception:
+                    # The G001 feed is auxiliary: a caller with a partial
+                    # schema (a unit test, an old database mid-migration)
+                    # must still record the property timeline.  In a live
+                    # corpus the table is created by init_db.
+                    log.debug(
+                        "G001 gained-host feed write failed for %s",
+                        package, exc_info=True)
         # Keep the newest observations per key; the row is a timeline, not
         # a ledger, and the package decides how fast it grows.
         conn.execute(
