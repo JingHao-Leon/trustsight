@@ -21,9 +21,14 @@ with an amplification property the regex engine does not have. [A6](../security/
 describes it: `b=$a$a` doubles per level, and a chain grows as `2**depth`,
 so a 517-byte PKGBUILD was once enough to exhaust memory unbounded. Four
 bounds hold it (`_MAX_EXPANSION_PASSES`, `_MAX_VALUE_LEN`, `_MAX_LINE_LEN`,
-`_MAX_TABLE_BYTES`) and they are effective. But a bound found and applied
-to a known amplification is a different assurance from "a defect here
-cannot reach anything", and that is the gap isolation closes.
+`_MAX_TABLE_BYTES`) and they are effective; a substitution that would
+multiply a value by its replacement is refused before `re.sub`, and a glob
+is answered by a table pass bounded by `_MAX_GLOB_PATTERN_LEN` and
+`_MAX_GLOB_STEPS`, never compiled into a backtracking regex. They live in
+the shared `expansion.py`, so the parent's whole-PKGBUILD resolver obeys
+the same values as the worker. But a bound found and applied to a known
+amplification is a different assurance from "a defect here cannot reach
+anything", and that is the gap isolation closes.
 
 It also happens to be the component where isolation is a bounded project
 rather than a rewrite:
@@ -62,8 +67,10 @@ tokenizer only through `trustsight.tokenizer`; the engine is imported by the
 worker alone (the `tokenizer module is isolated` gate fails otherwise). A
 child that cannot answer raises `TokenizerUnavailable`, and the package is
 reported as not vetted through the same path as any other analysis failure,
-so a dead sandbox can never read as a clean diff. That is strictly more
-honest than an analysis that silently ran without its parser.
+so a dead sandbox can never read as a clean diff. A response that is not a
+frame-shaped object, or that carries neither `result` nor `error`, is
+treated the same way. That is strictly more honest than an analysis that
+silently ran without its parser.
 
 **It does not remove the Python runtime from the trust boundary.** The
 interpreter, the standard library and the OS remain [assumptions](../security.md#assumptions).
@@ -88,7 +95,7 @@ gaps.
   input it did not produce. It is therefore kept trivial: a four-byte
   big-endian length and JSON, never `pickle` (the `no interpreter or shell
   execution` gate forbids unpickling for exactly this reason). Every frame
-  is capped and every read is sized.
+  is capped, every read is sized, and every write is deadline-bounded.
 - **Round-trips, unless they are cached.** The analysis makes ~97
   tokenizer entry-point calls per diff; the identity cache collapses them
   to about a dozen child round-trips, because the same diff object reaches
@@ -122,11 +129,14 @@ process group is gone, cleanup falls back to the child process's `kill()`
 method. This does not provide Windows pipe polling or Linux resource limits on
 Windows.
 
-The response deadline starts after the request is written. A blocked request
-write is not covered by that deadline. Resource-limit setup also currently
-ignores errors, so the presence of `RLIMIT_AS` code is not proof that the
-address-space limit took effect. Both need separate runtime verification and
-hardening before claiming an end-to-end request or memory bound.
+The request write and the response read share one deadline. The write goes
+through `protocol.write_frame`, which puts the descriptor in non-blocking mode
+and waits for writability with `select`, so a child that stops reading stdin
+cannot hold the parent in a blocking write. Resource-limit setup returns the
+limits that could not be applied; every response carries them in `degraded`
+and the client logs the degradation once. A swallowed `setrlimit` therefore
+cannot read as full protection. As with the git worker, these are
+resource-bounded subprocesses rather than an OS sandbox.
 
 The sandbox covers the whole tokenizer module, so `split_lines` and
 `join_line_continuations` are sandboxed too, not only the expansion

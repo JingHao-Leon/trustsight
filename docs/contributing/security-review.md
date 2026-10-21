@@ -78,8 +78,8 @@ Worth knowing when you are relying on one:
 `every stream read is bounded`,
 `SQL is parameterised`, `declared source URLs are never fetched`,
 `every result declares its coverage`, `a baseline supplies state, not rules`,
-`doc cross-references resolve`, `critical paths are synchronised`, and
-`docs/security.md matches the gates`.
+`doc cross-references resolve`, `critical paths are synchronised`,
+`every cited invariant is defined`, and `docs/security.md matches the gates`.
 
 **Behavioural, loop over every known site:** `terminal output is inert` (six
 renderers), `reserved names are refused by every writer` (three writers),
@@ -103,7 +103,7 @@ hostile input is bounded`, and `differ output is deterministic`.
 end to end rather than any single matcher, because that is the only place both
 rule engines are reached.
 
-The tokenizer and regex checks are deliberately separate from the broad rule matching gate. `tokenizer hostile-input smoke is deterministic` exercises fixed hostile expansion cases, while `regex patterns pass adversarial audit` audits configured and source patterns against bounded probes. The differ gates exercise hostile URL and malformed-hunk input and verify stable output order. When adding a new parser or input-bound constant, add both a focused adversarial test and a gate or structural check, then document the bound in A4 or A5.
+The tokenizer and regex checks are deliberately separate from the broad rule matching gate. `tokenizer hostile-input smoke is deterministic` exercises fixed hostile expansion cases, while `regex patterns pass adversarial audit` audits configured and source patterns against bounded probes. The sandbox checks are separate too: `tokenizer request writes are bounded` fails a direct `stdin.write`, and `tokenizer worker limit failures are reported` mirrors the git worker's `degraded` rule. The differ gates exercise hostile URL and malformed-hunk input and verify stable output order. When adding a new parser or input-bound constant, add both a focused adversarial test and a gate or structural check, then document the bound in A4 or A5.
 
 ## When you add an invariant
 

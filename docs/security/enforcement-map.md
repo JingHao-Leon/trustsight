@@ -24,6 +24,7 @@ python scripts/security_gates.py
 | `campaign expiry is structural` | A11 | an expired campaign is never returned by `active_campaigns` |
 | `campaign re-activation is bounded` | B1 | a class re-arming faster than the interval is reported as `M006`, never blocked |
 | `campaign points are attributed` | B1 | every campaign bonus is a `G007` entry carrying `campaign_id` |
+| `correlation feeds are cycle-scoped and bounded` | A14 | G001/G002/G003/G004 read per-cycle tables cleared at the `_run_baseline_build` entry point; the G003 relatedness pass is capped at `MAX_RELATEDNESS_MEMBERS` |
 | `elevation is attributed` | B1/B10 | `G006` is weight-0 INFO and names the campaign whose scope it touched |
 | `escalation is one notch` | B10 | licensing moves a band one step, never more |
 | `escalation never reaches fatal` | B4/B10 | no escalation or bonus path reaches FATAL |
@@ -53,26 +54,29 @@ python scripts/security_gates.py
 | `the layer profile is gap-precise and additive` | internal | `trustsight.layers.layer_profile` |
 | `differ hostile input is bounded` | A4b | `differ` parser limits and hostile extraction gate |
 | `generated diff is bounded before assembly` | A4b, B2 | `sandbox/git_project.generate_diff_bounded`, `MAX_DIFF_PATCHES`, `MAX_PATCH_BYTES` |
-| `companion reads are bounded before data` | A4b | `sandbox/git_project.companion_source_hunks`, `MAX_PKG_BUILD_BYTES`, `MAX_COMPANION_TREE_ENTRIES` |
+| `companion reads are bounded before data` | A4b | `sandbox/git_project.companion_source_hunks`, `MAX_PKG_BUILD_BYTES`, `MAX_COMPANION_TREE_ENTRIES`; `collect_tree_files` stops the general tree walk at `GIT_TREE_MAX_ENTRIES` during the walk |
 | `differ output is deterministic` | Guarantees | sorted differ summaries and URL extraction |
 | `API inputs are bounded before initialization` | A4c | `trustsight.api` input validators |
-| `expansion is bounded and never indirect` | A6 | `tokenizer.py` |
+| `expansion is bounded and never indirect` | A6 | `tokenizer.py` and the shared `expansion.py`, including the parent's whole-PKGBUILD resolver; globs use the bounded table matcher (`_MAX_GLOB_PATTERN_LEN`, `_MAX_GLOB_STEPS`) |
 | `tokenizer hostile-input smoke is deterministic` | A6, A14 | `tokenizer.py` and fixed hostile-input smoke cases |
 | `tokenizer module is isolated` | A6 | no `src/` module imports `_tokenizer_engine` except `sandbox/expand_worker.py` |
 | `tokenizer worker startup is isolated` | A6 | the worker launches `-I` with no `PYTHON*` environment, so no `sitecustomize` runs at startup |
 | `git worker startup is isolated` | A16 | the git worker launches `-I` with a minimal environment, so no `sitecustomize` runs at startup |
-| `git worker limit failures are reported` | A16 | `sandbox/git_worker._apply_limits` returns the limits that could not be set, and the client surfaces `degraded` rather than swallowing them; this is a **resource-bounded subprocess boundary, not an OS sandbox** (no separate UID, network namespace or seccomp) |
+| `git worker limit failures are reported` | A16 | `sandbox/git_worker._apply_limits` and `_harden_libgit2` return the protections that could not be set, and the client surfaces `degraded` rather than swallowing them; this is a **resource-bounded subprocess boundary, not an OS sandbox** (no separate UID, network namespace or seccomp) |
+| `every cited invariant is defined` | model parity | every `A<n>` cited by this map has a matching paragraph in `docs/security/program-under-attack.md` |
+| `tokenizer worker limit failures are reported` | A6 | `sandbox/expand_worker._apply_limits` returns the limits that could not be set and attaches `degraded` to every response; the client logs it rather than inferring protection from silence |
 | `every child process gets an explicit environment` | A6 | every `subprocess` call in `src/` passes `env=minimal_env()`, so no inherited startup-hook or loader-injection variable (`PYTHONPATH`, `LD_PRELOAD`, ...) reaches a child |
 | `tokenizer pool waits are bounded` | A6, A14 | `sandbox/client.py` refuses a saturated pool at a finite deadline rather than blocking forever |
+| `tokenizer request writes are bounded` | A4, A14 | `sandbox/protocol.write_frame` writes under a `select` deadline, so a child that stops reading stdin cannot hold the parent in a blocking write; both sandbox clients also refuse a frame past `MAX_FRAME_BYTES` before writing it |
 | `a dead tokenizer child fails the package` | A6, B2 | `sandbox/client.py` raises `TokenizerUnavailable`; the batch runner reports the package as NOT vetted |
-| `regex patterns pass adversarial audit` | A5, A14 | configured and source regex patterns |
+| `regex patterns pass adversarial audit` | A5, A14 | configured rules, source `re.compile` literals, inline `re.match`/`re.search`/... literals (anchored calls measured with the method they use), assembled patterns, and config-derived fragments; the shipped defaults are audited, not a stale local `patterns.toml` |
 | `untrusted text is sanitised where it is rendered` | A1, B7 | every CLI render path: `safe_text.clean` rather than the weaker `unicode.strip_ansi`, and values wrapped rather than passed to Rich as bare strings |
-| `every live regex is audited` | A5, A14 | every compiled pattern reachable from an imported module, including patterns assembled from parts rather than written as literals |
+| `every live regex is audited` | A5, A14 | every compiled pattern reachable from an imported module, patterns assembled from parts, inline `re.*` literal calls, and generated but not module-level patterns |
 | `report rendering is data-driven` | A7 | `verdict.py`, `findings.py` |
 | `no path-based archive extraction` | A8 | `full_aur/fetch.py`, `db._extract_v2_archive` |
 | `release artifacts and tags use the verified commit` | release consistency | `.github/workflows/publishing.yml` builds from the checked-out target and refuses a tag that points elsewhere; `scripts/verify_release.py` rebuilds `HEAD` |
 | `SQL is parameterised` | A9 | `db.py` |
-| `terminal output is inert` | A10 | `safe_text.py`, `cli/` |
+| `terminal output is inert` | A10 | `safe_text.py`, `cli/`, and the `full_aur` progress log sink |
 | `freshness uses local marker` | A11 | `sandbox/git_project._is_current`, `sandbox/git_project.last_fetch_time` |
 | `a seed cannot rewrite the database` | A12 | `db.import_seed` |
 | `hashed maintainers protect privacy` | P1 | `db.maintainers_hashed`, `seed_meta.salt` |
@@ -81,7 +85,7 @@ python scripts/security_gates.py
 | `IOC matches never contribute to the score` | B1 | `PackageFact.ioc_matches` separate from `score_breakdown` |
 | `an expired IOC is never silent` | IOC expiration | `ioc_baseline.active_iocs`, `cli/ioc.py` `[EXPIRED]` label |
 | `IOCs are not in the rule config layer` | config separation | no `ioc` table in `rules.toml`, `patterns.toml`, `thresholds.toml` |
-| `a pattern IOC that risks ReDoS is refused` | A13b pattern safety | `iocs.compile_ioc_pattern` static nested-quantifier and quantified-alternation checks |
+| `a pattern IOC that risks ReDoS is refused` | A13b pattern safety | `iocs.compile_ioc_pattern` static nested-quantifier, quantified-alternation, and multi-atom repeating-group (`(\w+\s?)+`) checks |
 | `reserved names are refused by every writer` | A12, A13 | `db.upsert_package`, `db.save_package_profile`, `db.save_pkgbuild_snapshot` |
 | `a baseline supplies state, not rules` | A13 | `full_aur/export.import_baseline` |
 | `incomplete coverage fails closed` | B2 | `coverage.fail_closed` |
