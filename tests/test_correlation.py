@@ -178,7 +178,8 @@ def test_g009_reports_a_watchlisted_maintainer(monkeypatch):
     )
     monkeypatch.setattr("trustsight.watchlist.load_packages",
                         lambda path=None: {})
-    monkeypatch.setattr("trustsight.watchlist.local_hash", lambda n: "h1")
+    monkeypatch.setattr("trustsight.watchlist.local_hash_many",
+                        lambda names: {n: "h1" for n in names})
     found = watchlisted_maintainer(records, None)
     assert [f["rule_id"] for f in found] == ["G009"]
     assert found[0]["severity"] == "INFO"
@@ -193,8 +194,8 @@ def test_g009_reports_a_watchlisted_package_without_hashing(monkeypatch):
     monkeypatch.setattr("trustsight.watchlist.load_packages",
                         lambda path=None: {"xsp": "June 2026 review"})
     monkeypatch.setattr(
-        "trustsight.watchlist.local_hash",
-        lambda n: (_ for _ in ()).throw(AssertionError("hashed a package")),
+        "trustsight.watchlist.local_hash_many",
+        lambda names: (_ for _ in ()).throw(AssertionError("hashed a package")),
     )
     found = watchlisted_maintainer(
         [{"package": "xsp", "maintainer": "fennekuiper"}], None)
@@ -208,7 +209,8 @@ def test_g009_prefers_the_package_when_both_match(monkeypatch):
                         lambda path=None: {"h1": "maintainer note"})
     monkeypatch.setattr("trustsight.watchlist.load_packages",
                         lambda path=None: {"xsp": "package note"})
-    monkeypatch.setattr("trustsight.watchlist.local_hash", lambda n: "h1")
+    monkeypatch.setattr("trustsight.watchlist.local_hash_many",
+                        lambda names: {n: "h1" for n in names})
     found = watchlisted_maintainer(
         [{"package": "xsp", "maintainer": "fennekuiper"}], None)
     assert len(found) == 1
@@ -363,3 +365,77 @@ def test_g008_requires_min_packages(monkeypatch):
         lambda m: "2026-10-18 12:00:00",
     )
     assert first_seen_adoption_burst(records, None) == []
+
+
+def test_g008_survives_a_first_seen_read_failure(monkeypatch):
+    """A locked or missing database is "unknown", never a cycle abort."""
+    from trustsight.analysis.correlation import first_seen_adoption_burst
+
+    records = [
+        {"package": f"pkg{i}", "maintainer": "fennekuiper",
+         "adoption": True,
+         "adoption_observed_at": "2026-10-18 12:00:00",
+         "last_modified": 1000}
+        for i in range(5)
+    ]
+    monkeypatch.setattr(
+        "trustsight.db.maintainer_first_seen",
+        lambda m: (_ for _ in ()).throw(RuntimeError("database is locked")),
+    )
+    assert first_seen_adoption_burst(records, None) == []
+
+
+def test_g008_counts_a_package_once(monkeypatch):
+    """Duplicate transitions for one package do not fabricate a burst."""
+    from trustsight.analysis.correlation import first_seen_adoption_burst
+    import time
+
+    now = time.time()
+    records = [
+        {"package": "pkg", "maintainer": "fennekuiper", "adoption": True,
+         "adoption_observed_at": "2026-10-18 12:00:00",
+         "last_modified": int(now - 200 * 86400)}
+        for _ in range(5)
+    ]
+    monkeypatch.setattr(
+        "trustsight.db.maintainer_first_seen",
+        lambda m: "2026-10-18 12:00:00",
+    )
+    assert first_seen_adoption_burst(records, None) == []
+
+
+def test_malformed_thresholds_do_not_abort_the_sweep():
+    config = {"thresholds": {
+        "g_host": {"min_packages": "3"},
+        "g_blob": {"min_packages": "2", "min_length": "64"},
+        "g_adopt": {"min_members": "3"},
+    }}
+    found = correlate(_records(), config)
+    assert {f["rule_id"] for f in found} == {"G001", "G002", "G003"}
+
+
+def test_the_relatedness_pass_is_capped(monkeypatch):
+    """One maintainer controlling many adopted names must not choose an
+    O(n^2) pass over the sweep."""
+    from trustsight.analysis import correlation
+
+    names = [f"pkg{i}" for i in range(correlation.MAX_RELATEDNESS_MEMBERS + 1)]
+    records = [
+        {"package": name, "maintainer": "m", "adoption": True,
+         "adoption_predicates": ["H044"]}
+        for name in names
+    ]
+    found = coordinated_adoption(records, min_members=3)
+    assert [f["rule_id"] for f in found] == ["G003"]
+
+
+def test_one_pkgbase_family_is_not_a_campaign():
+    """Split outputs of one project are one release, not a shared-host or
+    shared-literal campaign."""
+    records = [
+        {"package": name, "pkgbase": "appattic", "maintainer": "m",
+         "hosts_gained": ["new.cdn"], "added_literals": ["B" * 300]}
+        for name in ("appattic", "appattic-bin", "appattic-docs")
+    ]
+    assert shared_gained_host(records, min_packages=3) == []
+    assert shared_added_literal(records, min_packages=2, min_length=256) == []

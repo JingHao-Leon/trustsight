@@ -42,6 +42,32 @@ __all__ = ["correlate", "shared_gained_host", "shared_added_literal",
            "coordinated_adoption", "shared_upstream_dependency",
            "first_seen_adoption_burst", "watchlisted_maintainer"]
 
+#: Above this many members, the pairwise naming-relatedness pass in G003 is
+#: skipped.  The pass is O(n^2) and the member set is attacker-influenced; a
+#: cap keeps one maintainer with a thousand adopted names from deciding how
+#: much CPU the sweep spends (A14).  Skipping means the group is not proven
+#: to be one family, so it stays a finding - fail-open to the alert.
+MAX_RELATEDNESS_MEMBERS = 64
+
+
+def _safe_int(value, default: int) -> int:
+    """*value* as an int, or *default*: a bad threshold never aborts a sweep."""
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _maintainer_key(value) -> str:
+    """One grouping key for a maintainer identity.
+
+    The seed and every runtime lookup normalise ``strip().lower()`` at one
+    chokepoint (:func:`trustsight.db._hash_maintainer_value`); the G rules
+    must group on the same key, or a case/whitespace variant splits one
+    account into two clusters (or evades one rule while tripping another).
+    """
+    return str(value or "").strip().lower()
+
 
 def _thresholds(config) -> dict:
     return (config or {}).get("thresholds", {})
@@ -82,18 +108,26 @@ def shared_gained_host(records, min_packages: int = 5) -> list[dict]:
     join only means something for a *new* host a set of packages did not all
     already reach through the ordinary sources.
     """
-    from ..buckets import classify_url
+    from ..buckets import canonical_host, classify_url
 
-    by_host: dict[str, set[str]] = defaultdict(set)
+    by_host: dict[str, dict[str, dict]] = defaultdict(dict)
     for record in records:
         for host in record.get("hosts_gained", ()) or ():
-            if host:
-                by_host[host].add(str(record.get("package", "")))
+            normalised = canonical_host(str(host)) if host else ""
+            if normalised:
+                by_host[normalised][str(record.get("package", ""))] = record
     out = []
     for host, members in sorted(by_host.items()):
         if len(members) < min_packages:
             continue
-        bucket, _domain = classify_url(f"https://{host}")
+        if _one_project(members.values()):
+            continue
+        try:
+            bucket, _domain = classify_url(f"https://{host}")
+        except Exception:
+            # A host the classifier cannot read is an unknown host, not a
+            # reason to abandon the cycle's other clusters.
+            bucket = "unknown"
         if bucket in _UBIQUITOUS_BUCKETS:
             continue
         out.append({
@@ -107,29 +141,70 @@ def shared_gained_host(records, min_packages: int = 5) -> list[dict]:
     return out
 
 
+def _literal_token(entry) -> tuple[str, int] | None:
+    """``(join_token, length)`` for one recorded added literal.
+
+    The corpus feed supplies ``(digest, length)`` because the join must use
+    the *full* literal's digest: the stored text is truncated for
+    diagnostics, and joining on that copy let two distinct long literals
+    sharing a prefix meet.  A hand-built record may still carry the text
+    itself, which the unit tests and callers do.
+    """
+    if isinstance(entry, (list, tuple)) and len(entry) == 2:
+        try:
+            token, length = str(entry[0]), int(entry[1])
+        except (TypeError, ValueError):
+            return None
+        return (token, length) if token and length >= 0 else None
+    text = str(entry)
+    return (text, len(text)) if text else None
+
+
 def shared_added_literal(records, min_packages: int = 2,
                          min_length: int = 256) -> list[dict]:
     """G002: an identical added literal in *min_packages* packages."""
-    by_literal: dict[str, set[str]] = defaultdict(set)
+    by_literal: dict[str, dict[str, dict]] = defaultdict(dict)
+    lengths: dict[str, int] = {}
     for record in records:
-        for literal in record.get("added_literals", ()) or ():
-            text = str(literal)
-            if len(text) >= min_length:
-                by_literal[text].add(str(record.get("package", "")))
+        for entry in record.get("added_literals", ()) or ():
+            parsed = _literal_token(entry)
+            if parsed is None:
+                continue
+            token, length = parsed
+            if length >= min_length:
+                by_literal[token][str(record.get("package", ""))] = record
+                lengths[token] = max(lengths.get(token, 0), length)
     out = []
     for literal, members in by_literal.items():
-        if len(members) >= min_packages:
+        if len(members) >= min_packages and not _one_project(members.values()):
             out.append({
                 "rule_id": "G002",
                 "name": "Shared Added Literal",
                 # Never print the literal's content: name its class only.
                 "severity": "HIGH", "category": "correlation",
-                "match": (f"an added literal of {len(literal)} chars appears "
-                          f"in {len(members)} packages in the window"),
+                "match": (f"an added literal of {lengths[literal]} chars "
+                          f"appears in {len(members)} packages in the window"),
                 "params": {"members": sorted(members),
-                           "literal_length": len(literal)},
+                           "literal_length": lengths[literal],
+                           "literal_sha256": literal},
             })
     return out
+
+
+def _one_project(member_records) -> bool:
+    """True when every member names the same pkgbase.
+
+    A pkgbase's split outputs (``foo``/``foo-bin``/``foo-docs``) are one
+    project's release, not several packages meeting at a host, literal or
+    dependency.  Missing pkgbase data cannot prove a relationship, so it
+    keeps the finding (the same fail-open posture G003 uses).
+    """
+    records = list(member_records)
+    if not records:
+        return False
+    bases = {str(r.get("pkgbase") or "") for r in records}
+    bases.discard("")
+    return len(bases) == 1 and all(r.get("pkgbase") for r in records)
 
 
 def _one_related_cluster(members) -> bool:
@@ -144,6 +219,10 @@ def _one_related_cluster(members) -> bool:
     from ..deps import is_related_package
 
     names = sorted(members)
+    if len(names) > MAX_RELATEDNESS_MEMBERS:
+        # Not proven to be one family.  Keep the finding rather than spend
+        # O(n^2) on an attacker-chosen member set.
+        return False
     parent = {name: name for name in names}
 
     def find(name: str) -> str:
@@ -194,9 +273,9 @@ def coordinated_adoption(records, min_members: int = 3,
     """
     thresholds = _thresholds(config)
     g003 = thresholds.get("g003", {})
-    novel_days = int(g003.get("novel_days", 30))
-    min_dormant = int(g003.get("min_dormant", 2))
-    dormant_days = int(g003.get("dormant_days", 180))
+    novel_days = max(0, _safe_int(g003.get("novel_days", 30), 30))
+    min_dormant = max(0, _safe_int(g003.get("min_dormant", 2), 2))
+    dormant_days = max(0, _safe_int(g003.get("dormant_days", 180), 180))
     now = time.time()
     novel_cutoff = now - novel_days * 86400
     dormant_cutoff = now - dormant_days * 86400
@@ -206,7 +285,7 @@ def coordinated_adoption(records, min_members: int = 3,
     repos: dict[str, list[set[str]]] = defaultdict(list)
     last_modified: dict[str, list[float]] = defaultdict(list)
     for record in records:
-        maintainer = str(record.get("maintainer", "") or "").strip().lower()
+        maintainer = _maintainer_key(record.get("maintainer"))
         if maintainer and record.get("adoption"):
             by_maintainer[maintainer].add(str(record.get("package", "")))
             predicates[maintainer] |= set(
@@ -263,7 +342,7 @@ def shared_upstream_dependency(records, min_packages: int = 2) -> list[dict]:
     view) in at least *min_packages* distinct packages: the same-new-
     upstream-dependency campaign shape, one alert naming the members.
     """
-    by_dep: dict[tuple[str, str], set[str]] = defaultdict(set)
+    by_dep: dict[tuple[str, str], dict[str, dict]] = defaultdict(dict)
     for record in records:
         for entry in record.get("upstream_dep_additions", ()) or ():
             if isinstance(entry, (list, tuple)):
@@ -272,10 +351,10 @@ def shared_upstream_dependency(records, min_packages: int = 2) -> list[dict]:
             else:
                 name, host = str(entry), ""
             if name:
-                by_dep[(name, host)].add(str(record.get("package", "")))
+                by_dep[(name, host)][str(record.get("package", ""))] = record
     out = []
     for (name, host), members in sorted(by_dep.items()):
-        if len(members) >= min_packages:
+        if len(members) >= min_packages and not _one_project(members.values()):
             where = f" from {host}" if host else ""
             out.append({
                 "rule_id": "G004",
@@ -312,7 +391,7 @@ def impersonation_campaign(records, min_members: int = 3) -> list[dict]:
         if not target:
             continue
         member = str(record.get("package", ""))
-        maintainer = str(record.get("maintainer", "") or "")
+        maintainer = _maintainer_key(record.get("maintainer"))
         if maintainer:
             by_maintainer[maintainer].append((member, target))
     out: list[dict] = []
@@ -350,14 +429,14 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
     dormant targets is near-zero FP.  All parameters are config-driven and
     fingerprint-covered.
     """
-    from ..db import maintainer_first_seen
     from ..db._history import _parse_ts
 
     thresholds = _thresholds(config)
-    min_packages = int(thresholds.get("g008", {}).get("min_packages", 5))
-    window_days = int(thresholds.get("g008", {}).get("window_days", 7))
-    min_dormant = int(thresholds.get("g008", {}).get("min_dormant", 3))
-    dormant_days = int(thresholds.get("g008", {}).get("dormant_days", 180))
+    g008 = thresholds.get("g008", {})
+    min_packages = max(1, _safe_int(g008.get("min_packages", 5), 5))
+    window_days = max(0, _safe_int(g008.get("window_days", 7), 7))
+    min_dormant = max(0, _safe_int(g008.get("min_dormant", 3), 3))
+    dormant_days = max(0, _safe_int(g008.get("dormant_days", 180), 180))
 
     now = time.time()
     window_start = now - window_days * 86400
@@ -367,24 +446,20 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
     for record in records:
         if not record.get("adoption"):
             continue
-        maintainer = str(record.get("maintainer", "") or "").strip()
+        maintainer = _maintainer_key(record.get("maintainer"))
         if maintainer:
             by_maintainer[maintainer].append(record)
 
     out: list[dict] = []
     for maintainer, events in sorted(by_maintainer.items()):
-        first_seen = maintainer_first_seen(maintainer)
-        if first_seen is None:
-            continue
-        try:
-            first_seen_ts = _parse_ts(first_seen).timestamp()
-        except (ValueError, TypeError):
-            continue
-        if first_seen_ts < window_start:
+        # A DB read failure is "unknown", never "established": the guarded
+        # helper returns None instead of aborting the cycle.
+        first_seen_ts = _maintainer_first_seen_ts(maintainer)
+        if first_seen_ts is None or first_seen_ts < window_start:
             continue
 
-        packages_in_window: list[str] = []
-        dormant_count = 0
+        # One package contributes once, however many transitions it has.
+        packages: dict[str, float] = {}
         for event in events:
             observed_at = event.get("adoption_observed_at", "")
             if not observed_at:
@@ -396,12 +471,17 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
             if observed_ts < window_start:
                 continue
             pkg = str(event.get("package", ""))
-            if pkg and pkg not in packages_in_window:
-                packages_in_window.append(pkg)
+            if not pkg:
+                continue
             last_mod = event.get("last_modified", 0)
-            if last_mod and isinstance(last_mod, (int, float)):
-                if last_mod < dormant_cutoff:
-                    dormant_count += 1
+            if isinstance(last_mod, (int, float)):
+                packages[pkg] = float(last_mod or 0)
+            else:
+                packages.setdefault(pkg, 0.0)
+        packages_in_window = sorted(packages)
+        dormant_count = sum(
+            1 for last_mod in packages.values()
+            if last_mod and last_mod < dormant_cutoff)
 
         if len(packages_in_window) >= min_packages and dormant_count >= min_dormant:
             out.append({
@@ -437,13 +517,24 @@ def watchlisted_maintainer(records, config=None) -> list[dict]:
     g009 = _thresholds(config).get("g009", {})
     if not g009.get("enabled", True):
         return []
-    from ..watchlist import load_packages, load_watchlist, local_hash
+    from ..watchlist import (
+        load_packages,
+        load_watchlist,
+        local_hash_many,
+    )
 
-    path = g009.get("path") or None
+    raw_path = g009.get("path")
+    path = raw_path if isinstance(raw_path, str) and raw_path else None
     entries = load_watchlist(path)
     packages = load_packages(path)
     if not entries and not packages:
         return []
+
+    # One salt read and one hash loop for the sweep, rather than a database
+    # connection per package.  Only the maintainer entries need hashing.
+    hashes = local_hash_many(
+        {_maintainer_key(r.get("maintainer")) for r in records}
+    ) if entries else {}
 
     out: list[dict] = []
     seen: set[str] = set()
@@ -455,10 +546,10 @@ def watchlisted_maintainer(records, config=None) -> list[dict]:
             label = packages[package]
             subject = "package"
         else:
-            maintainer = str(record.get("maintainer", "") or "").strip()
+            maintainer = _maintainer_key(record.get("maintainer"))
             if not maintainer:
                 continue
-            name_hash = local_hash(maintainer)
+            name_hash = hashes.get(maintainer)
             if not name_hash or name_hash not in entries:
                 continue
             label = entries[name_hash]
@@ -479,12 +570,18 @@ def watchlisted_maintainer(records, config=None) -> list[dict]:
 def correlate(records, config=None) -> list[dict]:
     """All G-series findings for one cycle's records."""
     thresholds = _thresholds(config)
-    host_n = int(thresholds.get("g_host", {}).get("min_packages", 5))
-    blob_n = int(thresholds.get("g_blob", {}).get("min_packages", 2))
-    blob_len = int(thresholds.get("g_blob", {}).get("min_length", 256))
-    adopt_m = int(thresholds.get("g_adopt", {}).get("min_members", 3))
-    dep_n = int(thresholds.get("g_dep", {}).get("min_packages", 2))
-    imp_m = int(thresholds.get("g_impersonation", {}).get("min_members", 3))
+    host_n = max(1, _safe_int(
+        thresholds.get("g_host", {}).get("min_packages", 5), 5))
+    blob_n = max(1, _safe_int(
+        thresholds.get("g_blob", {}).get("min_packages", 2), 2))
+    blob_len = max(0, _safe_int(
+        thresholds.get("g_blob", {}).get("min_length", 256), 256))
+    adopt_m = max(1, _safe_int(
+        thresholds.get("g_adopt", {}).get("min_members", 3), 3))
+    dep_n = max(1, _safe_int(
+        thresholds.get("g_dep", {}).get("min_packages", 2), 2))
+    imp_m = max(1, _safe_int(
+        thresholds.get("g_impersonation", {}).get("min_members", 3), 3))
     out: list[dict] = []
     out.extend(shared_gained_host(records, host_n))
     out.extend(shared_added_literal(records, blob_n, blob_len))
