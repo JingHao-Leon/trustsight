@@ -228,3 +228,51 @@ def test_waiter_wakes_when_a_failed_worker_frees_capacity(monkeypatch):
             condition.notify_all()
         pool.put(replacement)
         thread.join(timeout=2)
+
+
+def test_a_blocked_frame_write_is_refused_at_its_deadline():
+    """A child that stops reading must not block the parent forever."""
+    import os
+    import time
+
+    from trustsight.sandbox import protocol
+
+    read_fd, write_fd = os.pipe()
+    try:
+        started = time.monotonic()
+        with pytest.raises(protocol.FrameError, match="timed out"):
+            protocol.write_frame(
+                write_fd,
+                b"x" * (2 * 1024 * 1024),
+                time.monotonic() + 0.2,
+            )
+        assert time.monotonic() - started < 2.0
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+
+
+def test_a_malformed_response_is_a_refusal(monkeypatch):
+    worker = Mock()
+    worker.requests = 0
+    worker.request.return_value = b"[]"
+    monkeypatch.setattr(client, "_acquire", lambda: worker)
+    monkeypatch.setattr(client, "_all", [worker])
+
+    with pytest.raises(TokenizerUnavailable, match="malformed response"):
+        client._send("lines", "x")
+    worker.stop.assert_called_once_with()
+
+
+def test_degraded_limits_are_reported_once(monkeypatch, caplog):
+    worker = Mock()
+    worker.request.return_value = b'{"result": ["x"], "degraded": ["RLIMIT_AS not applied: OSError"]}'
+    worker.requests = 0
+    worker.degraded = []
+    worker._degraded_reported = False
+    monkeypatch.setattr(client, "_acquire", lambda: worker)
+    monkeypatch.setattr(client, "_release", lambda _worker: None)
+
+    assert client._send("lines", "x") == ["x"]
+    assert worker.degraded == ["RLIMIT_AS not applied: OSError"]
+    assert "degraded" in caplog.text

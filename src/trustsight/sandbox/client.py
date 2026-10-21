@@ -79,6 +79,8 @@ class _Worker:
     def __init__(self):
         self.proc = None
         self.requests = 0
+        self.degraded: list = []
+        self._degraded_reported = False
         self._stderr_thread = None
 
     def start(self) -> None:
@@ -136,12 +138,13 @@ class _Worker:
     def request(self, body: bytes) -> bytes:
         if self.proc is None or self.proc.stdin is None or self.proc.stdout is None:
             raise _WorkerError("worker is not running")
-        try:
-            self.proc.stdin.write(protocol.frame(body))
-            self.proc.stdin.flush()
-        except (BrokenPipeError, OSError) as exc:
-            raise _WorkerError(f"worker closed the channel: {exc}") from exc
         deadline = time.monotonic() + REQUEST_TIMEOUT_SECONDS
+        try:
+            protocol.write_frame(
+                self.proc.stdin.fileno(), body, deadline
+            )
+        except (BrokenPipeError, OSError, protocol.FrameError) as exc:
+            raise _WorkerError(f"worker closed the channel: {exc}") from exc
         header = _read_with_deadline(
             self.proc.stdout, protocol.HEADER.size, deadline
         )
@@ -412,10 +415,23 @@ def _send(op: str, payload):
         raw = worker.request(body)
         worker.requests += 1
         response = json.loads(raw.decode("utf-8"))
+        if not isinstance(response, dict):
+            raise _WorkerError("malformed response from the tokenizer worker")
+        if "error" not in response and "result" not in response:
+            raise _WorkerError("response carried neither result nor error")
     except Exception as exc:
         worker.stop()
         _forget(worker)
         raise TokenizerUnavailable(f"tokenizer_unavailable: {exc}") from exc
+    degraded = response.get("degraded")
+    if degraded:
+        worker.degraded = list(degraded)
+        if not worker._degraded_reported:
+            worker._degraded_reported = True
+            _log.warning(
+                "tokenizer sandbox protection degraded: %s",
+                "; ".join(str(item) for item in degraded),
+            )
     _release(worker)
     if "error" in response:
         raise TokenizerUnavailable(f"tokenizer_unavailable: {response['error']}")

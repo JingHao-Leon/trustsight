@@ -18,10 +18,16 @@ itself):
   fails and the child is still a plain process with no descriptors worth
   having.  The stated trust model already trusts the interpreter, so this
   is hardening, not the guarantee.
+
+A limit that could not be applied is returned to the parent in every
+response's ``degraded`` field and logged, rather than swallowed: the
+isolation is weaker than the design intends and the operator must be able
+to see that.
 """
 
 import ctypes
 import os
+import resource
 import sys
 
 from trustsight import _tokenizer_engine as engine
@@ -43,16 +49,27 @@ _PR_SET_NO_NEW_PRIVS = 38
 _CLONE_NEWNET = 0x40000000
 
 
+_DEGRADED: list[str] = []
+
+
 class _UnknownOp(Exception):
     """The request named an operation the worker does not implement."""
 
 
-def _apply_limits() -> None:
-    """Bound the child's resources.  Best-effort on platforms without them."""
-    try:
-        import resource
-    except ImportError:  # pragma: no cover - not a Linux/AUR platform
-        return
+def _apply_limits() -> list[str]:
+    """Bound the child's resources; return what could not be applied.
+
+    A swallowed ``setrlimit`` makes the isolation weaker than the design
+    intends, so a failure is reported to the parent (the ``degraded`` field)
+    as well as logged.  The git worker works the same way; the two sandboxes
+    must not disagree about whether a limit took effect.
+    """
+    failures: list[str] = []
+    names = {
+        getattr(resource, name): name
+        for name in ("RLIMIT_AS", "RLIMIT_CPU", "RLIMIT_FSIZE", "RLIMIT_NOFILE")
+        if hasattr(resource, name)
+    }
     for which, value in (
         (resource.RLIMIT_AS, _WORKER_MEMORY_BYTES),
         (resource.RLIMIT_CPU, _WORKER_CPU_SECONDS),
@@ -61,9 +78,16 @@ def _apply_limits() -> None:
     ):
         try:
             resource.setrlimit(which, (value, value))
-        except (ValueError, OSError):
-            pass
-    _report_isolation(_no_new_privs(), _drop_network())
+        except (ValueError, OSError) as exc:
+            failures.append(
+                f"{names.get(which, str(which))} not applied: "
+                f"{type(exc).__name__}"
+            )
+    no_new_privs = _no_new_privs()
+    if not no_new_privs:
+        failures.append("PR_SET_NO_NEW_PRIVS not applied: prctl failed")
+    _report_isolation(no_new_privs, _drop_network())
+    return failures
 
 
 def _no_new_privs() -> bool:
@@ -147,8 +171,16 @@ def _handle(body: bytes) -> dict:
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
+def _attach_degraded(response: dict) -> dict:
+    """Attach the startup limit failures to a response, when there are any."""
+    if _DEGRADED:
+        response["degraded"] = list(_DEGRADED)
+    return response
+
+
 def main() -> int:
-    _apply_limits()
+    global _DEGRADED
+    _DEGRADED = _apply_limits()
     try:
         os.chdir("/")
     except OSError:
@@ -161,7 +193,7 @@ def main() -> int:
         except protocol.FrameError:
             # EOF or a truncated frame: the parent is done with this worker.
             return 0
-        response = _handle(body)
+        response = _attach_degraded(_handle(body))
         try:
             stdout.write(protocol.encode(response))
             stdout.flush()

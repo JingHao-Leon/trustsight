@@ -8,12 +8,17 @@ exactly this reason, and a sandbox whose channel is a deserialiser has
 moved the problem rather than solved it.
 
 Every read carries a size and every frame is capped, so neither side can
-make the other allocate an amount it chose (A4, A14).  See
-``bounded_io`` for the same rule applied to streams the operator hands in.
+make the other allocate an amount it chose (A4, A14).  A write is bounded by
+the same deadline as the response read, so a child that stops reading cannot
+block the parent in ``write``.  See ``bounded_io`` for the same rule applied
+to streams the operator hands in.
 """
 
 import json
+import os
+import select
 import struct
+import time
 
 #: One request.  Sized to the *escaping* worst case, not the raw diff:
 #: ``json.dumps`` still spells every C0 control byte as a six-byte
@@ -51,6 +56,44 @@ def encode(obj: object) -> bytes:
 def frame(body: bytes) -> bytes:
     """Length-prefix one already-serialised body."""
     return _HEADER.pack(len(body)) + body
+
+
+def write_frame(fd: int, body: bytes, deadline: float) -> None:
+    """Write one framed body to *fd* without blocking past *deadline*.
+
+    A length bound alone does not bound the *time* a write takes: a child
+    that stops reading its stdin leaves a frame larger than the pipe buffer
+    blocked in ``write`` while the parent holds a pool slot.  The descriptor
+    is non-blocking and every wait is a ``select`` bounded by the same
+    deadline used for the response.
+
+    Raises :class:`FrameError` on timeout, a closed descriptor, or a
+    zero-byte write.
+    """
+    payload = memoryview(frame(body))
+    try:
+        os.set_blocking(fd, False)
+    except OSError:
+        pass
+    while payload:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise FrameError("timed out writing frame")
+        try:
+            _, writable, _ = select.select([], [fd], [], remaining)
+        except OSError as exc:
+            raise FrameError(str(exc)) from exc
+        if not writable:
+            raise FrameError("timed out writing frame")
+        try:
+            written = os.write(fd, payload)
+        except BlockingIOError:
+            continue
+        except OSError as exc:
+            raise FrameError(f"write failed: {exc}") from exc
+        if written <= 0:
+            raise FrameError("write made no progress")
+        payload = payload[written:]
 
 
 def read_exact(fh, n: int) -> bytes:
