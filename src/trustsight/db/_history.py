@@ -6,7 +6,7 @@ from typing import Optional
 from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
 
-__all__ = ['clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
+__all__ = ['clear_correlation_feeds', 'clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
 
 def get_history(package_id: int, limit: int = 20, *, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
     """Return recent analysis history for *package_id*, newest first.
@@ -389,21 +389,47 @@ def observed_domain_count() -> int:
 
 MAX_OBSERVED_LITERALS = 50_000
 
+#: Per-package cap on the G002 feed.  The diff is the bound upstream, but a
+#: 5 MiB diff of encoded runs is tens of thousands of rows, and one package
+#: must not decide the cycle's insert volume (A14).
+MAX_LITERALS_PER_PACKAGE = 256
+
+#: The stored copy is diagnostic only; the join uses the digest of the full
+#: literal, so truncation here cannot make two long literals collide.
+MAX_LITERAL_STORED_BYTES = 4096
+
 def record_added_literals(package_name: str, literals, observed_at=None) -> None:
-    """Record a package's added encoded literals."""
+    """Record a package's added encoded literals for the G002 join.
+
+    The join key is a digest of the *full* literal.  The earlier feed stored
+    at most 4096 characters and joined on that text, so two distinct long
+    literals sharing a prefix met as if they were identical.  The text kept
+    here is a bounded diagnostic copy, never the join key.
+    """
     package_name = (package_name or "").strip()
     if not package_name or not literals:
         return
+    items = list(literals)
+    if len(items) > MAX_LITERALS_PER_PACKAGE:
+        import logging
+        logging.getLogger(__name__).warning(
+            "G002 feed capped for %s: %d added literals, keeping %d",
+            package_name, len(items), MAX_LITERALS_PER_PACKAGE)
+        items = items[:MAX_LITERALS_PER_PACKAGE]
     with get_connection() as conn:
-        for literal in literals:
-            text = str(literal)[:4096]
+        for literal in items:
+            text = str(literal)
             if not text:
                 continue
+            digest = hashlib.sha256(
+                text.encode("utf-8", "replace")).hexdigest()[:32]
             conn.execute(
                 """INSERT INTO observed_added_literals(
-                       package_name, literal, literal_len, observed_at)
-                   VALUES (?, ?, ?, COALESCE(?, datetime('now')))""",
-                (package_name, text, len(text), observed_at),
+                       package_name, literal, literal_hash, literal_len,
+                       observed_at)
+                   VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')))""",
+                (package_name, text[:MAX_LITERAL_STORED_BYTES], digest,
+                 len(text), observed_at),
             )
         conn.execute(
             """DELETE FROM observed_added_literals WHERE rowid IN (
@@ -434,6 +460,56 @@ def clear_upstream_dep_additions() -> None:
     """
     with get_connection() as conn:
         conn.execute("DELETE FROM observed_upstream_deps")
+        conn.commit()
+
+def clear_correlation_feeds() -> None:
+    """Drop every per-cycle G-series feed before a new cycle analyses anything.
+
+    G001/G002/G003/G004 are joins over *this* cycle's transitions.  The
+    tables are transient by construction: a row left from a prior cycle
+    would let an old host, literal or adoption meet a new one and re-fire
+    the join (and re-arm a campaign) long after the campaign ended.
+    """
+    with get_connection() as conn:
+        conn.execute("DELETE FROM observed_gained_hosts")
+        conn.execute("DELETE FROM observed_added_literals")
+        conn.execute("DELETE FROM observed_adoptions")
+        conn.execute("DELETE FROM observed_upstream_deps")
+        conn.commit()
+
+def record_gained_hosts(package_name: str, hosts, observed_at: str,
+                        conn=None) -> None:
+    """Record the hosts a package gained this cycle (G001's feed)."""
+    package_name = (package_name or "").strip()
+    if not package_name or not hosts:
+        return
+    rows = [(package_name, str(host), observed_at) for host in hosts if host]
+    if not rows:
+        return
+    if conn is None:
+        with get_connection() as own:
+            own.executemany(
+                "INSERT INTO observed_gained_hosts"
+                " (package_name, host, observed_at) VALUES (?, ?, ?)", rows)
+            own.commit()
+        return
+    conn.executemany(
+        "INSERT INTO observed_gained_hosts"
+        " (package_name, host, observed_at) VALUES (?, ?, ?)", rows)
+
+def record_adoption_event(package_name: str, maintainer: str, predicate: str,
+                          observed_at: str) -> None:
+    """Record this cycle's maintainer transition for G003/G008."""
+    package_name = (package_name or "").strip()
+    maintainer = (maintainer or "").strip()
+    if not package_name or not maintainer:
+        return
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO observed_adoptions"
+            " (package_name, maintainer, predicate, observed_at)"
+            " VALUES (?, ?, ?, ?)",
+            (package_name, maintainer, str(predicate), observed_at))
         conn.commit()
 
 def record_upstream_dep_additions(
@@ -532,9 +608,10 @@ def correlation_feed(package_names) -> dict[str, dict]:
             if row[0] in out:
                 out[row[0]]["hosts_gained"].append(row[1])
         for row in conn.execute(
-                "SELECT package_name, literal FROM added_literal_hashes"):
+                "SELECT package_name, literal_hash, literal_len "
+                "FROM added_literal_hashes"):
             if row[0] in out:
-                out[row[0]]["added_literals"].append(row[1])
+                out[row[0]]["added_literals"].append((row[1], int(row[2])))
         for row in conn.execute(
                 "SELECT package_name, dependency_name, host "
                 "FROM upstream_dep_additions"):

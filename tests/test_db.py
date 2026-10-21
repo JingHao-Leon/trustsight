@@ -945,7 +945,8 @@ def test_the_three_correlation_views_exist_and_serve(db):
     from trustsight.db import (
         correlation_feed,
         get_connection,
-        record_property_transition,
+        record_adoption_event,
+        record_gained_hosts,
     )
 
     with get_connection() as conn:
@@ -956,8 +957,8 @@ def test_the_three_correlation_views_exist_and_serve(db):
         assert {"gained_hosts_window", "added_literal_hashes",
                 "adoption_events"} <= views
 
-    record_property_transition("pkg", "source_hosts", [], ["new.cdn"])
-    record_property_transition("pkg", "maintainer", "", "m@x")
+    record_gained_hosts("pkg", ["new.cdn"], "2026-10-21T00:00:00+00:00")
+    record_adoption_event("pkg", "m@x", "H086", "2026-10-21T00:00:00+00:00")
     with get_connection() as conn:
         conn.execute(
             "INSERT INTO observed_added_literals "
@@ -967,7 +968,7 @@ def test_the_three_correlation_views_exist_and_serve(db):
 
     feed = correlation_feed(["pkg"])
     assert feed["pkg"]["hosts_gained"] == ["new.cdn"]
-    assert feed["pkg"]["added_literals"] == ["XYZ"]
+    assert feed["pkg"]["added_literals"] == [("XYZ", 3)]
     assert feed["pkg"]["maintainer"] == "m@x"
     assert feed["pkg"]["adoption_predicates"] == ["H086"]
 
@@ -1237,3 +1238,70 @@ def test_manifest_deps_null_preserves_the_previous_observation(db):
     save_pkgbuild_snapshot("a", "pkgver=3", "3", manifest_deps=None)
     assert get_pkgbuild_snapshot("a")["manifest_deps"] == (
         '[["evil", "evil.example"]]')
+
+
+def test_correlation_feeds_are_cycle_local(db):
+    """G001/G002/G003/G004 join on this cycle's transitions, not history.
+
+    A row left from a prior cycle let an old host, literal or adoption meet
+    a new one and re-fire the join (and re-arm a campaign) long after the
+    event.  The feeds are cleared at cycle start; a historical
+    ``property_transition`` is not a feed row.
+    """
+    from trustsight.db import (
+        clear_correlation_feeds,
+        correlation_feed,
+        record_added_literals,
+        record_adoption_event,
+        record_gained_hosts,
+        record_property_transition,
+    )
+
+    record_gained_hosts("a", ["new.cdn"], "2026-10-21T00:00:00+00:00")
+    record_added_literals("a", ["B" * 300])
+    record_adoption_event("a", "m", "H044", "2026-10-21T00:00:00+00:00")
+    feed = correlation_feed(["a"])
+    assert feed["a"]["hosts_gained"] == ["new.cdn"]
+    assert len(feed["a"]["added_literals"]) == 1
+    assert feed["a"]["adoption_predicates"] == ["H044"]
+
+    clear_correlation_feeds()
+    feed = correlation_feed(["a"])
+    assert feed["a"]["hosts_gained"] == []
+    assert feed["a"]["added_literals"] == []
+    assert feed["a"]["adoption_predicates"] == []
+
+    # The history timeline still records the change for the temporal rules,
+    # but it is not a G-series feed row.
+    record_property_transition("a", "source_hosts", [], ["old.cdn"])
+    record_property_transition("a", "maintainer", "", "m")
+    feed = correlation_feed(["a"])
+    assert feed["a"]["hosts_gained"] == []
+    assert feed["a"]["adoption_predicates"] == []
+
+
+def test_added_literal_digest_distinguishes_long_prefixes(db):
+    """The join is over the full literal's digest, not the 4096-byte copy.
+
+    Two distinct 5 KiB literals sharing a 4 KiB prefix used to meet as if
+    they were identical; the stored text is still truncated for diagnostics,
+    but the digest differs.
+    """
+    from trustsight.analysis.correlation import shared_added_literal
+    from trustsight.db import correlation_feed, record_added_literals
+
+    prefix = "A" * 5000
+    record_added_literals("a", [prefix + "X"])
+    record_added_literals("b", [prefix + "Y"])
+    feed = correlation_feed(["a", "b"])
+    records = [{"package": name, "added_literals": feed[name]["added_literals"]}
+               for name in ("a", "b")]
+    assert shared_added_literal(records, min_packages=2, min_length=256) == []
+
+    record_added_literals("c", [prefix + "X"])
+    feed = correlation_feed(["a", "c"])
+    records = [{"package": name, "added_literals": feed[name]["added_literals"]}
+               for name in ("a", "c")]
+    found = shared_added_literal(records, min_packages=2, min_length=256)
+    assert [f["rule_id"] for f in found] == ["G002"]
+    assert found[0]["params"]["literal_length"] == 5001

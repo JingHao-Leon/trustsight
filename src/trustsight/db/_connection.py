@@ -530,27 +530,53 @@ def init_db():
             CREATE TABLE IF NOT EXISTS observed_added_literals (
                 package_name TEXT NOT NULL,
                 literal TEXT NOT NULL,
+                literal_hash TEXT,
                 literal_len INTEGER NOT NULL,
                 observed_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_added_literals_package
                 ON observed_added_literals(package_name);
 
+            /* G001's per-cycle feed: the hosts a package *gained* this
+               cycle, written where the source_hosts property transition is
+               recorded.  Cleared at cycle start (clear_correlation_feeds),
+               so a host gained months ago cannot re-join a later cycle. */
+            CREATE TABLE IF NOT EXISTS observed_gained_hosts (
+                package_name TEXT NOT NULL,
+                host TEXT NOT NULL,
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_gained_hosts_package
+                ON observed_gained_hosts(package_name);
+
+            /* G003's per-cycle adoption feed: one row per maintainer
+               transition observed this cycle.  A package re-processed with
+               an unchanged maintainer is not an adoption, and a historical
+               transition cannot re-arm a campaign. */
+            CREATE TABLE IF NOT EXISTS observed_adoptions (
+                package_name TEXT NOT NULL,
+                maintainer TEXT NOT NULL,
+                predicate TEXT NOT NULL,
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_observed_adoptions_package
+                ON observed_adoptions(package_name);
+
             /* three indexed views the G-series correlates
                over at cycle end (O(cycle) queries, not O(packages^2)).
-               equivalent tables exist - these are the queryable surfaces. */
-            CREATE VIEW IF NOT EXISTS gained_hosts_window AS
-                SELECT pt.package_name AS package_name,
-                       je.value AS host,
-                       pt.observed_at AS observed_at
-                FROM property_transitions pt, json_each(pt.new_value) je
-                WHERE pt.property_key = 'source_hosts'
-                  AND je.value NOT IN (
-                      SELECT je2.value
-                      FROM json_each(COALESCE(pt.old_value, '[]')) je2);
+               Each reads a per-cycle table, so the join semantics match the
+               rule contract: "in the window" is "this cycle". */
+            DROP VIEW IF EXISTS gained_hosts_window;
+            CREATE VIEW gained_hosts_window AS
+                SELECT package_name, host, observed_at
+                FROM observed_gained_hosts;
 
-            CREATE VIEW IF NOT EXISTS added_literal_hashes AS
-                SELECT package_name, literal, literal_len, observed_at
+            DROP VIEW IF EXISTS added_literal_hashes;
+            CREATE VIEW added_literal_hashes AS
+                SELECT package_name,
+                       COALESCE(literal_hash, literal) AS literal_hash,
+                       literal_len,
+                       observed_at
                 FROM observed_added_literals;
 
             /* G004's feed: the remote upstream dependencies each processed
@@ -570,16 +596,10 @@ def init_db():
                 SELECT package_name, dependency_name, host, observed_at
                 FROM observed_upstream_deps;
 
-            CREATE VIEW IF NOT EXISTS adoption_events AS
-                SELECT pt.package_name AS package_name,
-                       json_extract(pt.new_value, '$') AS maintainer,
-                       CASE WHEN json_extract(pt.old_value, '$') IS NULL
-                                 OR json_extract(pt.old_value, '$') = ''
-                            THEN 'H086' ELSE 'H044' END AS predicate,
-                       pt.observed_at AS observed_at
-                FROM property_transitions pt
-                WHERE pt.property_key = 'maintainer'
-                  AND COALESCE(json_extract(pt.new_value, '$'), '') <> '';
+            DROP VIEW IF EXISTS adoption_events;
+            CREATE VIEW adoption_events AS
+                SELECT package_name, maintainer, predicate, observed_at
+                FROM observed_adoptions;
 
             /* The Contact Ledger (spec: contact-ledger): the innate layer's
                memory of first contact.  Append-only and cycle-versioned; one
@@ -643,6 +663,11 @@ _ADDED_COLUMNS = {
     # (`exfil` or `history_sweep`); empty for every other IOC type.
     "ioc_entries": {
         "shape": "TEXT",
+    },
+    # G002 joins on a digest of the full literal; the stored text is the
+    # bounded copy kept for diagnostics.
+    "observed_added_literals": {
+        "literal_hash": "TEXT",
     },
 }
 
