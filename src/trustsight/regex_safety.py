@@ -351,6 +351,33 @@ def has_nested_quantifier(pattern: str) -> bool:
     return False
 
 
+#: A group whose body already contains a quantifier, itself followed by a
+#: repeating quantifier: ``(\w+\s?)+``.  The narrower checks above only see a
+#: single atom or class inside the group, so a multi-atom body slipped past
+#: them.  This is deliberately broader, because it is used only where the
+#: pattern cannot be measured safely (a curator-supplied IOC is static text at
+#: compile time); the rule compiler keeps the narrower detector and decides by
+#: measurement, so a false refusal here costs an indicator, not a live rule.
+_REPEATING_QUANTIFIED_GROUP_RE = re.compile(
+    r"\((?:\?:)?"
+    r"(?:[^()\\]|\\.){0,256}"
+    r"(?:[*+?]|\{\d{0,8}(?:,\d{0,8})?\})"
+    r"(?:[^()\\]|\\.){0,256}"
+    r"\)\s*(?:[*+]|\{\d)"
+)
+
+
+def has_repeating_quantified_group(pattern: str) -> bool:
+    """Detect any group with an inner quantifier repeated by an outer one.
+
+    Unlike :func:`has_nested_quantifier` this looks at the whole group body,
+    so ``(\\w+\\s?)+`` is caught even though its body is two atoms.  Callers
+    that can measure a pattern should do so; this exists for the static IOC
+    path, where running the pattern on adversarial input is itself the hang.
+    """
+    return bool(_REPEATING_QUANTIFIED_GROUP_RE.search(pattern))
+
+
 #: Below this, a measurement is noise rather than signal.  It floors the long
 #: median (a pattern too fast to measure is fast enough) and caps the divisor
 #: of the growth ratio, so a contended reading cannot be divided by a

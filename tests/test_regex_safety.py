@@ -143,6 +143,26 @@ def test_a_quantified_class_in_a_quantified_group_is_caught_structurally():
     assert has_nested_quantifier(r"([a-z]*)+$")
 
 
+def test_a_multi_atom_quantified_group_is_caught_by_the_static_ioc_check():
+    r"""The narrow detector sees one atom; ``(\w+\s?)+`` has two.
+
+    The rule compiler can measure this shape and decide by cost.  A curator
+    pattern is static text at compile time, and measuring it is the hang the
+    check exists to prevent, so the IOC path uses the broader structural
+    detector instead.
+    """
+    from trustsight.iocs import compile_ioc_pattern
+    from trustsight.regex_safety import has_repeating_quantified_group
+
+    assert not has_nested_quantifier(r"(\w+\s?)+")
+    for pattern in (r"(\w+\s?)+", r"(\d+\s?)*", r"(a+b*)+", r"(?:ab+)+"):
+        assert has_repeating_quantified_group(pattern), pattern
+        assert compile_ioc_pattern(pattern) is None, pattern
+
+    # A pattern with no quantified group is still accepted.
+    assert compile_ioc_pattern(r"\bnpm\s+install\b") is not None
+
+
 def test_probing_a_safe_pattern_stays_cheap():
     """This runs at rule-compile time, so it is on the startup path."""
     pattern = re.compile(r"https?://[\w.-]+/\S+")
