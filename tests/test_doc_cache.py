@@ -14,6 +14,7 @@ from trustsight.diffdoc import (
     parse_diff,
     tokenizer_version,
 )
+from trustsight import doc_cache
 from trustsight.doc_cache import (
     document_key,
     parse_diff_cached,
@@ -118,6 +119,7 @@ def test_cached_parse_matches_a_fresh_parse_and_survives_a_corrupt_entry(tmp_pat
     assert first == fresh
     entry = tmp_path / f"diff-{document_key(text)}.json"
     assert entry.exists()
+    assert entry.stat().st_size <= doc_cache.MAX_DOC_CACHE_BYTES
     # A valid entry is served.
     assert parse_diff_cached(text, directory=tmp_path) == fresh
     # A corrupt entry falls back to a fresh parse rather than raising.
@@ -136,3 +138,50 @@ def test_cached_recipe_matches_a_fresh_parse(tmp_path):
 
 def test_the_tokenizer_digest_is_available():
     assert tokenizer_version() != ""
+
+
+def test_an_oversized_cache_entry_is_a_miss_without_reading_it(
+        tmp_path, monkeypatch):
+    """A cache file is not allowed to decide the read's allocation (A4/A14).
+
+    The size is refused from the stat before the file is opened, and the
+    caller falls back to parsing the real text.
+    """
+    import tracemalloc
+
+    text = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n-x\n+y\n"
+    monkeypatch.setattr(doc_cache, "MAX_DOC_CACHE_BYTES", 1024)
+    entry = tmp_path / f"diff-{document_key(text)}.json"
+    entry.write_bytes(b"x" * (2 * 1024 * 1024))
+
+    tracemalloc.start()
+    try:
+        assert doc_cache._load(entry, DiffDoc.from_dict) is None
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 256 * 1024, f"the oversized entry was materialised: {peak} bytes"
+    assert parse_diff_cached(text, directory=tmp_path) == parse_diff(text)
+
+
+def test_a_truncated_or_non_utf8_cache_entry_falls_back(tmp_path):
+    text = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n-x\n+y\n"
+    fresh = parse_diff(text)
+    entry = tmp_path / f"diff-{document_key(text)}.json"
+
+    entry.write_text('{"files": [', encoding="utf-8")
+    assert parse_diff_cached(text, directory=tmp_path) == fresh
+
+    entry.write_bytes(b"\xff\xfe\x00")
+    assert parse_diff_cached(text, directory=tmp_path) == fresh
+
+
+def test_an_oversized_cache_payload_is_not_stored(tmp_path, monkeypatch):
+    text = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n-x\n+y\n"
+    fresh = parse_diff(text)
+    monkeypatch.setattr(doc_cache, "MAX_DOC_CACHE_BYTES", 16)
+    assert parse_diff_cached(text, directory=tmp_path) == fresh
+    entry = tmp_path / f"diff-{document_key(text)}.json"
+    assert not entry.exists()
+    # The missed store is not an error: the next call still parses and returns.
+    assert parse_diff_cached(text, directory=tmp_path) == fresh

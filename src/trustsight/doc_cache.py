@@ -19,11 +19,20 @@ import json
 import os
 from pathlib import Path
 
+from .bounded_io import ReadTooLarge, read_file_capped
 from .diffdoc import DiffDoc, parse_diff
 from .recipedoc import RecipeDoc, parse_recipe
 
 #: Environment override for the cache directory; tests point it at a tmpdir.
 CACHE_ENV = "TRUSTSIGHT_DOC_CACHE"
+
+#: A4/A14: a cache entry is a local file derived from attacker text, and the
+#: read path must not be the one place that materialises a file without a
+#: ceiling.  This bounds the stored JSON, not the objects it parses into; the
+#: cache is an optimization, so a document over the cap is simply re-parsed
+#: and not stored.  16 MiB is well above the largest entry in the locked
+#: benign corpus (about 2 MiB).
+MAX_DOC_CACHE_BYTES = 16 * 1024 * 1024
 
 
 def cache_dir() -> Path:
@@ -45,20 +54,43 @@ def document_key(*parts: object) -> str:
 
 
 def _load(path: Path, loader):
+    """Read a cache entry, or return ``None`` for any reason to re-parse.
+
+    The read is capped before ``json.loads``: an oversized, truncated or
+    corrupt entry must be a miss, never the input that decides how much this
+    process allocates.  ``RecursionError`` is a miss too - deeply nested JSON
+    is exactly the malformed entry the cache must not turn into a crash.
+    """
     try:
-        return loader(json.loads(path.read_text(encoding="utf-8")))
-    except (OSError, ValueError):
+        raw = read_file_capped(
+            path, MAX_DOC_CACHE_BYTES, "document cache entry")
+        return loader(json.loads(raw.decode("utf-8")))
+    except (OSError, ValueError, ReadTooLarge, RecursionError):
         return None
 
 
 def _store(path: Path, payload: dict) -> None:
-    """Best-effort atomic write; a read-only cache is still a valid cache."""
+    """Best-effort atomic write; a read-only cache is still a valid cache.
+
+    Encoding is incremental so a payload over ``MAX_DOC_CACHE_BYTES`` is
+    abandoned at the cap instead of being materialised and then rejected.
+    Nothing is written in that case: an oversized entry would only be refused
+    on the next read anyway.
+    """
     try:
+        # ``ensure_ascii`` keeps every encoded character one byte, so the
+        # running character count is the byte count and the cap can be
+        # applied before a chunk is encoded.
+        encoder = json.JSONEncoder(separators=(",", ":"), ensure_ascii=True)
+        encoded = bytearray()
+        for chunk in encoder.iterencode(payload):
+            if len(encoded) + len(chunk) > MAX_DOC_CACHE_BYTES:
+                return
+            encoded.extend(chunk.encode("utf-8"))
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(
-            json.dumps(payload, separators=(",", ":")), encoding="utf-8"
-        )
+        with open(tmp, "wb") as handle:
+            handle.write(encoded)
         os.replace(tmp, path)
     except OSError:
         pass
