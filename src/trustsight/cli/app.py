@@ -4,6 +4,8 @@ import sys
 
 import typer
 
+from ..safe_text import clean, clean_log
+
 
 def _version_callback(value: bool):
     if value:
@@ -86,6 +88,40 @@ class _StderrHandler(logging.StreamHandler):
     def emit(self, record: logging.LogRecord) -> None:
         self.stream = sys.stderr
         super().emit(record)
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Render the record inert, without changing the record itself.
+
+        The log is a terminal render path like any other (A10): a message may
+        carry a maintainer name, URL, path or finding field the input chose.
+        The message is one line, so ``clean`` collapses newlines and a value
+        cannot forge a second log line.  Exception and stack text are
+        deliberately multi-line, so ``clean_log`` strips the control
+        sequences while keeping the layout a reader needs.
+
+        A copy is formatted so a later file or document handler still sees
+        the bytes the analysis produced; the terminal is the boundary, not
+        the shared record.
+        """
+        inert = logging.makeLogRecord(record.__dict__)
+        inert.msg = clean(record.getMessage())
+        inert.args = ()
+        return clean_log(super().format(inert))
+
+    def handleError(self, record: logging.LogRecord) -> None:
+        """Never dump the raw record when formatting fails.
+
+        ``logging.Handler.handleError`` writes the record's message and
+        arguments to stderr on a formatting error, which is exactly the
+        untrusted text this handler exists to clean.  The failure stays
+        visible; the contents do not.
+        """
+        try:
+            self.stream = sys.stderr
+            self.stream.write(
+                "trustsight: log record could not be formatted\n")
+        except Exception:
+            pass
 
 
 def _configure_logging() -> None:

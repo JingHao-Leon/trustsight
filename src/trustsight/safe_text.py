@@ -12,12 +12,13 @@ raw, that text is not inert.  It can
   aborts the render of every remaining package in the batch;
 * carry C1 control bytes, which some terminals still act on.
 
-The defence is one function applied at the boundary: :func:`clean` for
-anything that reaches a terminal, :func:`safe_markup` when the string is
-about to be interpolated into a Rich markup string.  Neither is a
-substitute for the other, and neither belongs deep in the analysis code:
-the value is sanitised where it is *rendered*, so that the evidence stored
-in the database and the JSON report stays byte-exact.
+The defence is one module applied at the boundary: :func:`clean` for a
+one-line value that reaches a terminal, :func:`clean_log` for a multi-line
+rendering such as a log record with a traceback, and :func:`safe_markup`
+when the string is about to be interpolated into a Rich markup string.  None
+is a substitute for another, and none belongs deep in the analysis code: the
+value is sanitised where it is *rendered*, so that the evidence stored in the
+database and the JSON report stays byte-exact.
 """
 
 import re
@@ -69,6 +70,23 @@ def clean(value, limit: int | None = None) -> str:
     text = _WHITESPACE_RE.sub(" ", text)
     if limit is not None and len(text) > limit:
         text = text[: max(0, limit - 1)] + "…"
+    return text
+
+
+def clean_log(value) -> str:
+    """Return *value* inert, but keep the multi-line layout a log needs.
+
+    A traceback is a deliberate multi-line rendering: collapsing its newlines
+    makes the diagnostic unreadable.  This cleaner removes the same forgery
+    material as :func:`clean` - escape sequences, C0/C1 control bytes (the
+    carriage return included) and bidi/zero-width characters - while leaving
+    ``\\n`` and ``\\t`` in place.  It is for the rendered log record, not for
+    a terminal table cell, where :func:`clean` is the right boundary.
+    """
+    text = value if isinstance(value, str) else str(value)
+    text = _ESCAPE_SEQUENCE_RE.sub("", text)
+    text = _CONTROL_RE.sub("", text)
+    text = _INVISIBLE_RE.sub("", text)
     return text
 
 
