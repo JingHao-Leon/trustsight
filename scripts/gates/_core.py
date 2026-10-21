@@ -272,9 +272,10 @@ _BOUND_CONSTANTS = {
     "recipedoc.py": ["MAX_ALIGNMENT_CELLS"],
     "full_aur/properties.py": ["MAX_PROPERTY_ITEMS",
                                "MAX_PROPERTY_TRANSITIONS_PER_KEY"],
-    "expansion.py": ["_MAX_EXPANSION_PASSES"],
-    "_tokenizer_engine/_common.py": ["_MAX_VALUE_LEN",
-                             "_MAX_LINE_LEN", "_MAX_TABLE_BYTES"],
+    "expansion.py": ["_MAX_EXPANSION_PASSES", "_MAX_VALUE_LEN",
+                     "_MAX_LINE_LEN", "_MAX_TABLE_BYTES", "_MAX_TEXT_LEN",
+                     "_MAX_GLOB_PATTERN_LEN", "_MAX_GLOB_STEPS"],
+    "_tokenizer_engine/_common.py": ["_MAX_ARRAY_ENTRIES"],
     "sandbox/protocol.py": ["MAX_FRAME_BYTES", "MAX_RESPONSE_BYTES"],
     "sandbox/expand_worker.py": ["_WORKER_MEMORY_BYTES", "_WORKER_CPU_SECONDS",
                                  "_WORKER_NOFILE"],
@@ -304,7 +305,16 @@ _BOUND_CONSTANTS = {
     "srcinfo.py": ["MAX_SRCINFO_BYTES", "MAX_SRCINFO_LINES",
                    "MAX_SRCINFO_VALUES_PER_KEY"],
     "depth.py": ["MAX_DEPTH_LEVELS", "MAX_DEPTH_NODES"],
-    "sandbox/git_bounds.py": ["MAX_TRANSFER_BYTES", "MAX_TOTAL_TRANSFER_BYTES"],
+    "sandbox/git_bounds.py": [
+        "GIT_WORKER_MEMORY_BYTES", "GIT_WORKER_CPU_SECONDS",
+        "GIT_WORKER_RETIRE_CPU_SECONDS", "GIT_WORKER_FSIZE_BYTES",
+        "GIT_WORKER_NOFILE", "GIT_PACK_MAX_OBJECTS",
+        "GIT_TRANSFER_DEADLINE_SECONDS", "GIT_FETCH_TIMEOUT_SECONDS",
+        "GIT_OP_TIMEOUT_SECONDS", "MAX_TRANSFER_BYTES",
+        "MAX_TOTAL_TRANSFER_BYTES", "GIT_DIFF_MAX_CONTEXT_LINES",
+        "GIT_TREE_MAX_ENTRIES", "GIT_COMMIT_META_MAX_OIDS",
+        "GIT_FILE_AT_MAX_BYTES",
+    ],
 }
 
 def _parity_fact():

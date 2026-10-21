@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from scripts.gates._core import Gate, H_SERIES_REDUCTION_TARGET, ROOT, SRC, _GIT_ALLOWED_IMPORTS, _SHARED_ANALYSIS, _h_series_live_ceiling, _parity_fact, _python_files
 
-__all__ = ['gate_a_critical_finding_never_reads_medium', 'gate_a_fatal_finding_names_itself', 'gate_a_truncated_history_walk_is_a_declared_gap', 'gate_an_audit_does_not_write_history', 'gate_api_and_cli_emit_the_same_body', 'gate_api_and_cli_share_the_analysis', 'gate_ci_installs_from_the_lock', 'gate_companion_reads_are_bounded_before_data', 'gate_critical_paths_are_synchronised', 'gate_doc_lists_every_gate', 'gate_every_render_reports_the_same_information', 'gate_generated_diff_is_bounded_before_assembly', 'gate_h_series_intake_is_frozen', 'gate_h_series_reduction_residue', 'gate_libgit2_stays_behind_the_sandbox', 'gate_retired_ids_resolve_to_live_survivors', 'gate_run_diff_assembly_is_bounded', 'gate_score_is_withheld_by_default', 'gate_the_history_walk_is_bounded', 'gate_unpinned_build_deps_is_a_declared_gap']
+__all__ = ['gate_a_critical_finding_never_reads_medium', 'gate_a_fatal_finding_names_itself', 'gate_a_truncated_history_walk_is_a_declared_gap', 'gate_an_audit_does_not_write_history', 'gate_api_and_cli_emit_the_same_body', 'gate_api_and_cli_share_the_analysis', 'gate_ci_installs_from_the_lock', 'gate_companion_reads_are_bounded_before_data', 'gate_critical_paths_are_synchronised', 'gate_doc_lists_every_gate', 'gate_every_invariant_is_defined', 'gate_every_render_reports_the_same_information', 'gate_generated_diff_is_bounded_before_assembly', 'gate_h_series_intake_is_frozen', 'gate_h_series_reduction_residue', 'gate_libgit2_stays_behind_the_sandbox', 'gate_retired_ids_resolve_to_live_survivors', 'gate_run_diff_assembly_is_bounded', 'gate_score_is_withheld_by_default', 'gate_the_history_walk_is_bounded', 'gate_unpinned_build_deps_is_a_declared_gap']
 
 def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
     """``docs/security/enforcement-map.md`` names exactly the invariants enforced here.
@@ -32,6 +32,27 @@ def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
     if extra:
         problems.append(f"documented but unenforced: {extra}")
     return Gate(name, not problems, problems)
+
+def gate_every_invariant_is_defined() -> Gate:
+    """Every ``A<n>`` invariant the enforcement map cites is defined in Part A.
+
+    The map is the bridge between a stated guarantee and the gate that
+    enforces it.  A citation of ``A16`` with no A16 paragraph means the map
+    points at a claim the model never makes, which is the same defect as a
+    gate with no entry: the reader cannot check what "A16" requires.
+    """
+    part = ROOT / "docs" / "security" / "program-under-attack.md"
+    enforcement = ROOT / "docs" / "security" / "enforcement-map.md"
+    if not part.exists() or not enforcement.exists():
+        return Gate("every cited invariant is defined", False, "missing")
+    defined = set(re.findall(
+        r"\*\*(A\d+[a-z]?)\.", part.read_text(encoding="utf-8")))
+    cited = set(re.findall(
+        r"\b(A\d+[a-z]?)\b", enforcement.read_text(encoding="utf-8")))
+    missing = sorted(cited - defined)
+    return Gate("every cited invariant is defined", not missing,
+                missing or sorted(cited))
+
 
 def gate_api_and_cli_emit_the_same_body() -> Gate:
     """The API's JSON is the CLI's JSON: same keys, same values.

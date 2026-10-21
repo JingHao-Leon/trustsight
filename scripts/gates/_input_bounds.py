@@ -7,7 +7,7 @@ import re
 import time
 from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
-__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
+__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
 
 def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
@@ -288,6 +288,37 @@ def gate_terminal_output_is_inert() -> Gate:
             fn()
         return buffer.getvalue()
 
+    def corpus_log() -> str:
+        """The full-aur progress log is a render path too.
+
+        It prints a cluster finding's ``match`` verbatim, and that string
+        carries the gained host, maintainer or dependency the rule joined on.
+        A logger that does not clean would let a package repaint the
+        watcher's terminal from a finding line (A10).
+        """
+        import trustsight.full_aur.pipeline as pipeline
+
+        buffer = io.StringIO()
+
+        class _Recorder:
+            def info(self, msg, *args):
+                buffer.write(msg % args if args else str(msg))
+
+            warning = info
+
+            def debug(self, *args, **kwargs):
+                pass
+
+        saved = pipeline.log
+        pipeline.log = _Recorder()
+        try:
+            pipeline._logger(False)(
+                f"  G001 (HIGH) Shared Gained Host: gained host {HOSTILE}"
+            )
+        finally:
+            pipeline.log = saved
+        return buffer.getvalue()
+
     renders = {
         "review rich": lambda: rich(
             lambda: review._render_results_rich([result], 1, False, True, True, False)),
@@ -309,6 +340,7 @@ def gate_terminal_output_is_inert() -> Gate:
             "confidence": HOSTILE, "sources": ["corpus"],
             "matches": [{"package": HOSTILE, "surface": HOSTILE, "detail": HOSTILE}],
         })),
+        "corpus sweep log": corpus_log,
     }
 
     problems = []
@@ -422,6 +454,7 @@ def gate_expansion_is_bounded() -> Gate:
         _MAX_VALUE_LEN,
         resolve_expansions,
     )
+    from trustsight.expansion import resolve_text, text_variable_table
     from trustsight.tokenizer import tokenize_and_resolve
 
     problems = []
@@ -451,6 +484,34 @@ def gate_expansion_is_bounded() -> Gate:
     if any(len(s) > _MAX_LINE_LEN for s in resolved):
         problems.append("a resolved line exceeded the line bound")
 
+    # The same resolver runs in the parent, outside the sandbox, on the whole
+    # PKGBUILD.  A many-wildcard glob is answered by the bounded matcher, and
+    # a substitution that would multiply a value by its replacement is still
+    # refused there too.
+    start = time.monotonic()
+    globbed, fully = resolve_expansions(
+        "${x##" + "*a" * 8 + "b}", {"x": "a" * 4096}
+    )
+    substituted, sub_fully = resolve_expansions(
+        "${x//a/" + "b" * 50_000 + "}", {"x": "a" * 8000}
+    )
+    matched, matched_fully = resolve_expansions(
+        "${x//*a*ab/Y}", {"x": "zzabzzab"}
+    )
+    text = "x=" + "a" * 8000 + "\nsource=(\"${x//a/" + "b" * 50_000 + "}\")\n"
+    resolved_text = resolve_text(text, text_variable_table(text))
+    elapsed = time.monotonic() - start
+    if elapsed > 2.0:
+        problems.append(f"shared resolver took {elapsed:.1f}s on a hostile shape")
+    if not fully or globbed != "a" * 4096:
+        problems.append("a many-wildcard glob was not answered")
+    if (matched, matched_fully) != ("Y", True):
+        problems.append("a multi-star glob did not use table matching")
+    if sub_fully or substituted != "${x//a/" + "b" * 50_000 + "}":
+        problems.append("an oversized substitution was not refused")
+    if resolved_text != text:
+        problems.append("the parent resolver changed oversized input")
+
     return Gate("expansion is bounded and never indirect", not problems, problems)
 
 def gate_regex_patterns_pass_adversarial_audit() -> Gate:
@@ -472,15 +533,20 @@ def gate_every_live_regex_is_audited() -> Gate:
     a pattern assembled from parts was skipped in silence: 44 of 246, 18%,
     concentrated in the modules with the most shared prefixes. A gate that
     passes because it never looked is the failure this codebase keeps
-    finding, so coverage is asserted rather than assumed.
+    finding, so coverage is asserted rather than assumed.  Literal patterns
+    passed straight to ``re.match/search/...`` were a third blind spot: they
+    are compiled implicitly by the ``re`` cache, not by ``re.compile``.
     """
     import importlib
 
-    from scripts.regex_audit import audit_patterns
+    from scripts.regex_audit import _inline_patterns, audit_patterns
 
     audited = {audit.pattern for audit in audit_patterns()}
 
     missing: list[str] = []
+    for source, pattern, _method in _inline_patterns():
+        if pattern not in audited:
+            missing.append(source)
     for path in sorted(SRC.rglob("*.py")):
         parts = [
             part
@@ -694,8 +760,96 @@ def gate_git_worker_limit_failures_are_reported() -> Gate:
         problems.append("an rlimit failure was not named")
     if not any("PR_SET_NO_NEW_PRIVS" in f for f in failures):
         problems.append("a NO_NEW_PRIVS failure was not named")
+
+    # The libgit2 settings are the other half of A16, and they were once
+    # swallowed the same way.  A settings object that refuses every write
+    # must produce four named failures, not an empty list.
+    class _RefusingSettings:
+        def __setattr__(self, name, value):
+            raise ValueError("denied")
+
+        def enable_strict_object_creation(self, value=True):
+            raise ValueError("denied")
+
+        def enable_strict_hash_verification(self, value=True):
+            raise ValueError("denied")
+
+    with patch.object(git_worker.pygit2, "settings", _RefusingSettings()), \
+            patch.object(git_worker.tempfile, "mkdtemp",
+                         return_value="/tmp/trustsight-gate-home"), \
+            patch.object(git_worker.atexit, "register"):
+        hardened = git_worker._harden_libgit2()
+    if len(hardened) != 4:
+        problems.append(
+            f"expected four reported libgit2 failures, got {len(hardened)}")
+    for name in ("pack object ceiling", "strict object creation",
+                 "strict hash verification"):
+        if not any(name in f for f in hardened):
+            problems.append(f"a libgit2 setting failure was not named: {name}")
     return Gate("git worker limit failures are reported", not problems,
+                problems or "limit and libgit2 failures are returned, not swallowed")
+
+def gate_tokenizer_worker_limit_failures_are_reported() -> Gate:
+    """A6: the tokenizer worker's failed limits surface, not vanish.
+
+    Same rule as the git worker: a ``setrlimit`` or
+    ``PR_SET_NO_NEW_PRIVS`` that did not take effect leaves the sandbox
+    weaker than the design intends, and the parent must be able to say so
+    rather than infer protection from silence.
+    """
+    from unittest.mock import patch
+
+    from trustsight.sandbox import expand_worker
+
+    problems: list[str] = []
+    with patch.object(expand_worker.resource, "setrlimit",
+                      side_effect=OSError("denied")), \
+            patch.object(expand_worker.ctypes, "CDLL",
+                         side_effect=AttributeError("no libc")), \
+            patch.object(expand_worker, "_report_isolation", lambda *a: None):
+        failures = expand_worker._apply_limits()
+    if len(failures) != 5:
+        problems.append(f"expected five reported failures, got {len(failures)}")
+    if not any("RLIMIT_AS" in f for f in failures):
+        problems.append("an rlimit failure was not named")
+    if not any("PR_SET_NO_NEW_PRIVS" in f for f in failures):
+        problems.append("a NO_NEW_PRIVS failure was not named")
+    return Gate("tokenizer worker limit failures are reported", not problems,
                 problems or "failures are returned, not swallowed")
+
+def gate_tokenizer_request_writes_are_bounded() -> Gate:
+    """A4/A14: a request is capped, and its write has a deadline.
+
+    A child that stops reading stdin must not hold the parent in a blocking
+    ``write``, and an over-cap frame must be refused where the reason is
+    still known rather than by the worker exiting.  Every sandbox request -
+    tokenizer and git - caps the frame and goes through the bounded writer.
+    """
+    import inspect
+
+    from trustsight.sandbox import client, git_client, protocol
+
+    problems: list[str] = []
+    for module in (client, git_client):
+        source = inspect.getsource(module)
+        if ".stdin.write(" in source:
+            problems.append(
+                f"{module.__name__} still writes to stdin directly"
+            )
+        if "protocol.write_frame(" not in source:
+            problems.append(
+                f"{module.__name__} does not use the bounded frame writer"
+            )
+        if "MAX_FRAME_BYTES" not in source:
+            problems.append(
+                f"{module.__name__} does not cap the request frame before writing"
+            )
+    writer = inspect.getsource(protocol.write_frame)
+    for required in ("deadline", "select.select", "os.write"):
+        if required not in writer:
+            problems.append(f"write_frame lacks {required}")
+    return Gate("tokenizer request writes are bounded", not problems,
+                problems or "writes are select-bounded")
 
 def gate_tokenizer_pool_wait_is_bounded() -> Gate:
     """A6/A14: a saturated pool refuses at a deadline, never blocks forever.

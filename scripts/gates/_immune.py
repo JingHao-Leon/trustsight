@@ -20,6 +20,7 @@ __all__ = [
     "gate_campaign_expiry_is_structural",
     "gate_campaign_reactivation_is_bounded",
     "gate_campaign_points_are_attributed",
+    "gate_correlation_feeds_are_cycle_scoped_and_bounded",
     "gate_elevation_is_attributed",
     "gate_escalation_is_one_notch",
     "gate_escalation_never_reaches_fatal",
@@ -102,6 +103,56 @@ def gate_campaign_reactivation_is_bounded() -> Gate:
             problems.append("interval 0 did not disable the check")
     return Gate("campaign re-activation is bounded", not problems,
                 problems or "M006 reports the churn without blocking it")
+
+
+def gate_correlation_feeds_are_cycle_scoped_and_bounded() -> Gate:
+    """A14: the G-series joins this cycle's transitions, not all history.
+
+    G001/G002/G003/G004 are window joins.  The first implementation read
+    cumulative views (every ``source_hosts``/``maintainer`` transition ever
+    recorded and the whole literal table), so a host, literal or adoption
+    from months ago could meet a new one, re-fire the join and re-arm a
+    campaign.  The feeds are now transient tables cleared at cycle start;
+    this gate checks the clear happens at the entry point and that no feed
+    survives it.
+    """
+    import inspect
+
+    from trustsight.analysis import correlation
+    from trustsight.full_aur import pipeline
+
+    problems: list[str] = []
+    keys = ("hosts_gained", "added_literals", "adoption_predicates",
+            "upstream_dep_additions")
+    with _temp_db() as db:
+        db.record_gained_hosts("a", ["new.cdn"], "t")
+        db.record_added_literals("a", ["B" * 300])
+        db.record_adoption_event("a", "m", "H044", "t")
+        db.record_upstream_dep_additions("a", [("dep", "host")])
+        feed = db.correlation_feed(["a"])
+        if not all(feed["a"][key] for key in keys):
+            problems.append("a per-cycle feed was not served before the clear")
+        db.clear_correlation_feeds()
+        feed = db.correlation_feed(["a"])
+        if any(feed["a"][key] for key in keys):
+            problems.append("a per-cycle feed survived the cycle clear")
+
+    # The clear must run at the one entry point a real cycle reaches.
+    if "clear_correlation_feeds(" not in inspect.getsource(
+            pipeline._run_baseline_build):
+        problems.append("the cycle entry point does not clear the G feeds")
+
+    # The O(n^2) relatedness pass must be capped: the member set is
+    # attacker-influenced.
+    if "MAX_RELATEDNESS_MEMBERS" not in inspect.getsource(
+            correlation._one_related_cluster):
+        problems.append("the relatedness pass is not capped")
+
+    return Gate(
+        "correlation feeds are cycle-scoped and bounded",
+        not problems,
+        problems or "feeds clear per cycle; relatedness pass is capped",
+    )
 
 
 def gate_campaign_expiry_is_structural() -> Gate:
