@@ -41,6 +41,7 @@ from trustsight.sandbox.git_bounds import (
     GIT_DIFF_MAX_CONTEXT_LINES,
     GIT_FILE_AT_MAX_BYTES,
     GIT_PACK_MAX_OBJECTS,
+    GIT_TRANSFER_DEADLINE_SECONDS,
     GIT_TREE_MAX_ENTRIES,
     GIT_WORKER_CPU_SECONDS,
     GIT_WORKER_FSIZE_BYTES,
@@ -68,6 +69,24 @@ class _UnknownOp(Exception):
 
 class _OpError(Exception):
     """A worker operation could not complete."""
+
+
+class _TransferTooLarge(_OpError):
+    """A transfer hit its byte ceiling."""
+
+
+class _TransferAborted(_OpError):
+    """A transfer failed after bytes had already arrived.
+
+    The parent charges those bytes to the run budget even though the fetch
+    did not complete: they are on disk either way, and a failed transfer that
+    is never charged lets repeated failures walk around the total ceiling.
+    """
+
+    def __init__(self, message: str, received_bytes: int, too_large: bool):
+        super().__init__(message)
+        self.received_bytes = received_bytes
+        self.too_large = too_large
 
 
 #: Readable names for the limits, so a failure names *which* protection was
@@ -116,34 +135,44 @@ def _apply_limits() -> list[str]:
     return failures
 
 
-def _harden_libgit2() -> str:
-    """Configure libgit2 once; return the throwaway HOME directory used.
+def _harden_libgit2() -> list[str]:
+    """Configure libgit2 once; return the protections that could not be set.
 
     ``pygit2.settings`` has no setter for the config ``search_path`` in the
     pinned release, so system/XDG git config cannot be cleared from here; the
     user's own ``~/.gitconfig`` is removed by pointing ``homedir`` at an empty
     directory.  That still sits inside the model's trusted-local-filesystem
     assumption for the system path (recorded as a drift note).
+
+    A setting that fails to apply weakens the isolation the design intends,
+    so it is **reported** to the parent (:data:`_DEGRADED`) rather than
+    swallowed: strict hash verification silently missing reads exactly like
+    strict hash verification working.
     """
-    home = tempfile.mkdtemp(prefix="trustsight-git-home-")
+    failures: list[str] = []
+    try:
+        home = tempfile.mkdtemp(prefix="trustsight-git-home-")
+    except OSError as exc:
+        failures.append(
+            f"libgit2 homedir not applied: {type(exc).__name__}")
+        return failures
     atexit.register(shutil.rmtree, home, ignore_errors=True)
-    try:
-        pygit2.settings.homedir = home
-    except (AttributeError, pygit2.GitError, ValueError):
-        pass
-    try:
-        pygit2.settings.pack_max_objects = GIT_PACK_MAX_OBJECTS
-    except (AttributeError, pygit2.GitError, ValueError):
-        pass
-    for enable in (
-        pygit2.settings.enable_strict_object_creation,
-        pygit2.settings.enable_strict_hash_verification,
-    ):
+
+    def _attempt(label: str, apply) -> None:
         try:
-            enable(True)
-        except (AttributeError, pygit2.GitError, ValueError, TypeError):
-            pass
-    return home
+            apply()
+        except (AttributeError, pygit2.GitError, ValueError, TypeError) as exc:
+            failures.append(f"libgit2 {label} not applied: {type(exc).__name__}")
+
+    _attempt("homedir", lambda: setattr(pygit2.settings, "homedir", home))
+    _attempt("pack object ceiling",
+             lambda: setattr(pygit2.settings, "pack_max_objects",
+                             GIT_PACK_MAX_OBJECTS))
+    _attempt("strict object creation",
+             lambda: pygit2.settings.enable_strict_object_creation(True))
+    _attempt("strict hash verification",
+             lambda: pygit2.settings.enable_strict_hash_verification(True))
+    return failures
 
 
 def _contained_repo_path(cache_dir: str, pkg: str):
@@ -271,7 +300,7 @@ class _Callbacks(pygit2.RemoteCallbacks):
         self._check()
         received = getattr(stats, "received_bytes", 0) or 0
         if received > MAX_TRANSFER_BYTES:
-            raise _OpError(
+            raise _TransferTooLarge(
                 f"transfer exceeded {MAX_TRANSFER_BYTES} bytes"
             )
         self.received_bytes = max(self.received_bytes, received)
@@ -280,13 +309,24 @@ class _Callbacks(pygit2.RemoteCallbacks):
         self._check()
 
 
+def _transfer_aborted(callbacks: "_Callbacks",
+                      exc: BaseException) -> _TransferAborted:
+    """Carry what the transfer received into the error response."""
+    return _TransferAborted(
+        str(exc), callbacks.received_bytes, isinstance(exc, _TransferTooLarge))
+
+
 def _open_fetch(payload: dict) -> dict:
     pkg = payload.get("pkg", "")
     cache_dir = payload.get("cache_dir", "")
     upstream_mtime = payload.get("upstream_mtime")
     offline = payload.get("offline") is True
-    connect = _positive_int(payload.get("connect_timeout"), 10)
-    transfer = _positive_int(payload.get("transfer_timeout"), 30)
+    # The configured timeouts cannot exceed the transfer deadline the
+    # callback enforces, so the two cannot silently disagree.
+    connect = min(_positive_int(payload.get("connect_timeout"), 10),
+                  GIT_TRANSFER_DEADLINE_SECONDS)
+    transfer = min(_positive_int(payload.get("transfer_timeout"), 30),
+                   GIT_TRANSFER_DEADLINE_SECONDS)
 
     path = _contained_repo_path(cache_dir, pkg)
     try:
@@ -313,9 +353,12 @@ def _open_fetch(payload: dict) -> dict:
                 return {"path": str(path), "head": _head_commit_id(cached),
                         "fetched": False, "marker_time": _last_fetch_time(cached),
                         "received_bytes": 0}
-            callbacks = _Callbacks(120)
-            cached.remotes["origin"].fetch(callbacks=callbacks)
-            _advance_to_fetched_head(cached)
+            callbacks = _Callbacks(GIT_TRANSFER_DEADLINE_SECONDS)
+            try:
+                cached.remotes["origin"].fetch(callbacks=callbacks)
+                _advance_to_fetched_head(cached)
+            except (pygit2.GitError, _OpError) as exc:
+                raise _transfer_aborted(callbacks, exc) from exc
             return {"path": str(path), "head": _head_commit_id(cached),
                     "fetched": True, "marker_time": _record_fetch(cached),
                     "received_bytes": callbacks.received_bytes}
@@ -327,9 +370,12 @@ def _open_fetch(payload: dict) -> dict:
         )
     os.makedirs(path.parent, exist_ok=True)
     url = f"{_AUR_HOST}/{pkg}.git"
-    callbacks = _Callbacks(120)
-    repo = pygit2.clone_repository(url, str(path), bare=True,
-                                   callbacks=callbacks)
+    callbacks = _Callbacks(GIT_TRANSFER_DEADLINE_SECONDS)
+    try:
+        repo = pygit2.clone_repository(url, str(path), bare=True,
+                                       callbacks=callbacks)
+    except (pygit2.GitError, _OpError) as exc:
+        raise _transfer_aborted(callbacks, exc) from exc
     return {"path": str(path), "head": _head_commit_id(repo),
             "fetched": True, "marker_time": _record_fetch(repo),
             "received_bytes": callbacks.received_bytes}
@@ -441,11 +487,12 @@ def _tree_files(payload: dict) -> dict:
 
     oid = _require_oid(payload.get("oid"), "commit id")
     repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
-    files, complete = collect_tree_files(repo, oid)
+    files, complete = collect_tree_files(
+        repo, oid, max_entries=GIT_TREE_MAX_ENTRIES)
     if len(files) > GIT_TREE_MAX_ENTRIES:
-        # The byte budget bounds companion *content*, not the entry count, so
-        # a repository of millions of tiny files would build an unbounded
-        # list.  Truncating is a real skip, so it reports incomplete.
+        # The walk already stops at the cap; this is belt-and-braces for a
+        # caller that supplies a wider budget.  Truncating is a real skip,
+        # so it reports incomplete.
         files = files[:GIT_TREE_MAX_ENTRIES]
         complete = False
     return {
@@ -570,6 +617,12 @@ def _handle(body: bytes) -> dict:
         return {"result": fn(request)}
     except _UnknownOp as exc:
         return {"error": str(exc)}
+    except _TransferAborted as exc:
+        return {
+            "error": str(exc),
+            "received_bytes": exc.received_bytes,
+            "too_large": exc.too_large,
+        }
     except _OpError as exc:
         return {"error": str(exc)}
     except Exception as exc:  # a defect is a refusal, not a crash
@@ -583,9 +636,16 @@ def _encode_response(response: dict) -> bytes:
     parent read a frame it must reject, nor this worker hold an unbounded
     reply (A4/A14).
     """
-    payload = json.dumps(
-        response, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8")
+    try:
+        payload = json.dumps(
+            response, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8", errors="replace")
+    except Exception as exc:  # a defect here is a refusal, not a dead loop
+        payload = json.dumps(
+            {"error": f"response could not be serialised: "
+                      f"{type(exc).__name__}"},
+            separators=(",", ":"),
+        ).encode("ascii")
     if len(payload) > protocol.MAX_RESPONSE_BYTES:
         payload = json.dumps(
             {"error": "response exceeds the response byte cap"},
@@ -608,8 +668,7 @@ def _attach_degraded(response: dict) -> dict:
 
 def main() -> int:
     global _DEGRADED
-    _DEGRADED = _apply_limits()
-    _harden_libgit2()
+    _DEGRADED = _apply_limits() + _harden_libgit2()
     try:
         os.chdir("/")
     except OSError:

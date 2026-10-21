@@ -47,6 +47,7 @@ from ..differ import (
 )
 from ..schema import DiffSummary
 from ..tokenizer import split_lines
+from .git_bounds import GIT_TREE_MAX_ENTRIES
 
 __all__ = [
     "MAX_HISTORY_COMMITS",
@@ -536,6 +537,7 @@ def collect_tree_files(
     max_file_bytes: int = 512 * 1024,
     head_bytes: int = 64,
     max_stream_bytes: int = 64 * 1024 * 1024,
+    max_entries: int | None = GIT_TREE_MAX_ENTRIES,
 ) -> tuple[list[tuple[str, bytes]], bool]:
     """Walk a commit tree, returning ``([(path, first_bytes)], complete)``.
 
@@ -544,10 +546,16 @@ def collect_tree_files(
     larger than *max_file_bytes* is streamed for its head rather than skipped
     (a committed payload is far more likely to be large than small), and an
     incomplete read reports as incomplete ([B2](../../docs/security.md)).
+
+    *max_entries* is enforced **during** the walk, not after it: a repository
+    is free to commit millions of tiny blobs, so a cap applied to the finished
+    list bounds what is returned while the list itself has already grown
+    without limit.  Reaching the cap stops the walk and reports incomplete.
     """
     files: list[tuple[str, bytes]] = []
     complete = True
     budget = _COMPANION_TOTAL_BYTES
+    inspected = 0
 
     def head_of(blob, want: int) -> bytes | None:
         """The first *want* bytes of *blob*, or None if it was not read."""
@@ -583,11 +591,18 @@ def collect_tree_files(
     # choice, and a recursive walk raised RecursionError past the interpreter
     # limit - escaping analysis entirely instead of degrading to the gap.
     def walk(tree, prefix: str) -> None:
-        nonlocal complete, budget
+        nonlocal complete, budget, inspected
         stack = [(tree, prefix)]
         while stack:
             cur_tree, cur_prefix = stack.pop()
             for entry in cur_tree:
+                # Checked here, before the entry is processed or its subtree
+                # is pushed, so neither the file list nor the pending stack
+                # can grow past the cap.
+                if max_entries is not None and inspected >= max_entries:
+                    complete = False
+                    return
+                inspected += 1
                 if entry.type_str == "tree":
                     try:
                         stack.append((repo[entry.id], cur_prefix + entry.name + "/"))

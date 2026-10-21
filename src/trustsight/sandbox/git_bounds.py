@@ -17,6 +17,7 @@ __all__ = [
     "GIT_WORKER_NOFILE",
     "GIT_PACK_MAX_OBJECTS",
     "GIT_FETCH_TIMEOUT_SECONDS",
+    "GIT_TRANSFER_DEADLINE_SECONDS",
     "GIT_OP_TIMEOUT_SECONDS",
     "MAX_TRANSFER_BYTES",
     "MAX_TOTAL_TRANSFER_BYTES",
@@ -60,8 +61,13 @@ MAX_TRANSFER_BYTES = 256 * 1024 * 1024
 #: the parent charges this run budget across packages.
 MAX_TOTAL_TRANSFER_BYTES = 2 * 1024 * 1024 * 1024
 
-#: Wall-clock ceiling for the clone/fetch request, matching the existing
-#: 120-second deadline plus startup and index time.
+#: Seconds libgit2 may spend on one transfer before the progress callback
+#: aborts it.  A source constant rather than a literal in the worker, so the
+#: bound is visible beside the byte ceilings it composes with.
+GIT_TRANSFER_DEADLINE_SECONDS = 120
+
+#: Wall-clock ceiling for the clone/fetch request, matching the transfer
+#: deadline plus startup and index time.
 GIT_FETCH_TIMEOUT_SECONDS = 180
 
 #: Wall-clock ceiling for a local object/diff request.
@@ -71,10 +77,11 @@ GIT_OP_TIMEOUT_SECONDS = 60
 #: cannot make the worker build an arbitrarily wide patch.
 GIT_DIFF_MAX_CONTEXT_LINES = 200
 
-#: Files one tree projection may return.  A recipe commits tens of files; a
-#: repository can commit millions, so the projection is capped and reports
-#: incomplete rather than building an unbounded list (the byte budget does
-#: not bound the entry count).
+#: Tree entries one projection may inspect, and therefore files it may
+#: return.  A recipe commits tens of files; a repository can commit millions
+#: of tiny blobs, so the walk stops at the cap and reports incomplete rather
+#: than building an unbounded list (the byte budget does not bound the entry
+#: count).
 GIT_TREE_MAX_ENTRIES = 100_000
 
 #: Commit ids one ``commit_meta`` request may name.

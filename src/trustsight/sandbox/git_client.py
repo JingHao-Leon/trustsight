@@ -28,10 +28,16 @@ import weakref
 from collections import namedtuple
 from pathlib import Path
 
+from ..coverage import note_stage_failure
 from ..schema import DiffSummary
 from . import protocol
 from ._spawn import spawn_isolated
-from .git_bounds import GIT_FETCH_TIMEOUT_SECONDS, GIT_OP_TIMEOUT_SECONDS
+from .git_bounds import (
+    GIT_COMMIT_META_MAX_OIDS,
+    GIT_FETCH_TIMEOUT_SECONDS,
+    GIT_OP_TIMEOUT_SECONDS,
+    GIT_WORKER_RETIRE_CPU_SECONDS,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -47,6 +53,15 @@ class GitSandboxUnavailable(RuntimeError):
 
 class GitOpError(RuntimeError):
     """The worker answered with an operation error (not a transport failure)."""
+
+    def __init__(self, message: str, received_bytes: int = 0) -> None:
+        super().__init__(message)
+        #: Bytes a failed transfer still wrote, for the run-wide budget.
+        self.received_bytes = received_bytes
+
+
+class GitTransferTooLargeError(GitOpError):
+    """The worker aborted a transfer at its per-transfer byte ceiling."""
 
 
 def _read_exact(fd: int, n: int, deadline: float) -> bytes:
@@ -65,12 +80,31 @@ def _read_exact(fd: int, n: int, deadline: float) -> bytes:
     return bytes(out)
 
 
+def _worker_cpu_seconds(pid: int) -> float:
+    """Cumulative user+system CPU of *pid*, or 0.0 when unavailable.
+
+    Read from ``/proc`` rather than ``getrusage``: ``RUSAGE_CHILDREN`` is
+    process-wide across every child, so it cannot say which worker is close
+    to the limit.  An unavailable reading errs toward keeping the worker;
+    its request and ``RLIMIT_CPU`` bounds still apply.
+    """
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as handle:
+            fields = handle.read(4096).rsplit(b")", 1)[-1].split()
+        ticks = int(fields[11]) + int(fields[12])  # utime, stime
+    except (OSError, IndexError, ValueError):
+        return 0.0
+    return ticks / os.sysconf("SC_CLK_TCK")
+
+
 class GitSession:
     """One isolated worker, exclusive to a package's requests."""
 
     def __init__(self) -> None:
         self.proc = spawn_isolated(_WORKER_MODULE)
         self._closed = False
+        #: Why this worker was retired, so the refusal names the cause.
+        self._retired = ""
         #: Limit failures the worker reported.  Empty means the worker's
         #: resource bounds and NO_NEW_PRIVS were all applied.
         self.degraded: list = []
@@ -99,13 +133,19 @@ class GitSession:
     def request(self, op: str, payload: dict,
                 timeout: float = GIT_OP_TIMEOUT_SECONDS) -> dict:
         if self._closed or self.proc.stdin is None or self.proc.stdout is None:
-            raise GitSandboxUnavailable("session is not running")
+            raise GitSandboxUnavailable(self._retired or "session is not running")
         body = json.dumps({"op": op, **payload}, separators=(",", ":"),
                           ensure_ascii=False).encode("utf-8")
+        # The worker refuses an over-cap frame by exiting, which the parent
+        # would see as an opaque EOF.  Refuse it here, where the reason is
+        # still known, the way the tokenizer client does.
+        if len(body) > protocol.MAX_FRAME_BYTES:
+            raise GitSandboxUnavailable(
+                f"request of {len(body)} bytes exceeds the "
+                f"{protocol.MAX_FRAME_BYTES}-byte cap")
         deadline = time.monotonic() + timeout
         try:
-            self.proc.stdin.write(protocol.frame(body))
-            self.proc.stdin.flush()
+            protocol.write_frame(self.proc.stdin.fileno(), body, deadline)
             header = _read_exact(self.proc.stdout.fileno(),
                                  protocol.HEADER.size, deadline)
             (length,) = protocol.HEADER.unpack(header)
@@ -121,11 +161,17 @@ class GitSession:
         except Exception as exc:  # noqa: BLE001 - any transport fault is a refusal
             self.close()
             raise GitSandboxUnavailable(str(exc)) from exc
+        self._maybe_retire()
         if not isinstance(response, dict):
             self.close()
             raise GitSandboxUnavailable("malformed response from the git worker")
         if "error" in response:
-            raise GitOpError(response["error"])
+            received = response.get("received_bytes", 0)
+            if not isinstance(received, int) or isinstance(received, bool):
+                received = 0
+            if response.get("too_large"):
+                raise GitTransferTooLargeError(response["error"], received)
+            raise GitOpError(response["error"], received)
         degraded = response.get("degraded")
         if degraded:
             # A limit that failed to apply weakens the isolation, but the
@@ -141,6 +187,22 @@ class GitSession:
             self.close()
             raise GitSandboxUnavailable("response carried neither result nor error")
         return response["result"]
+
+    def _maybe_retire(self) -> None:
+        """Retire a worker that has burned its CPU allowance.
+
+        ``RLIMIT_CPU`` kills the child mid-request, which the caller cannot
+        tell apart from a defect in the repository it just asked about.  The
+        ceiling here is lower, so the worker is retired *between* requests
+        and the failure is attributed to the package that spent the budget.
+        """
+        if self.proc is None:
+            return
+        if _worker_cpu_seconds(self.proc.pid) >= GIT_WORKER_RETIRE_CPU_SECONDS:
+            self._retired = (
+                "git worker retired after "
+                f"{GIT_WORKER_RETIRE_CPU_SECONDS} cpu seconds")
+            self.close()
 
     def open_fetch(self, pkg: str, cache_dir: str, upstream_mtime,
                    offline: bool, connect_timeout: int,
@@ -203,8 +265,13 @@ class GitSession:
         })["commits"]
 
     def commit_meta(self, pkg: str, cache_dir: str, oids) -> list[dict]:
+        oids = list(oids)
+        if len(oids) > GIT_COMMIT_META_MAX_OIDS:
+            raise GitOpError(
+                f"too many commit ids: {len(oids)} > "
+                f"{GIT_COMMIT_META_MAX_OIDS}")
         return self.request("commit_meta", {
-            "pkg": pkg, "cache_dir": cache_dir, "oids": list(oids),
+            "pkg": pkg, "cache_dir": cache_dir, "oids": oids,
         })["commits"]
 
     def close(self) -> None:
@@ -288,6 +355,12 @@ class GitProject:
         try:
             return self._session.file_at(self.pkg, self.cache_dir, oid, name, cap)
         except GitOpError:
+            # The worker's normal "no such member" answer is an empty text,
+            # not an error: an error means the file exists but could not be
+            # read (oversize, unavailable repository).  Collapsing that to
+            # "" would let current-state rules skip it while the run still
+            # looks complete (B2).
+            note_stage_failure("git-file-read")
             return ""
 
     def walk(self, head: str, limit: int | None = None) -> list["_Commit"]:
@@ -304,6 +377,9 @@ class GitProject:
         try:
             records = self.commit_meta([head])
         except (GitSandboxUnavailable, GitOpError):
+            # "No parent" is a real shape (a root commit); "could not ask"
+            # is a skipped stage.  They must not both read as "".
+            note_stage_failure("git-parent-read")
             return ""
         if not records or not records[0].parents:
             return ""
