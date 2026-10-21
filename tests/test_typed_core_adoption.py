@@ -45,9 +45,6 @@ PINNED_LOOPS = {
     "analysis/manifests/_formats_c.py": 4,
     # Reads a committed companion file's payload text, not a diff.
     "sandbox/git_project.py": 1,
-    # Function bodies already read from RecipeDoc.functions; the loop is over
-    # a body's lines (recipe text), not a diff walk.
-    "analysis/placeholder.py": 1,
 }
 
 
