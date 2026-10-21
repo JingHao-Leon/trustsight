@@ -489,9 +489,14 @@ own project's names from firing a scope-expansion rule.
 | `g_adopt.min_members` | G003 | `3` | Packages with a recorded adoption predicate one maintainer key must be joined to among a cycle's processed packages for a coordinated-adoption finding. |
 | `g003.novel_days` / `g003.min_dormant` / `g003.dormant_days` | G003 | `30` / `2` / `180` | Window in which an adopter counts as novel, the dormant targets that escalate the finding to HIGH, and the age that makes a target dormant. |
 | `g008.min_packages` / `g008.window_days` / `g008.min_dormant` / `g008.dormant_days` | G008 | `5` / `7` / `3` / `180` | First-seen account adoption floor, its window, the dormant-target floor and the dormancy age. |
-| `g009.enabled` / `g009.path` | G009 | `true` / empty | Whether the watchlist is consulted, and the watchlist file (`~/.config/trustsight/watchlist.json` when empty). The file holds maintainer entries under `entries` (salted hashes) and package entries under `packages` (plain names). |
+| `g009.enabled` / `g009.path` | G009 | `true` / empty | Whether the watchlist is consulted, and the watchlist file (`~/.config/trustsight/watchlist.json` when empty). The file holds maintainer entries under `entries` (salted hashes) and package entries under `packages` (plain names). A non-string `path` is ignored (the default file is used), and the file is read under a 1 MiB cap: an oversized or malformed file is treated as absent, never as an analysis error. |
 | `g010.min_packages` / `g010.window_days` | G010 | `5` / `7` | Packages that must share one first-seen host, and the first-seen window. |
 | `m002.min_layers` | M002 | `3` | Distinct evidence categories that must fire (none above the alert bar) before M002 escalates the reported band one step. |
+
+A malformed threshold value (a non-numeric string, `null`, or a list where a
+number is expected) falls back to the shipped default instead of aborting a
+corpus cycle. Counts are clamped to at least one, and a never-negative window
+or length is clamped to zero.
 
 The E-series thresholds (`e001`/`e002`/`e003`) ship **empty** by design: the
 series is silent until a threshold is set from the first corpus measurement

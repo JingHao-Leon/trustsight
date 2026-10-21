@@ -55,6 +55,9 @@ This is a reference page. For how weight and scope work, see
 - **Condition:** The same gained canonical host appears in `[thresholds] g_host.min_packages` (default 5) distinct packages within the cycle window.
 
 atomic-arch's signature: a new CDN added by many unrelated packages at once.
+The feed is the hosts each package gained **this cycle**; it is cleared at
+cycle start, so a host gained months ago cannot re-join a later cycle. Split
+outputs of one pkgbase are one project, not several unrelated packages.
 
 ### G002: Shared Added Literal {#g002}
 
@@ -67,9 +70,17 @@ atomic-arch's signature: a new CDN added by many unrelated packages at once.
 The literal's content is never printed - only its length and the members.
 
 The live sweep records each analysed package's added literals in the
-`added_literal_hashes` view, and G002 joins them at cycle end. The `review`
-path records the same feed, so a single-package analysis can contribute to a
-later corpus cycle.
+`added_literal_hashes` view, and G002 joins them at cycle end. The feed is
+**cycle-local**: the sweep clears it before analysing anything, so a literal
+recorded by an earlier cycle or a `review` run does not survive into this one
+and cannot re-fire the join. The join key is a digest of the full literal; the
+stored text is a bounded diagnostic copy, so two distinct long literals that
+share a prefix are not treated as identical. At most 256 literals per package
+are kept in one cycle; a larger set is logged and the excess is not joined.
+Split outputs of one pkgbase are one project, not several unrelated packages.
+The finding's `params` carries `literal_length` and `literal_sha256` (the
+digest, never the content) so the campaign can be keyed without printing the
+shared literal.
 
 ### G003: Coordinated Adoption {#g003}
 
@@ -81,6 +92,12 @@ later corpus cycle.
 
 Adoption is the temporal engine's own predicate - H044 (ownership transition) or H086 (orphan-to-maintained) - recorded per package, not a bare maintainer-change. A package absent from the previous snapshot is a first observation, not an adoption, so a newly published package cannot join the group. The finding's `predicates` names which T instance the group joined on; H074 (mass adoption) is the cross-package aggregation this rule performs.
 
+Only this cycle's maintainer transitions are adoptions: re-processing a
+package with an unchanged maintainer (or one whose adoption was recorded in an
+earlier cycle) does not join the group or re-arm its campaign. The
+naming-relatedness stand-down is bounded at 64 members; above that the group is
+not proven to be one family and stays a finding (fail-open to the alert).
+
 **Novelty/dormancy escalation.** When the adopting maintainer is globally novel (its earliest recorded maintainer-event falls within `[thresholds] g003.novel_days`, default 30) and at least `[thresholds] g003.min_dormant` (default 2) of the adopted targets are dormant (AUR LastModified older than `[thresholds] g003.dormant_days`, default 180), the finding is escalated to HIGH - the fennekuiper shape, where a first-seen account sweeps up dormant orphans. The bare N-adoption shape stays MEDIUM, so an established maintainer keeps the old posture. The escalation changes the alert's severity and evidence, not member scores: like every G finding but G005, a correlation cluster does not score its own members.
 
 ### G004: Shared Upstream Dependency {#g004}
@@ -91,7 +108,7 @@ Adoption is the temporal engine's own predicate - H044 (ownership transition) or
 
 - **Condition:** The same upstream dependency (and host), added to a committed manifest, appears in at least `[thresholds] g_dep.min_packages` (default 2) packages in the window.
 
-The committed-manifest counterpart to G001: a dependency name and remote host that many packages gain in the same window is the same-new-upstream-dependency campaign shape. It reads the recorded `upstream_dep_additions` view, which the corpus writer clears at cycle start and repopulates with the dependencies each processed package added; a prior cycle's row cannot re-fire the join.
+The committed-manifest counterpart to G001: a dependency name and remote host that many packages gain in the same window is the same-new-upstream-dependency campaign shape. It reads the recorded `upstream_dep_additions` view, which the corpus writer clears at cycle start and repopulates with the dependencies each processed package added; a prior cycle's row cannot re-fire the join. Split outputs of one pkgbase are one project, not several unrelated packages.
 
 ### G005: Impersonation Campaign {#g005}
 
@@ -145,7 +162,7 @@ The dormant-target clause is the FP killer. A legitimate new maintainer adopts a
 
 Report-only, weight 0, like G006. Registration date, "Inactive since" and suspension state are AUR profile-page facts the pipeline never fetches, so no machine rule can compute them. Where a human has established such a fact - the pattern a triager reads by hand, "Inactive-since ~ Last Updated and Last Packager = Package Maintainer" - the watchlist records it and this rule names the package instead of guessing from RPC metadata. A package can also be named directly, for the same report-only reason: the operator wants it surfaced without asserting a machine-computable signal.
 
-Maintainer entries are keyed by the same salted SHA-256 the `maintainers_hashed` table uses, so no plaintext identity is stored; the salt is per-installation and the file is absent by default, so G009 is silent until an operator curates a list. Package entries are kept under `packages` as written, because a package name is already public in every record, report and AUR page. Add a maintainer with `python -c "from trustsight.watchlist import add_entry; add_entry('name', 'note')"`, or a package with `add_package('pkgname', 'note')`.
+Maintainer entries are keyed by the same salted SHA-256 the `maintainers_hashed` table uses, so no plaintext identity is stored; the salt is per-installation and the file is absent by default, so G009 is silent until an operator curates a list. G009 is report-only and never primes a campaign: it is a human note, not a corroborated cluster. Package entries are kept under `packages` as written, because a package name is already public in every record, report and AUR page. Add a maintainer with `python -c "from trustsight.watchlist import add_entry; add_entry('name', 'note')"`, or a package with `add_package('pkgname', 'note')`.
 
 The operator's file is unioned with an imported, signed `watchlist-*` release (`trustsight watchlist update`), which carries public package names and salted maintainer hashes under its own salt. A local entry wins on collision, so the hand-curated list is never overwritten. The release hashes match only when the database uses the released salt; otherwise the import keeps the packages and skips the hashes, exactly as a baseline seed does.
 
