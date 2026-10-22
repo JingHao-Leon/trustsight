@@ -303,3 +303,18 @@ def test_fact_from_dict_rejects_rows_it_cannot_serve():
     d = fact_to_dict(PackageFact(package_name="demo"))
     d["diff_summary"] = "not-a-dict"
     assert fact_from_dict(d) is None
+
+
+def test_shape_fingerprint_and_techniques_round_trip():
+    fact = PackageFact(
+        package_name="demo",
+        diff_shape_fp="sha256:0123456789abcdef",
+        score_breakdown=[ScoreEntry(
+            rule_id="X002", severity="CRITICAL", weight=40,
+            techniques=("X002:partial-quote",),
+        )],
+    )
+    restored = fact_from_dict(fact_to_dict(fact))
+    assert restored is not None
+    assert restored.diff_shape_fp == "sha256:0123456789abcdef"
+    assert restored.score_breakdown[0].techniques == ("X002:partial-quote",)

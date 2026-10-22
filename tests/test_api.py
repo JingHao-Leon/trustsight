@@ -968,3 +968,21 @@ def test_the_fact_report_body_carries_comparison_base():
 
     fact = PackageFact(package_name="demo", comparison_base="parent")
     assert report_body(evaluate_fact(fact))["comparison_base"] == "parent"
+
+
+def test_report_body_carries_the_shape_fingerprint_and_technique_tags():
+    from trustsight.reporting import evaluate_fact, report_body
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    fact = PackageFact(
+        package_name="demo",
+        diff_shape_fp="sha256:0123456789abcdef",
+        final_score=40,
+        score_breakdown=[ScoreEntry(
+            rule_id="X002", severity="CRITICAL", weight=40,
+            techniques=("X002:partial-quote",),
+        )],
+    )
+    body = report_body(evaluate_fact(fact))
+    assert body["diff_shape_fp"] == "sha256:0123456789abcdef"
+    assert body["findings"][0]["techniques"] == ["X002:partial-quote"]

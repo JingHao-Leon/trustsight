@@ -45,6 +45,8 @@ class Finding:
     :ivar line: 1-based line number in that file, or ``None``.
     :ivar template: the rule template that produced the description.
     :ivar evidence: rule-specific match detail, as a plain dict.
+    :ivar techniques: per-finding evasion-technique tags
+        (``X002:spliced-variable`` and peers); additive instrumentation.
     """
 
     rule_id: str
@@ -55,6 +57,10 @@ class Finding:
     line: Optional[int] = None
     template: str = ""
     evidence: dict = field(default_factory=dict)
+    #: Per-finding evasion-technique tags (``X002:spliced-variable`` and
+    #: peers).  Additive instrumentation for the harness shape archive;
+    #: never rendered, scored or suppressed.
+    techniques: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         """Serialize to a plain dict."""
@@ -144,6 +150,8 @@ class Report:
     :ivar coverage_gaps: non-empty means part of the change was not read.
         See :data:`COVERAGE_GAP_REASONS`.
     :ivar file_changes: each file the diff added, removed or modified.
+    :ivar diff_shape_fp: the diff's deterministic shape fingerprint
+        (instrumentation for corpus/harness clustering, never a score input).
     :ivar added_urls: URLs the change introduced.
     :ivar removed_urls: URLs the change removed.
     :ivar source_buckets: source categories the change touched, with counts.
@@ -237,6 +245,8 @@ class Report:
     """Non-empty means part of the change was not read.  See ``COVERAGE_GAP_REASONS``."""
 
     file_changes: tuple[FileChange, ...] = ()
+    diff_shape_fp: str = ""
+    """The diff's shape fingerprint: instrumentation, never score."""
     added_urls: tuple[str, ...] = ()
     removed_urls: tuple[str, ...] = ()
     source_buckets: dict = field(default_factory=dict)

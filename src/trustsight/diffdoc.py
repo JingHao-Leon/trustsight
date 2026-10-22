@@ -344,6 +344,45 @@ class DiffDoc:
             if line.side in ("remove", "context")
         ]
 
+    def shape_fingerprint(self) -> str:
+        """A deterministic fingerprint of the diff's *shape*, not its text.
+
+        Per file, in path order: status, hunk count, file-level add/remove
+        counts, and per hunk the declared starts, the parsed pre/post lengths,
+        the add/remove counts and the byte mass.  Content is reduced to its
+        length, so two payloads with the same insertion geometry cluster
+        together; the serialisation is canonical and the result is the first
+        16 hex characters of its SHA-256.
+
+        The fingerprint is instrumentation, never evidence: it is not a
+        rule, a finding or a score input.  It is exported for corpus/harness
+        clustering and stored additively on ``PackageFact``.
+        """
+        parts: list[str] = []
+        for file in sorted(self.files, key=lambda f: (f.path, f.status,
+                                                       f.old_path)):
+            hunks: list[str] = []
+            file_plus = file_minus = 0
+            for hunk in file.hunks:
+                plus = sum(1 for line in hunk.lines if line.side == "add")
+                minus = sum(1 for line in hunk.lines if line.side == "remove")
+                pre_len = sum(1 for line in hunk.lines
+                              if line.side in ("remove", "context"))
+                post_len = sum(1 for line in hunk.lines
+                               if line.side in ("add", "context"))
+                mass = sum(len(line.content.encode("utf-8"))
+                           for line in hunk.lines)
+                file_plus += plus
+                file_minus += minus
+                hunks.append(
+                    f"{hunk.old_start},{pre_len},{hunk.new_start},{post_len},"
+                    f"{plus},{minus},{mass}")
+            parts.append(
+                f"{file.path}:{file.status}:{len(file.hunks)}:"
+                f"{file_plus}:{file_minus}:" + ";".join(hunks))
+        payload = "|".join(parts)
+        return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
     def added_lines(self) -> list[DiffLine]:
         """Content lines on the ``+`` side, wherever they appeared."""
         return [line for line in self.lines if line.side == "add"]
@@ -734,3 +773,15 @@ def parse_diff(diff_text: str) -> DiffDoc:
     sandbox's decision, exactly as every legacy reader split them.
     """
     return parse_diff_lines(split_lines(diff_text))
+
+
+def diff_shape_fp(diff_text: str) -> str:
+    """The shape fingerprint of *diff_text*, or ``""`` when it is empty.
+
+    A thin convenience wrapper so every fact producer uses one function.  A
+    parse failure is a caller bug rather than attacker input (the parser is
+    total over lines), so it is not swallowed here.
+    """
+    if not diff_text:
+        return ""
+    return parse_diff(diff_text).shape_fingerprint()

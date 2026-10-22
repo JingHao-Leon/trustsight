@@ -78,7 +78,7 @@ from ..coverage import (
     unresolved_assignment_rows,
     unresolved_source_lines,
 )
-from ..diffdoc import parse_diff_lines
+from ..diffdoc import diff_shape_fp, parse_diff_lines
 from ..scoring import calculate_score, prebuilt_declared
 from ..schema import (
     with_changes,
@@ -742,6 +742,7 @@ def analyze_package_text(
         pkgver_old=_pkgver_old or "",
         pkgver_new=_pkgver_new or "",
         diff_summary=_diff_summary(diff_text),
+        diff_shape_fp=diff_shape_fp(diff_text),
         source_changes=source_changes,
         source_buckets=source_buckets,
         execution_changes=ExecutionChanges(

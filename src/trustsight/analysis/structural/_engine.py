@@ -128,10 +128,22 @@ def _structural_findings(
         # ``weight_override`` off the finding, so it is promoted out of
         # ``params`` rather than buried there.
         weight_override = extra.pop("weight_override", None) if extra else None
-        if extra:
-            finding["params"] = extra
+        #: Per-finding evasion-technique tags for the harness shape archive.
+        #: Additive instrumentation: never rendered, scored or suppressed.
+        techniques = extra.pop("techniques", None) if extra else None
+        technique_tags = extra.pop("technique_tags", None) if extra else None
         if weight_override is not None:
             finding["weight_override"] = weight_override
+        if technique_tags is not None:
+            # X007 carries a display string under ``techniques`` and its
+            # per-rule tag list separately; keep the string in params.
+            finding["techniques"] = list(technique_tags)
+            if techniques is not None:
+                extra["techniques"] = techniques
+        elif techniques is not None:
+            finding["techniques"] = list(techniques)
+        if extra:
+            finding["params"] = extra
         findings.append(stamp(finding))
 
     cs_behavior = source_changes.checksum_behavior

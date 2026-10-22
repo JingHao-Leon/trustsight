@@ -72,6 +72,7 @@ def _findings_from_evaluation(evaluated: dict) -> tuple[Finding, ...]:
             line=row["line"],
             template=row["template"],
             evidence=row["evidence"],
+            techniques=tuple(row.get("techniques") or ()),
         )
         for row in evaluated["findings"]
     )
@@ -152,6 +153,7 @@ def _report_from_fact(fact) -> Report:
         layers=dict(evaluated.get("layers", {}) or {}),
         boundaries=tuple(evaluated.get("boundaries", ()) or ()),
         file_changes=_file_changes(evaluated["file_changes"]),
+        diff_shape_fp=fact.diff_shape_fp or "",
         added_urls=tuple(fact.source_changes.added_urls),
         removed_urls=tuple(fact.source_changes.removed_urls),
         source_buckets=dict(fact.source_buckets),
@@ -251,6 +253,7 @@ def _report_from_result(row: dict) -> Report:
         layers=dict(evaluated.get("layers", {}) or {}),
         boundaries=tuple(evaluated.get("boundaries", ()) or ()),
         file_changes=_file_changes(evaluated["file_changes"]),
+        diff_shape_fp=evaluated.get("diff_shape_fp", "") or "",
         first_seen=evaluated["first_seen"],
         comparison_base=evaluated.get("comparison_base", ""),
         is_trivial=evaluated["is_trivial"],

@@ -84,6 +84,10 @@ class ScoreEntry:
     #: Licensor rule ids that fired and raised this finding's band (B1: a
     #: finding amplified by licensed help names what helped it).
     licensed_by: tuple = ()
+    #: Evasion-technique tags behind this finding (``X002:spliced-variable``
+    #: and peers).  Additive instrumentation for the harness's shape archive;
+    #: never rendered, scored or suppressed.
+    techniques: tuple = ()
 
 
 @dataclass
@@ -235,6 +239,11 @@ class PackageFact:
     # Which fetch/adapter produced the analysis: "git" | "corpus" | "diff"
     adapter: str = "git"
 
+    #: The diff's shape fingerprint (``DiffDoc.shape_fingerprint``): a
+    #: deterministic, content-reduced clustering signal.  Instrumentation,
+    #: never evidence: it is not a rule, a finding or a score input.
+    diff_shape_fp: str = ""
+
     score_breakdown: list[ScoreEntry] = field(default_factory=list)
     final_score: int = 0
 
@@ -359,11 +368,13 @@ def fact_to_dict(fact: PackageFact) -> dict:
                 "file": e.file,
                 "line": e.line,
                 "licensed_by": list(e.licensed_by),
+                "techniques": list(getattr(e, "techniques", ()) or ()),
             }
             for e in fact.score_breakdown
         ],
         "final_score": fact.final_score,
         "adapter": fact.adapter,
+        "diff_shape_fp": getattr(fact, "diff_shape_fp", ""),
         "ioc_matches": [_ioc_match_dict(m) for m in fact.ioc_matches],
         "dependencies": [
             d.to_dict() if hasattr(d, "to_dict") else dict(d)
@@ -539,11 +550,13 @@ def fact_from_dict(data: dict) -> PackageFact | None:
                     file=e.get("file", ""),
                     line=e.get("line"),
                     licensed_by=tuple(e.get("licensed_by") or ()),
+                    techniques=tuple(e.get("techniques") or ()),
                 )
                 for e in data["score_breakdown"]
             ],
             final_score=data["final_score"],
             adapter=data["adapter"],
+            diff_shape_fp=data.get("diff_shape_fp", ""),
             ioc_matches=[
                 IocMatch(
                     type=m.get("type", ""),

@@ -27,6 +27,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "diff_summary": {
     "files_changed": ["string"],
     "file_changes": [{"path": "string", "status": "modified"}],
+    "diff_shape_fp": "string",
     "lines_added": int,
     "lines_removed": int
   },
@@ -192,6 +193,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 |-------|------|-------------|
 | `files_changed` | `list[string]` | File paths touched in the diff (filtered to `PKGBUILD`, `.SRCINFO`, `*.install`). |
 | `file_changes` | `list[dict]` | File-change rows, each with `path` and `status` (`added`, `removed`, or `modified`). |
+| `diff_shape_fp` | `string` | The diff's shape fingerprint (`sha256:` + 16 hex): file status, hunk geometry, add/remove counts and byte mass, with content reduced to length. Instrumentation for corpus/harness clustering. Never a rule, finding or score input; `""` when there is no diff. |
 | `lines_added` | `int` | Total insertion count from `pygit2.Diff.stats.insertions`. |
 | `lines_removed` | `int` | Total deletion count from `pygit2.Diff.stats.deletions`. |
 
@@ -252,6 +254,7 @@ Each entry:
 | `evidence` | `dict` | The declared facts that triggered the rule, plus the raw matched text as `match`. This is what the finding is *about*, as opposed to prose describing it. |
 | `file` | `string` | The file the finding is in: `PKGBUILD`, `.SRCINFO`, `<name>.install`, or another path. |
 | `line` | `int` or `null` | The 1-based line the finding anchors to. Explicitly `null`, never omitted, for findings that legitimately have no line: maintainer, graph, temporal and corpus rules, and a standing indicator match that is not in the current hunk. |
+| `techniques` | `list[string]` | Per-finding evasion-technique tags (`X002:spliced-variable` and peers), when the finding came from the X-series shape vocabulary. Additive instrumentation for the harness shape archive; never rendered, scored or suppressed. Empty for every other family. |
 
 ### The finding contract
 

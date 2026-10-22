@@ -54,6 +54,7 @@ def finding_rows(fact) -> list[dict]:
                 "evidence": dict(entry.evidence) if entry.evidence else {},
                 "severity": entry.severity,
                 "weight": entry.weight,
+                "techniques": list(getattr(entry, "techniques", ()) or ()),
             })
     return rows
 
@@ -194,6 +195,9 @@ def evaluate_fact(fact) -> dict[str, Any]:
         # unresolved lines points at X026 (the refusal family).
         "resolution_coverage": _resolution_coverage_rows(fact),
         "file_changes": list(fact.diff_summary.file_changes),
+        # The diff's shape fingerprint: additive instrumentation for
+        # corpus/harness clustering; never a rule, finding or score input.
+        "diff_shape_fp": getattr(fact, "diff_shape_fp", "") or "",
         "first_seen": fact.first_seen,
         "diff_truncated": fact.diff_truncated,
         "scan_truncated": fact.scan_truncated,
@@ -239,6 +243,7 @@ REPORT_KEYS = (
     "findings",
     "layers",
     "file_changes",
+    "diff_shape_fp",
     "changes",
     "coverage_gaps",
     "coverage_gaps_carried",
@@ -286,7 +291,7 @@ VERBOSE_KEYS = ("score_breakdown",)
 # Fields of a finding that are evidence rather than arithmetic.  ``weight``
 # is deliberately absent: it belongs to VERBOSE_KEYS with the breakdown.
 _FINDING_FIELDS = ("rule_id", "rule_uid", "severity", "file", "line", "description",
-                   "template", "evidence")
+                   "template", "evidence", "techniques")
 
 
 def _ioc_row(match) -> dict:
@@ -333,7 +338,11 @@ def report_body(
 
     policy = review_policy()
     findings = [
-        {field: finding.get(field) for field in _FINDING_FIELDS}
+        {
+            field: ([] if field == "techniques" and finding.get(field) is None
+                    else finding.get(field))
+            for field in _FINDING_FIELDS
+        }
         for finding in evaluated.get("findings", ())
     ]
     body = {
@@ -348,6 +357,8 @@ def report_body(
         # the layer profile, additive.
         "layers": dict(evaluated.get("layers", {}) or {}),
         "file_changes": list(evaluated.get("file_changes", ())),
+        # Instrumentation: the diff's shape fingerprint, additive.
+        "diff_shape_fp": evaluated.get("diff_shape_fp", "") or "",
         # B7: what moved, whether or not a rule matched.
         "changes": list(evaluated.get("changes", ())),
         # B2: never dropped, on any path.
@@ -698,6 +709,7 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "resolution_coverage": dict(row.get("resolution_coverage", {}) or {}),
         "version_comparison": row.get("version_comparison", ""),
         "file_changes": list(row.get("file_changes", ())),
+        "diff_shape_fp": row.get("diff_shape_fp", "") or "",
         "score_breakdown": findings,
         "suppressed_rules": list(row.get("suppressed_rules", ())),
         "cached": bool(row.get("cached", False)),

@@ -258,6 +258,7 @@
     "coverage_gaps_carried": [],
     "dependencies": [],
     "depth_truncated": false,
+    "diff_shape_fp": "",
     "diff_truncated": false,
     "failed": false,
     "file_changes": [],
@@ -270,6 +271,7 @@
         "rule_id": "R001",
         "rule_uid": "TS-0166",
         "severity": "CRITICAL",
+        "techniques": [],
         "template": ""
       },
       {
@@ -280,6 +282,7 @@
         "rule_id": "H001",
         "rule_uid": "TS-0057",
         "severity": "HIGH",
+        "techniques": [],
         "template": ""
       }
     ],

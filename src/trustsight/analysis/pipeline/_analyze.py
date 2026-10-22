@@ -21,7 +21,7 @@ from ...db import (
     update_package_version,
     upsert_package,
 )
-from ...diffdoc import parse_diff_lines
+from ...diffdoc import diff_shape_fp, parse_diff_lines
 from ...differ import (
     detect_gpg_verification_removed,
     detect_verification_evidence,
@@ -819,6 +819,7 @@ def analyze_package(
         depth_note=depth_result.reason,
         depth=resolved_depth,
         diff_summary=diff_summary,
+        diff_shape_fp=diff_shape_fp(diff_text),
         source_changes=source_changes,
         source_buckets=source_buckets,
         execution_changes=ExecutionChanges(

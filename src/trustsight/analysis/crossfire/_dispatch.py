@@ -58,13 +58,19 @@ def _crossfire_findings(diff_text, config, add, previous_diff: str = "",
         line_no, shape, quoted = hits[0][0], hits[0][1], hits[0][2]
         name, severity = _NAMES[rule_id]
         add(rule_id, name, severity, "evasion",
-            f"{shape}: {quoted}", line=line_no, shape=shape, body=quoted)
+            f"{shape}: {quoted}", line=line_no, shape=shape, body=quoted,
+            techniques=[f"{rule_id}:{shape}"])
 
     if len(techniques) >= X007_MIN_TECHNIQUES:
         shapes = ", ".join(sorted(techniques))
+        tags = sorted({
+            f"{rule_id}:{hit[1]}" for rule_id, hits in techniques.items()
+            for hit in hits if len(hit) > 1 and hit[1]
+        })
         add("X007", "Multiple Evasion Techniques", "CRITICAL", "evasion",
             f"{len(techniques)} evasion techniques in one diff: {shapes}",
-            line=None, count=len(techniques), techniques=shapes)
+            line=None, count=len(techniques), techniques=shapes,
+            technique_tags=tags)
 
     # the refusal family. Deliberately outside the techniques
     # Dict above, so X007 keeps counting known techniques only.

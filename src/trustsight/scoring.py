@@ -413,6 +413,7 @@ def calculate_score(
                     evidence=evidence,
                     file=file,
                     line=line,
+                    techniques=tuple(rule.get("techniques") or ()),
                 )
             )
             continue
@@ -431,6 +432,7 @@ def calculate_score(
                 evidence=evidence,
                 file=file,
                 line=line,
+                techniques=tuple(rule.get("techniques") or ()),
             )
         )
 

@@ -7,7 +7,7 @@ from ...config import (
     load_config,
     load_rules,
 )
-from ...diffdoc import parse_diff_lines
+from ...diffdoc import diff_shape_fp, parse_diff_lines
 from ...differ import (
     diff_summary_from_text,
     binary_metadata_in_text,
@@ -294,6 +294,7 @@ def scan_diff(
     fact = PackageFact(
         package_name=package_name,
         diff_summary=diff_summary_from_text(diff_text),
+        diff_shape_fp=diff_shape_fp(diff_text),
         source_changes=source_changes,
         source_buckets=source_buckets,
         execution_changes=exec_changes,

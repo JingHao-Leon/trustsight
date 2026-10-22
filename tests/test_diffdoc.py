@@ -324,3 +324,29 @@ def test_cut_hunks_flags_both_directions():
 
     honest = parse_diff("@@ -1,2 +1,2 @@\n a\n+b\n")
     assert honest.cut_hunks() == []
+
+
+def test_shape_fingerprint_is_deterministic_and_content_reduced():
+    """Same geometry clusters together; a different payload length moves it."""
+    a = SIMPLE.replace("pkgver=1.0", "pkgver=9.9")
+    b = SIMPLE.replace("pkgver=1.0", "pkgver=2.0")
+    assert parse_diff(SIMPLE).shape_fingerprint() == parse_diff(a).shape_fingerprint()
+    assert parse_diff(SIMPLE).shape_fingerprint() == parse_diff(b).shape_fingerprint()
+    assert parse_diff(SIMPLE).shape_fingerprint().startswith("sha256:")
+    assert len(parse_diff(SIMPLE).shape_fingerprint()) == len("sha256:") + 16
+
+
+def test_shape_fingerprint_moves_with_geometry():
+    one_hunk = parse_diff(SIMPLE)
+    two_hunks = parse_diff(
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,1 +1,1 @@\n-a\n+b\n"
+        "@@ -9,1 +9,1 @@\n-c\n+d\n"
+    )
+    assert one_hunk.shape_fingerprint() != two_hunks.shape_fingerprint()
+
+
+def test_diff_shape_fp_wrapper_is_empty_without_a_diff():
+    from trustsight.diffdoc import diff_shape_fp
+
+    assert diff_shape_fp("") == ""
+    assert diff_shape_fp(SIMPLE) == parse_diff(SIMPLE).shape_fingerprint()
