@@ -102,6 +102,94 @@ def test_callers_receive_their_own_copy():
     assert second == engine.resolve_added_lines(diff)
 
 
+def _clear_cache() -> None:
+    store = getattr(client._cache, "entries", None)
+    if store is not None:
+        store.clear()
+        client._cache.bytes = 0
+
+
+def test_equal_strings_share_one_round_trip(monkeypatch):
+    """Equal content is one input, even when built by a different caller."""
+    calls: list[str] = []
+
+    def fake(op, payload):
+        calls.append(op)
+        return ["resolved"]
+
+    monkeypatch.setattr(client, "_send", fake)
+    _clear_cache()
+    first = resolve_added_lines("+a=b\n")
+    second = resolve_added_lines("".join(["+a=b\n"]))
+    assert first == second == ["resolved"]
+    assert calls == ["resolve_added"]
+
+
+def test_equal_line_lists_share_one_round_trip(monkeypatch):
+    """Readers rebuild the line list; the cache keys on its content."""
+    calls: list[str] = []
+
+    def fake(op, payload):
+        calls.append(op)
+        return ["joined"]
+
+    monkeypatch.setattr(client, "_send", fake)
+    _clear_cache()
+    assert join_line_continuations(["+a=b"]) == ["joined"]
+    assert join_line_continuations(list(["+a=b"])) == ["joined"]
+    assert calls == ["join"]
+
+
+def test_the_content_cache_is_bounded(monkeypatch):
+    """The oldest entry is evicted rather than growing without a bound."""
+    calls: list[str] = []
+
+    def fake(op, payload):
+        calls.append(payload)
+        return []
+
+    monkeypatch.setattr(client, "_send", fake)
+    monkeypatch.setattr(client, "_CACHE_MAX_ENTRIES", 1)
+    _clear_cache()
+    resolve_added_lines("a")
+    resolve_added_lines("b")
+    resolve_added_lines("a")
+    assert len(calls) == 3
+
+
+def test_the_byte_budget_counts_the_result_too(monkeypatch):
+    """A small request that expands past the budget is not retained."""
+    calls: list[str] = []
+
+    def fake(op, payload):
+        calls.append(payload)
+        return ["x" * 100]
+
+    monkeypatch.setattr(client, "_send", fake)
+    monkeypatch.setattr(client, "_CACHE_MAX_BYTES", 50)
+    _clear_cache()
+    resolve_added_lines("a")
+    resolve_added_lines("a")
+    assert len(calls) == 2
+
+
+def test_reset_after_fork_clears_the_content_cache(monkeypatch):
+    calls: list[str] = []
+
+    def fake(op, payload):
+        calls.append(payload)
+        return []
+
+    monkeypatch.setattr(client, "_send", fake)
+    _clear_cache()
+    resolve_added_lines("a")
+    resolve_added_lines("a")
+    assert len(calls) == 1
+    client.reset_after_fork()
+    resolve_added_lines("a")
+    assert len(calls) == 2
+
+
 def test_a_dead_child_raises_tokenizer_unavailable():
     original = client._acquire
 

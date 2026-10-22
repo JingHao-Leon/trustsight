@@ -10,8 +10,8 @@ The pool is persistent because a fresh interpreter per diff costs 26-48 ms
 against a 0.5 ms tokenizer, and recycled because a worker that has parsed
 hostile input should not parse an unbounded amount of it.  Two things make
 the per-request cost bearable: the pool amortises interpreter startup, and
-the identity cache collapses the ~97 entry-point calls a diff makes into
-about a dozen round-trips.
+the content cache collapses the ~126 entry-point calls a diff makes into the
+~27 distinct inputs they ask about.
 
 Nothing here imports the engine.  The parent process never runs tokenizer
 code on package-controlled text; ``sandbox/expand_worker.py`` is the only
@@ -27,6 +27,7 @@ import select
 import signal
 import threading
 import time
+from collections import OrderedDict
 
 from . import protocol
 from ._spawn import launch_args, spawn_isolated
@@ -225,7 +226,6 @@ _all: list[_Worker] = []
 _lock = threading.Condition()
 _shutdown = threading.Event()
 
-
 def _acquire() -> _Worker:
     deadline = time.monotonic() + REQUEST_TIMEOUT_SECONDS
     with _lock:
@@ -332,7 +332,7 @@ def reset_after_fork() -> None:
 
     The parent's workers are *not* stopped here: the pids name the same
     processes in the child's table, and stopping one would kill the
-    parent's pool.  Only this process's bookkeeping and identity cache are
+    parent's pool.  Only this process's bookkeeping and content cache are
     cleared, so the first request in the child spawns a fresh pool.
     """
     global _pool
@@ -342,41 +342,107 @@ def reset_after_fork() -> None:
         _shutdown.clear()
         _lock.notify_all()
     if getattr(_cache, "entries", None) is not None:
-        del _cache.entries
+        _cache.entries.clear()
+        _cache.bytes = 0
 
 
-# --- identity cache ---------------------------------------------------------
+# --- content cache ----------------------------------------------------------
+#
+# Every request is a few milliseconds of child work plus IPC; the analysis
+# asks the same pure questions repeatedly (measured: ~126 calls per diff,
+# only ~27 distinct inputs).  The cache is content-keyed so equal diffs built
+# by different call sites share one round-trip.  The previous cache keyed on
+# ``id(payload)`` with 16 FIFO entries and missed almost always: readers
+# rebuild equal line lists constantly and the working set is larger than 16.
 
+_MISSING = object()
 _cache = threading.local()
-_CACHE_MAX = 16
+
+#: Entries per thread.  Sized for one diff's working set plus the handful of
+#: text variants (raw, clamped, pre, post) readers ask about.
+_CACHE_MAX_ENTRIES = 64
+
+#: Byte budget for the *inputs* retained by the cache.  Diffs are already
+#: capped (``apply_diff_caps``), but a handful of multi-megabyte inputs must
+#: not accumulate in a long-lived watcher.
+_CACHE_MAX_BYTES = 32 * 1024 * 1024
 
 
-def _cache_get(key, payload):
+def _cache_key(op: str, payload):
+    """A hashable key for a pure request, or ``None`` to skip caching.
+
+    A string is its own key (Python caches a str's hash); a list payload is
+    one of the reader-rebuilt line lists, so it is keyed by content.  An
+    unexpected shape is not cached rather than guessed at.
+    """
+    if isinstance(payload, str):
+        return (op, "s", payload)
+    if isinstance(payload, (list, tuple)):
+        if not all(isinstance(item, str) for item in payload):
+            return None
+        return (op, "l", tuple(payload))
+    return None
+
+
+def _payload_bytes(payload) -> int:
+    if isinstance(payload, str):
+        return len(payload)
+    if isinstance(payload, (list, tuple)):
+        return sum(len(item) for item in payload if isinstance(item, str))
+    return 0
+
+
+def _value_bytes(value) -> int:
+    """A cheap size estimate for a cached result, bounded by the same cap.
+
+    The input budget alone would let a small request cache a large expansion
+    (the engine caps one at 1 MiB), so the result counts too.
+    """
+    if isinstance(value, str):
+        return len(value)
+    if isinstance(value, (list, tuple)):
+        return sum(_value_bytes(item) for item in value)
+    if isinstance(value, dict):
+        return sum(_value_bytes(key) + _value_bytes(item)
+                   for key, item in value.items())
+    return 0
+
+
+def _cache_get(key):
     store = getattr(_cache, "entries", None)
     if not store:
-        return None
-    for cached_key, cached_input, value in store:
-        if cached_key == key and cached_input is payload:
-            return value
-    return None
+        return _MISSING
+    entry = store.get(key)
+    if entry is None:
+        return _MISSING
+    store.move_to_end(key)
+    return entry[1]
 
 
 def _cache_put(key, payload, value) -> None:
     store = getattr(_cache, "entries", None)
     if store is None:
-        store = []
+        store = OrderedDict()
         _cache.entries = store
-    store.append((key, payload, value))
-    del store[:-_CACHE_MAX]
+        _cache.bytes = 0
+    size = _payload_bytes(payload) + _value_bytes(value)
+    previous = store.pop(key, None)
+    if previous is not None:
+        _cache.bytes -= previous[0]
+    store[key] = (size, value)
+    _cache.bytes += size
+    while store and (len(store) > _CACHE_MAX_ENTRIES
+                     or _cache.bytes > _CACHE_MAX_BYTES):
+        _old_key, (old_size, _old_value) = store.popitem(last=False)
+        _cache.bytes -= old_size
 
 
 def _copy(value):
     """Return a caller-owned structure; the cache keeps the original.
 
-    The old in-process memo did the same for the same reason: a shared list
-    would turn any in-place edit by one rule into a bug in an unrelated one.
-    The cache still collapses the repeated whole-diff calls, because those
-    are keyed on the diff object, not on the (copied) result.
+    A shared list would turn any in-place edit by one rule into a bug in an
+    unrelated one.  The cache still collapses the repeated whole-diff calls,
+    because those are keyed on the input content, not on the copied result.
     """
     if isinstance(value, list):
         return [_copy(item) for item in value]
@@ -393,16 +459,17 @@ def _copy(value):
 def request(op: str, payload):
     """Run *op* on *payload* in the sandbox, or raise TokenizerUnavailable.
 
-    The response is cached by the identity of the *input*, so the many call
-    sites that pass the same diff object share one round-trip, and a fresh
-    copy is returned so no caller can edit the cached value.
+    The response is cached by the *content* of the input, so the many call
+    sites that pass an equal diff or an equal line list share one round-trip,
+    and a fresh copy is returned so no caller can edit the cached value.
     """
-    key = (op, id(payload))
-    cached = _cache_get(key, payload)
-    if cached is not None:
+    key = _cache_key(op, payload)
+    cached = _cache_get(key) if key is not None else _MISSING
+    if cached is not _MISSING:
         return _copy(cached)
     value = _send(op, payload)
-    _cache_put(key, payload, value)
+    if key is not None:
+        _cache_put(key, payload, value)
     return _copy(value)
 
 
