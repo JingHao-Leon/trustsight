@@ -4,6 +4,10 @@
 
 Mechanics live on the [Crossfire system page](../rules/crossfire.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [X001](../rules/crossfire.md#x001), [X002](../rules/crossfire.md#x002), [X003](../rules/crossfire.md#x003), [X004](../rules/crossfire.md#x004), [X005](../rules/crossfire.md#x005), [X006](../rules/crossfire.md#x006), [X007](../rules/crossfire.md#x007), [X008](../rules/crossfire.md#x008), [X009](../rules/crossfire.md#x009), [X010](../rules/crossfire.md#x010), [X011](../rules/crossfire.md#x011), [X012](../rules/crossfire.md#x012), [X013](../rules/crossfire.md#x013), [X014](../rules/crossfire.md#x014), [X015](../rules/crossfire.md#x015), [X016](../rules/crossfire.md#x016), [X017](../rules/crossfire.md#x017), [X018](../rules/crossfire.md#x018), [X019](../rules/crossfire.md#x019), [X020](../rules/crossfire.md#x020), [X021](../rules/crossfire.md#x021), [X022](../rules/crossfire.md#x022), [X023](../rules/crossfire.md#x023), [X024](../rules/crossfire.md#x024), [X025](../rules/crossfire.md#x025), [X026](../rules/crossfire.md#x026), [X027](../rules/crossfire.md#x027), [X028](../rules/crossfire.md#x028), [X029](../rules/crossfire.md#x029), [X030](../rules/crossfire.md#x030), [X031](../rules/crossfire.md#x031), [X032](../rules/crossfire.md#x032), [X033](../rules/crossfire.md#x033), [X034](../rules/crossfire.md#x034) (34 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 The name is taken from **military crossfire**: two guns sited so that their

@@ -98,5 +98,5 @@ slipping past the freeze - is a hard failure.
 4. The retired id's reference entry becomes a one-paragraph stub, and
    `sync-rules` never resurrects it.
 
-See also [Rule Nature](../reference/rules/nature.md#h-series-heuristic-behavioral-analysis)
+See also [Rule Series](../reference/rules/nature.md#h-series-heuristic-behavioral-analysis)
 and the [Rule System](../reference/rules/system.md).

@@ -106,7 +106,7 @@ New heuristic (H) rule ids are frozen while the H series is above its
 reduction target. New detections must be an instance of an
 existing family (a C-series invariant, an X-series refusal, an E-series
 statistic, ...) rather than another H id. See
-[Rule Nature](../reference/rules/nature.md).
+[Rule Series](../reference/rules/nature.md).
 
 ## See Also
 

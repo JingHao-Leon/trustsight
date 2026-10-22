@@ -24,13 +24,19 @@ supplies them), so the join logic is testable without a live corpus:
   the operator's hand-curated watchlist, or one whose maintainer is.  It is the
   sanctioned home for profile-page facts the RPC metadata does not carry, and
   for an operator's package-level attention.  Report-only.
+* **G012 Shared Payload Signal** (HIGH): the same specific payload rule fired
+  in unrelated packages from more than one maintainer in the cycle.
+* **G013 Shared Fetch Target** (HIGH): payload findings in unrelated packages
+  name the same canonical URL.
+* **G014 Shared Adoption Window** (HIGH): unrelated dormant packages were
+  adopted by more than one maintainer in the cycle.
 
 Members are named in the finding; the roundup is one alert, not N.
 
-Live coverage caveat: G001, G002, G003 and G005 have a connected corpus feed
-today.  G004 (upstream dependencies) ships and is unit-tested, but the view
-that would supply it is pending, so it cannot fire on a real ``full-aur``
-cycle yet.  See the correlation rule reference.
+Every join here runs over the cycle records the full-AUR sweep supplies.
+G008 reads the maintainer-event timeline, so it is invoked beside
+:func:`correlate` from the sweep rather than inside it.  See the correlation
+rule reference.
 """
 
 from __future__ import annotations
@@ -40,7 +46,9 @@ from collections import defaultdict
 
 __all__ = ["correlate", "shared_gained_host", "shared_added_literal",
            "coordinated_adoption", "shared_upstream_dependency",
-           "first_seen_adoption_burst", "watchlisted_maintainer"]
+           "first_seen_adoption_burst", "watchlisted_maintainer",
+           "shared_payload_signal", "shared_fetch_target",
+           "shared_adoption_window"]
 
 #: Above this many members, the pairwise naming-relatedness pass in G003 is
 #: skipped.  The pass is O(n^2) and the member set is attacker-influenced; a
@@ -69,8 +77,30 @@ def _maintainer_key(value) -> str:
     return str(value or "").strip().lower()
 
 
+def _seq(value) -> list[str]:
+    """A record field as a bounded list of strings.
+
+    A hand-built or decoded record may carry a bare string where the corpus
+    writer supplies a list; iterating that string would turn ``R001`` into
+    four single-character rule ids.  An unexpected shape is empty rather
+    than guessed at.
+    """
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [str(item) for item in value if item is not None]
+    return []
+
+
 def _thresholds(config) -> dict:
-    return (config or {}).get("thresholds", {})
+    """The thresholds table, or {} when a hand-edited value is not a table."""
+    value = (config or {}).get("thresholds", {})
+    return value if isinstance(value, dict) else {}
+
+
+def _section(value) -> dict:
+    """One threshold section, or {} when a hand-edited value is not a table."""
+    return value if isinstance(value, dict) else {}
 
 
 def _maintainer_first_seen_ts(maintainer: str):
@@ -567,26 +597,203 @@ def watchlisted_maintainer(records, config=None) -> list[dict]:
     return out
 
 
+def shared_payload_signal(records, min_packages: int = 3,
+                          min_maintainers: int = 2) -> list[dict]:
+    """G012: the same specific payload rule across unrelated maintainers.
+
+    A single ``R001`` is a package-level finding.  The same rule firing in
+    several unrelated packages from different accounts in one cycle is the
+    multi-maintainer shape the per-package rules cannot name.  Only the
+    curated :data:`~trustsight.analysis.payload_signals.SHARED_PAYLOAD_RULES`
+    set counts; a broad practice rule would turn ordinary ecosystem churn into
+    a campaign.
+    """
+    from .payload_signals import SHARED_PAYLOAD_RULES
+
+    min_packages = max(1, _safe_int(min_packages, 3))
+    min_maintainers = max(1, _safe_int(min_maintainers, 2))
+    by_rule: dict[str, dict[str, dict]] = defaultdict(dict)
+    maintainers: dict[str, set[str]] = defaultdict(set)
+    for record in records or ():
+        if not isinstance(record, dict):
+            continue
+        package = str(record.get("package", "") or "")
+        if not package:
+            continue
+        maintainer = _maintainer_key(record.get("maintainer"))
+        for rule_id in _seq(record.get("rules")):
+            signal = str(rule_id)
+            if signal not in SHARED_PAYLOAD_RULES:
+                continue
+            by_rule[signal][package] = record
+            if maintainer:
+                maintainers[signal].add(maintainer)
+    out: list[dict] = []
+    for signal, members in sorted(by_rule.items()):
+        if len(members) < min_packages:
+            continue
+        accounts = sorted(maintainers[signal])
+        if len(accounts) < min_maintainers:
+            continue
+        if _one_project(members.values()) or _one_related_cluster(members):
+            continue
+        out.append({
+            "rule_id": "G012",
+            "name": "Shared Payload Signal",
+            "severity": "HIGH", "category": "correlation",
+            "match": (f"{len(members)} packages from {len(accounts)} "
+                      f"maintainer(s) all fired {signal} in the window"),
+            "params": {"members": sorted(members), "signal": signal,
+                       "maintainers": accounts,
+                       "maintainer_count": len(accounts)},
+        })
+    return out
+
+
+def shared_fetch_target(records, min_packages: int = 2,
+                        min_maintainers: int = 2) -> list[dict]:
+    """G013: the same canonical payload URL across unrelated maintainers.
+
+    ``G012`` joins on the rule; this joins on the URL the rule reported, so
+    two different payload rules that fetch the same endpoint meet.  URLs are
+    extracted from already-bounded finding text by
+    :mod:`trustsight.analysis.payload_signals`; a URL that cannot be parsed
+    is dropped, never guessed at.
+    """
+    from .payload_signals import canonical_payload_url
+
+    min_packages = max(1, _safe_int(min_packages, 2))
+    min_maintainers = max(1, _safe_int(min_maintainers, 2))
+    by_url: dict[str, dict[str, dict]] = defaultdict(dict)
+    maintainers: dict[str, set[str]] = defaultdict(set)
+    for record in records or ():
+        if not isinstance(record, dict):
+            continue
+        package = str(record.get("package", "") or "")
+        if not package:
+            continue
+        maintainer = _maintainer_key(record.get("maintainer"))
+        for url in _seq(record.get("payload_urls")):
+            target = canonical_payload_url(str(url))
+            if not target:
+                continue
+            by_url[target][package] = record
+            if maintainer:
+                maintainers[target].add(maintainer)
+    out: list[dict] = []
+    for url, members in sorted(by_url.items()):
+        if len(members) < min_packages:
+            continue
+        accounts = sorted(maintainers[url])
+        if len(accounts) < min_maintainers:
+            continue
+        if _one_project(members.values()) or _one_related_cluster(members):
+            continue
+        out.append({
+            "rule_id": "G013",
+            "name": "Shared Fetch Target",
+            "severity": "HIGH", "category": "correlation",
+            "match": (f"{len(members)} packages from {len(accounts)} "
+                      f"maintainer(s) fetch {url}"),
+            "params": {"members": sorted(members), "url": url,
+                       "maintainers": accounts,
+                       "maintainer_count": len(accounts)},
+        })
+    return out
+
+
+def shared_adoption_window(records, min_packages: int = 3,
+                           min_maintainers: int = 2, min_dormant: int = 2,
+                           dormant_days: int = 180) -> list[dict]:
+    """G014: unrelated dormant packages adopted by several maintainers.
+
+    ``G003`` groups adoptions under one maintainer and ``G008`` watches a
+    single first-seen account.  This is the multi-account adoption window
+    H052's old wording described: different maintainers taking unrelated
+    dormant packages in the same cycle.  The dormant-target clause keeps the
+    ordinary "new maintainer adopts an active package" case out.
+    """
+    min_packages = max(1, _safe_int(min_packages, 3))
+    min_maintainers = max(1, _safe_int(min_maintainers, 2))
+    min_dormant = max(0, _safe_int(min_dormant, 2))
+    dormant_days = max(0, _safe_int(dormant_days, 180))
+    now = time.time()
+    dormant_cutoff = now - dormant_days * 86400
+    members: dict[str, dict] = {}
+    maintainers: set[str] = set()
+    dormant_count = 0
+    for record in records or ():
+        if not isinstance(record, dict) or not record.get("adoption"):
+            continue
+        package = str(record.get("package", "") or "")
+        if not package or package in members:
+            continue
+        members[package] = record
+        maintainer = _maintainer_key(record.get("maintainer"))
+        if maintainer:
+            maintainers.add(maintainer)
+        last_modified = record.get("last_modified")
+        if (isinstance(last_modified, (int, float)) and last_modified
+                and last_modified < dormant_cutoff):
+            dormant_count += 1
+    if len(members) < min_packages:
+        return []
+    accounts = sorted(maintainers)
+    if len(accounts) < min_maintainers:
+        return []
+    if dormant_count < min_dormant:
+        return []
+    if _one_project(members.values()) or _one_related_cluster(members):
+        return []
+    return [{
+        "rule_id": "G014",
+        "name": "Shared Adoption Window",
+        "severity": "HIGH", "category": "correlation",
+        "match": (f"{len(members)} unrelated packages adopted by "
+                  f"{len(accounts)} maintainer(s) "
+                  f"({dormant_count} dormant) in the window"),
+        "params": {"members": sorted(members), "maintainers": accounts,
+                   "maintainer_count": len(accounts),
+                   "dormant_count": dormant_count},
+    }]
+
+
 def correlate(records, config=None) -> list[dict]:
     """All G-series findings for one cycle's records."""
     thresholds = _thresholds(config)
     host_n = max(1, _safe_int(
-        thresholds.get("g_host", {}).get("min_packages", 5), 5))
+        _section(thresholds.get("g_host")).get("min_packages", 5), 5))
     blob_n = max(1, _safe_int(
-        thresholds.get("g_blob", {}).get("min_packages", 2), 2))
+        _section(thresholds.get("g_blob")).get("min_packages", 2), 2))
     blob_len = max(0, _safe_int(
-        thresholds.get("g_blob", {}).get("min_length", 256), 256))
+        _section(thresholds.get("g_blob")).get("min_length", 256), 256))
     adopt_m = max(1, _safe_int(
-        thresholds.get("g_adopt", {}).get("min_members", 3), 3))
+        _section(thresholds.get("g_adopt")).get("min_members", 3), 3))
     dep_n = max(1, _safe_int(
-        thresholds.get("g_dep", {}).get("min_packages", 2), 2))
+        _section(thresholds.get("g_dep")).get("min_packages", 2), 2))
     imp_m = max(1, _safe_int(
-        thresholds.get("g_impersonation", {}).get("min_members", 3), 3))
+        _section(thresholds.get("g_impersonation")).get("min_members", 3), 3))
+    g012 = _section(thresholds.get("g012"))
+    payload_n = max(1, _safe_int(g012.get("min_packages", 3), 3))
+    payload_m = max(1, _safe_int(g012.get("min_maintainers", 2), 2))
+    g013 = _section(thresholds.get("g013"))
+    url_n = max(1, _safe_int(g013.get("min_packages", 2), 2))
+    url_m = max(1, _safe_int(g013.get("min_maintainers", 2), 2))
+    g014 = _section(thresholds.get("g014"))
+    adopt_window_n = max(1, _safe_int(g014.get("min_packages", 3), 3))
+    adopt_window_m = max(1, _safe_int(g014.get("min_maintainers", 2), 2))
+    adopt_window_dormant = max(0, _safe_int(g014.get("min_dormant", 2), 2))
+    adopt_window_days = max(0, _safe_int(g014.get("dormant_days", 180), 180))
     out: list[dict] = []
     out.extend(shared_gained_host(records, host_n))
     out.extend(shared_added_literal(records, blob_n, blob_len))
     out.extend(coordinated_adoption(records, adopt_m, config))
     out.extend(shared_upstream_dependency(records, dep_n))
     out.extend(impersonation_campaign(records, imp_m))
+    out.extend(shared_payload_signal(records, payload_n, payload_m))
+    out.extend(shared_fetch_target(records, url_n, url_m))
+    out.extend(shared_adoption_window(
+        records, adopt_window_n, adopt_window_m,
+        adopt_window_dormant, adopt_window_days))
     out.extend(watchlisted_maintainer(records, config))
     return out

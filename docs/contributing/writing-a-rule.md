@@ -27,7 +27,7 @@ diff lines is an H-series heuristic instead. Each R rule has:
 | `name`        | Human-readable name                                   |
 | `pattern`     | Regex pattern to match                                |
 | `severity`    | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`        |
-| `category`    | Risk category, e.g. `network`, `integrity`            |
+| `category`    | Capability touched, e.g. `network_execution`, `integrity` |
 | `match_target`| Where to match: `raw_line` or `resolved`      |
 | `scope`       | (Optional, `raw_line` only) Line contexts (`function_body`, `message`, `other`) or a named PKGBUILD function (`pkgver`) to restrict matching to. |
 
@@ -175,9 +175,11 @@ Each category also has a page on the **Rule Nature** tab
 (`docs/reference/nature/<category>.md`) describing where the category's ideas
 come from and what a finding means. Those pages are prose, not per-rule
 definitions, so a new rule rarely changes one; update it only when the rule
-introduces a new *kind* of claim the page does not yet cover. The two tabs are
-kept in step by the navigation check in `tests/test_docs.py`, which requires
-every page on disk to appear in the nav.
+introduces a new *kind* of claim the page does not yet cover. The generated
+line at the top of each Nature page lists the rule IDs and is rebuilt with the
+pages, so you do not edit it by hand. The two tabs are kept in step by the
+navigation check in `tests/test_docs.py`, which requires every page on disk to
+appear in the nav.
 
 Then rebuild the pages and the index from `docs_src` and the registry:
 
@@ -321,8 +323,8 @@ def test_r001_no_false_positive():
 Run them with:
 
 ```bash
-uv run --with pytest python -m pytest tests/test_rules.py::test_r001_curl_bash -v
-uv run --with pytest python -m pytest tests/test_rules.py::test_r001_no_false_positive -v
+uv run --extra dev pytest tests/test_rules.py::test_r001_curl_bash -v
+uv run --extra dev pytest tests/test_rules.py::test_r001_no_false_positive -v
 ```
 
 ## Common mistakes

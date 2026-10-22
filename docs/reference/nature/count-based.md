@@ -4,6 +4,10 @@
 
 Mechanics live on the [Count-Based system page](../rules/count-based.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [H030](../rules/count-based.md#h030-rule), [H036](../rules/count-based.md#h036), [H045](../rules/count-based.md#h045), [H052](../rules/count-based.md#h052), [H055](../rules/count-based.md#h055) (5 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 One swallow does not make a summer, but a **swarm of them** means the season

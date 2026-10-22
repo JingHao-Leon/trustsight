@@ -4,6 +4,10 @@
 
 Mechanics live on the [Sabotage system page](../rules/sabotage.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [S001](../rules/sabotage.md#s001), [S002](../rules/sabotage.md#s002), [S003](../rules/sabotage.md#s003), [S004](../rules/sabotage.md#s004), [S005](../rules/sabotage.md#s005), [S006](../rules/sabotage.md#s006), [S007](../rules/sabotage.md#s007), [S008](../rules/sabotage.md#s008) (8 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 Picture a **courier who swaps the parcel**. They do not add anything to your

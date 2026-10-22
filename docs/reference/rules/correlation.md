@@ -44,6 +44,9 @@ This is a reference page. For how weight and scope work, see
 | [G008](#g008) | First-Seen Account Adoption Burst | HIGH |
 | [G009](#g009) | Watchlisted Subject | INFO |
 | [G010](#g010) | Shared First-Seen Host | INFO |
+| [G012](#g012) | Shared Payload Signal | HIGH |
+| [G013](#g013) | Shared Fetch Target | HIGH |
+| [G014](#g014) | Shared Adoption Window | HIGH |
 <!-- /generated: page-index -->
 
 ### G001: Shared Gained Host {#g001}
@@ -175,3 +178,39 @@ The operator's file is unioned with an imported, signed `watchlist-*` release (`
 - **Condition:** The same canonical source host, first seen in the corpus at or after `[thresholds] g010.window_days` (default 7) days ago, is gained by at least `[thresholds] g010.min_packages` (default 5) packages within the window.
 
 The G001 shape with the novelty join instead of the gained-host join: only a host the corpus has not met before counts, so one honest newcomer per window is the AUR being the AUR and five is a distribution infrastructure. Weight 0 and never campaign-priming: a first contact is a statement about newness, never about intent, so G010 names the coordination and never scores, gates, or escalates a member (the Contact Ledger's plural-contact rule: strangers in company are a signal, strangers alone are a census).
+
+### G012: Shared Payload Signal {#g012}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** HIGH (weight 25)
+- **Category:** `correlation`
+
+- **Condition:** The same specific payload rule fired in at least `[thresholds] g012.min_packages` (default 3) unrelated packages from at least `g012.min_maintainers` (default 2) distinct maintainers in one cycle.
+
+A per-package rule names one package's payload. This is the cross-account join: three unrelated maintainers shipping the same payload technique in one window is a campaign, not three coincidences. Only the curated payload allowlist counts (`R001`, `R002`, `R003`, `R008`, `H017`, `H035`, `H041`, `H075`, `H090`, `C016`, `C032`, `S001`-`S008`); broad practice rules such as `R010` (uses curl) or `H001` (checksum `SKIP`) are deliberately excluded so ordinary ecosystem churn cannot read as coordination.
+
+The join runs over this cycle's recorded rule ids, so a prior cycle cannot re-fire it. Split outputs of one pkgbase and one naming family stand down, the same way G003 refuses a variant family. The finding names the members, the shared rule and the maintainer count. It is alert-only: a member's own score is not inflated by belonging to the cluster, and the campaign is what escalates (G006/G007), not the member's number.
+
+### G013: Shared Fetch Target {#g013}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** HIGH (weight 25)
+- **Category:** `correlation`
+
+- **Condition:** The same canonical URL reported by a payload finding appears in at least `[thresholds] g013.min_packages` (default 2) unrelated packages from at least `g013.min_maintainers` (default 2) distinct maintainers in one cycle.
+
+G012 joins on the rule; this joins on the endpoint. Two different payload rules that fetch the same URL meet here. The URL is read from the finding's already-bounded `reason` and `evidence` text - nothing is fetched and nothing is resolved - and a URL that cannot be parsed is dropped rather than guessed at. The canonical key keeps the scheme, lower-cased host, non-default port and path, and drops the query and fragment: that is the part an attacker can vary for free, and two packages pointing at the same endpoint should meet.
+
+This is the build-time complement to G001/G010, which read `source=` host transitions only. A payload URL inside `build()` or an installed scriptlet is invisible to those joins. Like G012, G013 is alert-only and does not score its members; the campaign state G006/G007 reads is the escalation.
+
+### G014: Shared Adoption Window {#g014}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** HIGH (weight 25)
+- **Category:** `correlation`
+
+- **Condition:** At least `[thresholds] g014.min_packages` (default 3) unrelated dormant packages were adopted in one cycle by at least `g014.min_maintainers` (default 2) distinct maintainers.
+
+G003 groups adoptions under one maintainer and G008 watches one first-seen account. This is the multi-account adoption window: different maintainers taking unrelated dormant packages in the same cycle. The dormant-target clause (`g014.min_dormant`, default 2 targets older than `g014.dormant_days`, default 180) keeps the ordinary "a new maintainer adopts an active package they care about" case out, in the same way G008's dormant clause does.
+
+The finding names the members, the maintainer count and the dormant count. Split outputs of one pkgbase and one naming family stand down. It is alert-only: membership does not inflate a member's own score; the campaign state G006/G007 reads is the escalation.

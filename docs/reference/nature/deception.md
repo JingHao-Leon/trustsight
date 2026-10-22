@@ -4,6 +4,10 @@
 
 Mechanics live on the [Deception system page](../rules/deception.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [C012](../rules/deception.md#c012), [H012](../rules/deception.md#h012), [H013](../rules/deception.md#h013), [H067](../rules/deception.md#h067), [R012](../rules/deception.md#r012), [R013](../rules/deception.md#r013) (6 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 This is **sleight of hand**. A magician does not change the world, only what

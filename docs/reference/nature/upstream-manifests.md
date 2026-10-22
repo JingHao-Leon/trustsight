@@ -5,6 +5,10 @@
 Mechanics live on the
 [Upstream Manifests system page](../rules/upstream-manifests.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [U001](../rules/upstream-manifests.md#u001), [U002](../rules/upstream-manifests.md#u002), [U003](../rules/upstream-manifests.md#u003), [U004](../rules/upstream-manifests.md#u004), [U005](../rules/upstream-manifests.md#u005), [U006](../rules/upstream-manifests.md#u006) (6 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 This is the discipline of **checking a citation against the original text**. A

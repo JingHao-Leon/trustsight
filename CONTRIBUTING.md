@@ -12,10 +12,15 @@ If you only want to use the tool, start with the README and the tutorial. If you
 git clone https://github.com/emiliano-go/trustsight.git
 cd trustsight
 uv sync --locked --extra dev
-uv run --with pytest python -m pytest
+uv run --extra dev pytest
 uv run ruff check
 uv run python scripts/security_gates.py
 ```
+
+`pytest` defaults to `-n 4 --dist loadfile` (set in `pyproject.toml`), so the
+command above already runs the suite in parallel. Use
+`uv run --extra dev pytest -n 0` when a failure needs serial order, and pass a
+node id such as `tests/test_rules.py::test_r001_curl_bash` to run one test.
 
 If you change rules, scoring, tokenizer behavior, or calibration fixtures, also run:
 
@@ -23,7 +28,7 @@ If you change rules, scoring, tokenizer behavior, or calibration fixtures, also 
 uv run python scripts/build_corpus.py --from-manifest \
   --manifest tests/fixtures/corpus.lock \
   --out tests/fixtures/benign-corpus
-TRUSTSIGHT_FULL_CALIBRATION=1 uv run --with pytest python -m pytest tests/test_calibration_gates.py
+TRUSTSIGHT_FULL_CALIBRATION=1 uv run --extra dev pytest tests/test_calibration_gates.py
 ```
 
 The benign corpus is gitignored, so a fresh checkout must reconstruct the

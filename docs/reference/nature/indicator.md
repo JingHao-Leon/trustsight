@@ -4,6 +4,10 @@
 
 Mechanics live on the [Indicators system page](../rules/indicator.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [H056](../rules/indicator.md#h056) (1 rule).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 An indicator is a **wanted poster**. It does not reason about behaviour; it

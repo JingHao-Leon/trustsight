@@ -406,12 +406,16 @@ def test_g008_counts_a_package_once(monkeypatch):
 
 def test_malformed_thresholds_do_not_abort_the_sweep():
     config = {"thresholds": {
-        "g_host": {"min_packages": "3"},
+        "g_host": "bad",
+        "g_dep": "bad",
         "g_blob": {"min_packages": "2", "min_length": "64"},
         "g_adopt": {"min_members": "3"},
     }}
     found = correlate(_records(), config)
-    assert {f["rule_id"] for f in found} == {"G001", "G002", "G003"}
+    assert {f["rule_id"] for f in found} == {"G002", "G003"}
+    # A whole table that is not a table falls back to shipped defaults.
+    assert {f["rule_id"] for f in correlate(_records(), {"thresholds": "bad"})} == {
+        "G002", "G003"}
 
 
 def test_the_relatedness_pass_is_capped(monkeypatch):
@@ -439,3 +443,203 @@ def test_one_pkgbase_family_is_not_a_campaign():
     ]
     assert shared_gained_host(records, min_packages=3) == []
     assert shared_added_literal(records, min_packages=2, min_length=256) == []
+
+
+def _payload_records():
+    return [
+        {"package": "a", "maintainer": "a@x", "rules": ["R001"],
+         "payload_urls": ["https://evil.example/x.sh"]},
+        {"package": "b", "maintainer": "b@x", "rules": ["R001"],
+         "payload_urls": ["https://evil.example/x.sh"]},
+        {"package": "c", "maintainer": "c@x", "rules": ["R001"],
+         "payload_urls": ["https://elsewhere.example/y.sh"]},
+    ]
+
+
+def test_shared_payload_signal_fires_across_maintainers():
+    from trustsight.analysis.correlation import shared_payload_signal
+
+    found = shared_payload_signal(_payload_records())
+    assert [f["rule_id"] for f in found] == ["G012"]
+    assert found[0]["params"]["signal"] == "R001"
+    assert found[0]["params"]["members"] == ["a", "b", "c"]
+    assert found[0]["params"]["maintainer_count"] == 3
+
+
+def test_shared_payload_signal_requires_distinct_maintainers():
+    from trustsight.analysis.correlation import shared_payload_signal
+
+    records = _payload_records()
+    for record in records:
+        record["maintainer"] = "same@x"
+    assert shared_payload_signal(records) == []
+
+
+def test_shared_payload_signal_ignores_broad_rules():
+    from trustsight.analysis.correlation import shared_payload_signal
+
+    records = _payload_records()
+    for record in records:
+        record["rules"] = ["R010"]
+    assert shared_payload_signal(records) == []
+
+
+def test_shared_payload_signal_stands_down_for_one_project():
+    from trustsight.analysis.correlation import shared_payload_signal
+
+    records = _payload_records()
+    for record in records:
+        record["pkgbase"] = "one"
+    assert shared_payload_signal(records) == []
+
+
+def test_shared_payload_signal_stands_down_for_a_naming_family():
+    from trustsight.analysis.correlation import shared_payload_signal
+
+    records = [
+        {"package": "appattic", "maintainer": "a@x", "rules": ["R001"]},
+        {"package": "appattic-bin", "maintainer": "b@x", "rules": ["R001"]},
+        {"package": "appattic-qt", "maintainer": "c@x", "rules": ["R001"]},
+    ]
+    assert shared_payload_signal(records) == []
+
+
+def test_shared_fetch_target_fires_across_maintainers():
+    from trustsight.analysis.correlation import shared_fetch_target
+
+    found = shared_fetch_target(_payload_records())
+    assert [f["rule_id"] for f in found] == ["G013"]
+    assert found[0]["params"]["url"] == "https://evil.example/x.sh"
+    assert found[0]["params"]["members"] == ["a", "b"]
+
+
+def test_shared_fetch_target_requires_distinct_maintainers():
+    from trustsight.analysis.correlation import shared_fetch_target
+
+    records = _payload_records()
+    records[1]["maintainer"] = records[0]["maintainer"]
+    assert shared_fetch_target(records) == []
+
+
+def test_shared_adoption_window_fires_for_several_maintainers():
+    import time
+
+    from trustsight.analysis.correlation import shared_adoption_window
+
+    old = time.time() - 400 * 86400
+    records = [
+        {"package": "a", "maintainer": "a@x", "adoption": True,
+         "last_modified": old},
+        {"package": "b", "maintainer": "b@x", "adoption": True,
+         "last_modified": old},
+        {"package": "c", "maintainer": "c@x", "adoption": True,
+         "last_modified": old},
+    ]
+    found = shared_adoption_window(records)
+    assert [f["rule_id"] for f in found] == ["G014"]
+    assert found[0]["params"]["dormant_count"] == 3
+    assert found[0]["params"]["maintainer_count"] == 3
+
+
+def test_shared_adoption_window_requires_distinct_maintainers_and_dormancy():
+    import time
+
+    from trustsight.analysis.correlation import shared_adoption_window
+
+    old = time.time() - 400 * 86400
+    ready = [
+        {"package": "a", "maintainer": "a@x", "adoption": True,
+         "last_modified": old},
+        {"package": "b", "maintainer": "b@x", "adoption": True,
+         "last_modified": old},
+        {"package": "c", "maintainer": "c@x", "adoption": True,
+         "last_modified": old},
+    ]
+    one_account = [dict(record, maintainer="same@x") for record in ready]
+    assert shared_adoption_window(one_account) == []
+    active = [dict(record, last_modified=time.time()) for record in ready]
+    assert shared_adoption_window(active) == []
+
+
+def test_correlate_includes_the_multi_maintainer_joins():
+    from trustsight.analysis.correlation import correlate
+
+    found = correlate(_payload_records())
+    assert {f["rule_id"] for f in found} == {"G012", "G013"}
+
+
+def test_correlation_records_carry_cycle_findings(tmp_path, monkeypatch):
+    from trustsight.db import init_db
+    from trustsight.full_aur.pipeline import _correlation_records
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    init_db()
+    detail = {"a": {"rules": ["R001"],
+                    "payload_urls": ["https://evil.example/x.sh"]}}
+    records = _correlation_records({}, None, {"a"}, detail=detail)
+    assert records[0]["rules"] == ["R001"]
+    assert records[0]["payload_urls"] == ["https://evil.example/x.sh"]
+
+
+def test_multi_maintainer_joins_tolerate_bad_records():
+    from trustsight.analysis.correlation import (
+        shared_adoption_window, shared_fetch_target, shared_payload_signal,
+    )
+
+    bad = [None, "x", {}, {"package": ""},
+           {"package": "a", "rules": "R001", "payload_urls": "https://e/x"}]
+    assert shared_payload_signal(bad) == []
+    assert shared_fetch_target(bad) == []
+    assert shared_adoption_window(bad) == []
+
+
+def test_shared_fetch_target_canonicalises_hand_built_urls():
+    from trustsight.analysis.correlation import shared_fetch_target
+
+    records = [
+        {"package": "a", "maintainer": "a@x",
+         "payload_urls": ["HTTPS://Evil.Example:443/x.sh?q=1"]},
+        {"package": "b", "maintainer": "b@x",
+         "payload_urls": ["https://evil.example/x.sh"]},
+    ]
+    found = shared_fetch_target(records)
+    assert [f["rule_id"] for f in found] == ["G013"]
+    assert found[0]["params"]["url"] == "https://evil.example/x.sh"
+
+
+def test_new_joins_survive_malformed_thresholds():
+    from trustsight.analysis.correlation import correlate
+
+    records = _payload_records()
+    config = {"thresholds": {"g012": {"min_packages": "x",
+                                      "min_maintainers": None},
+                             "g013": "bad", "g014": {"min_dormant": "x"}}}
+    assert {f["rule_id"] for f in correlate(records, config)} >= {"G012", "G013"}
+
+
+def test_correlation_records_tolerate_bad_detail(tmp_path, monkeypatch):
+    from trustsight.db import init_db
+    from trustsight.full_aur.pipeline import _correlation_records
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    init_db()
+    assert _correlation_records({}, None, {"a"}, detail="bad")[0]["rules"] == []
+    assert _correlation_records(
+        {}, None, {"a"}, detail={"a": "bad"})[0]["payload_urls"] == []
+
+
+def test_shared_adoption_window_counts_a_package_once():
+    import time
+
+    from trustsight.analysis.correlation import shared_adoption_window
+
+    old = time.time() - 400 * 86400
+    records = [
+        {"package": "a", "maintainer": "a@x", "adoption": True,
+         "last_modified": old},
+        {"package": "a", "maintainer": "b@x", "adoption": True,
+         "last_modified": old},
+        {"package": "b", "maintainer": "b@x", "adoption": True,
+         "last_modified": old},
+    ]
+    assert shared_adoption_window(records) == []

@@ -4,6 +4,10 @@
 
 Mechanics live on the [Entropy system page](../rules/entropy.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [E001](../rules/entropy.md#e001), [E002](../rules/entropy.md#e002), [E003](../rules/entropy.md#e003) (3 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 Encryption and compression leave a **fingerprint of randomness**. Legitimate

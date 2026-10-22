@@ -177,7 +177,7 @@ Each rule supports these fields:
 | `name` | `string` | Human-readable name. |
 | `pattern` | `string` | Python regex applied to the match target. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
-| `category` | `string` | Semantic category (`network_execution`, `obfuscation`, `installer`, `privilege`, `network_usage`, `injection`, `unicode`, `integrity`). |
+| `category` | `string` | The capability the match touched (`network_execution`, `obfuscation`, `installer`, `privilege`, `network_usage`, `injection`, `unicode`, `integrity`). This is not the rule's subject: see [Rule labels explained](../../explanation/rule-taxonomy.md). |
 | `match_target` | `string` | `"resolved"` : apply to variable-resolved command strings after tokenization. `"raw_line"` : apply to raw diff lines after stripping the `+`/`-` prefix. |
 | `scope` | `list[string]` | (Optional, `raw_line` only) Restrict matching to line contexts (`["function_body"]`, `["message"]`, `["other"]`) or to a named PKGBUILD function (`["pkgver"]`, `["package"]`, `["package_foo"]`). When absent, matches all lines. |
 | `added_only` | `bool` | (Optional, `raw_line` only) Match only added (`+`) lines. Raw diff lines include removals, so without this a maintainer *deleting* a suspicious line raises the score. All `raw_line` `R039`+ rules set it. |
@@ -200,7 +200,7 @@ the design, the partial-diff rule and the severity cap are in
 | `pattern` | `string` | Python regex searched against the value the primitive selects, never against a raw line. |
 | `severity` | `string` | (Optional) Defaults to `MEDIUM`; `FATAL` and `CRITICAL` clamp to `HIGH`. |
 | `name` | `string` | (Optional) Defaults to the id. |
-| `category` | `string` | (Optional) Defaults to `structural`. |
+| `category` | `string` | (Optional) Capability touched; defaults to `structural`. |
 
 ### R001 {#r001}
 
@@ -1341,6 +1341,18 @@ See [G009: Watchlisted Subject](correlation.md#g009).
 ### G010 {#g010}
 
 See [G010: Shared First-Seen Host](correlation.md#g010).
+
+### G012 {#g012}
+
+See [G012: Shared Payload Signal](correlation.md#g012).
+
+### G013 {#g013}
+
+See [G013: Shared Fetch Target](correlation.md#g013).
+
+### G014 {#g014}
+
+See [G014: Shared Adoption Window](correlation.md#g014).
 
 ### A001 {#a001}
 

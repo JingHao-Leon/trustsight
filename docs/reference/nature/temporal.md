@@ -4,6 +4,10 @@
 
 Mechanics live on the [Temporal Context system page](../rules/temporal.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [H020](../rules/temporal.md#h020), [H021](../rules/temporal.md#h021), [H022](../rules/temporal.md#h022), [T001](../rules/temporal.md#t001), [T002](../rules/temporal.md#t002), [T003](../rules/temporal.md#t003), [T006](../rules/temporal.md#t006), [T007](../rules/temporal.md#t007) (8 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 The idea comes from **forensics**: an alibi is checked against the clock, and

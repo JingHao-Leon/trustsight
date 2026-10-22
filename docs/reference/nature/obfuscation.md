@@ -4,6 +4,10 @@
 
 Mechanics live on the [Obfuscation system page](../rules/obfuscation.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [H014](../rules/obfuscation.md#h014), [H065](../rules/obfuscation.md#h065), [H080](../rules/obfuscation.md#h080), [R003](../rules/obfuscation.md#r003), [R039](../rules/obfuscation.md#r039), [R040](../rules/obfuscation.md#r040), [R043](../rules/obfuscation.md#r043), [R045](../rules/obfuscation.md#r045) (8 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 Think of a **message written in a private cipher**: you are asked to deliver

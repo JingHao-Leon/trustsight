@@ -53,6 +53,7 @@ dev = [
     # Property-based parser tests: the locked corpus proves
     # equivalence; Hypothesis explores the contract itself.
     "hypothesis",
+    "pytest-xdist>=3.8.0",
 ]
 docs = [
     # Pinned to the versions in uv.lock.  The docs site is also built by an
@@ -100,3 +101,9 @@ target-version = "py311"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# ~7k tests; the corpus-heavy files dominate a serial run.  Four workers
+# with file grouping keep module-scoped fixtures and process-wide state
+# isolated.  `-n 0` restores serial order for debugging.  Capped rather than
+# `auto`: the regex-safety audit uses a wall-clock budget, and an
+# oversubscribed machine makes a safe pattern time out.
+addopts = "-n 4 --dist loadfile"

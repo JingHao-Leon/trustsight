@@ -26,15 +26,34 @@ This installs the package in editable mode along with `pytest`, `ruff`, and othe
 ## Run the test suite
 
 ```bash
-uv run --with pytest python -m pytest
+uv run --extra dev pytest
 ```
 
-Run `uv run --with pytest python -m pytest` for the current test count; it changes as coverage is added.
+`pyproject.toml` sets `addopts = "-n 4 --dist loadfile"`, so this runs the
+suite on four `pytest-xdist` workers with each test file kept whole on one
+worker. That grouping matters: module-scoped fixtures and the few files that
+touch process-wide state stay isolated, while the corpus-heavy files run
+alongside each other.
+
+Use `-n 0` to restore serial order when you are debugging an ordering
+failure:
+
+```bash
+uv run --extra dev pytest -n 0
+```
+
+The worker count is capped at four on purpose. The regex-safety audit
+(`tests/test_regex_safety.py`) measures patterns against a wall-clock budget;
+when the machine is oversubscribed, a pattern that is safe serially can time
+out. Four workers pass on the project's CI runner.
+
+Run the command above to get the current test count; it changes as coverage
+is added.
 
 ### Run a single test
 
 ```bash
-uv run --with pytest python -m pytest tests/test_rules.py::test_r001_curl_bash -v
+uv run --extra dev pytest tests/test_rules.py::test_r001_curl_bash -v
 ```
 
 ### The suite does not reach the network

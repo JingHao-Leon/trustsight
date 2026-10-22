@@ -85,7 +85,7 @@ itself is the signal.
 - **Severity:** HIGH (weight 25)
 - **Category:** `adoption`
 
-- **Condition:** At least `[thresholds] h052.min_packages` (default 3) otherwise unrelated packages share a source repository, a new domain, or an adoption window.
+- **Condition:** At least `[thresholds] h052.min_packages` (default 3) otherwise unrelated packages share a source repository. A shared new domain is [G001](correlation.md#g001)/[G010](correlation.md#g010); a shared adoption window from several accounts is [G014](correlation.md#g014).
 
 ### H055: Attribute Burst {#h055}
 

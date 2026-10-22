@@ -3,10 +3,14 @@
 # Glossary
 
 One page for the labels TrustSight uses, each defined once and linked to the
-page that explains it in full. Four axes are easy to confuse: a rule carries a
-**family** (how it works), a **subject** (what it looks for), an **evidence
-category** (what kind of evidence its finding is), and an **evidence tier**
-(what the signal is worth).
+page that explains it in full. Two axes are independent: a rule carries a
+**family** (how it works) and a **subject** (what it looks for), and those
+cross-cut. Its findings also carry an **evidence category** (what kind of
+evidence the finding is), which is derived from the family with per-rule
+overrides. An **evidence tier** is not a classification of the rule at all:
+it describes how a scoring signal is sourced. See
+[Rule labels explained](../explanation/rule-taxonomy.md) for all of them side
+by side.
 
 ## How a rule is classified
 
@@ -23,7 +27,7 @@ a heuristic (`H`), an evasion or refusal check (`X`), a statistic (`E`), a
 history read (`T`), a cross-package correlation (`G`), an indicator lookup
 (`I`), a predicate over other findings (`M`), or an artifact inspection (`A`).
 `P` reports declared practices and `W` reports analysis boundaries; neither is a
-detection. Full list: [Rule Nature](rules/nature.md).
+detection. Full list: [Rule Series](rules/nature.md).
 
 **Subject (category).** What a rule looks for, as a closed set with one
 reference page each (fetch and execution, obfuscation, integrity, and so on). A
@@ -35,11 +39,12 @@ of `L1`-`L8`
 finding is labelled by the check that produced it, not by every other check it
 might complement.
 
-**Evidence tier.** How much external data a signal needs before it means
-anything: `A` (structural, always available), `B` (priors, static lists), `C`
-(history, needs a warm corpus), `D` (declared verification, reported never
-weighted). Tiers are orthogonal to layers: a finding has both a tier (how it is
-sourced) and a layer (what kind of evidence it is). See
+**Evidence tier.** How much external data a scoring signal needs before it
+means anything: `A` (structural, always available), `B` (priors, static lists),
+`C` (history, needs a warm corpus), `D` (declared verification, reported never
+weighted). It describes sourcing and scoring, not a property every rule is
+filed under. Tiers are orthogonal to layers: a finding has both a tier (how it
+is sourced) and a layer (what kind of evidence it is). See
 [Evidence Tiers](evidence-tiers.md) and
 [Scoring Philosophy](../explanation/scoring-philosophy.md).
 

@@ -521,6 +521,33 @@
     "capability": "correlation",
     "target": "programmatic (cycle records)"
   },
+  "g012": {
+    "uid": "TS-0275",
+    "name": "Shared Payload Signal",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "g013": {
+    "uid": "TS-0276",
+    "name": "Shared Fetch Target",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
+  "g014": {
+    "uid": "TS-0277",
+    "name": "Shared Adoption Window",
+    "canonical": true,
+    "severity_text": "HIGH (weight 25)",
+    "severity": "HIGH",
+    "capability": "correlation",
+    "target": "programmatic (cycle records)"
+  },
   "h001": {
     "uid": "TS-0057",
     "name": "Checksum Disabled",

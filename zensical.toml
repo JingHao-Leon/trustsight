@@ -110,7 +110,7 @@ Guides = [
 [[project.nav]]
 "Rule System" = [
   {"Rules Overview" = "reference/rules/index.md"},
-  {"Rule Nature (by series)" = "reference/rules/nature.md"},
+  {"Rule Series (mechanism)" = "reference/rules/nature.md"},
   {"Rule System" = "reference/rules/system.md"},
   {"Fetch and Execution" = "reference/rules/fetch-and-execution.md"},
   {Obfuscation = "reference/rules/obfuscation.md"},
@@ -189,6 +189,7 @@ Reference = [
 [[project.nav]]
 Explanation = [
   {Overview = "explanation/index.md"},
+  {"Rule Labels and Taxonomy" = "explanation/rule-taxonomy.md"},
   {"Scoring Philosophy" = "explanation/scoring-philosophy.md"},
   {"Cold Start and Maturity" = "explanation/cold-start-and-maturity.md"},
   {"Corpus and Priors" = "explanation/corpus-and-priors.md"},

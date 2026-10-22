@@ -33,9 +33,12 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def results():
+    # The scan dominates the suite when the locked corpus is present.  Four
+    # workers keep it off the critical path without turning an xdist run
+    # (which already has workers) into an oversubscribed machine.
     with gates.shipped_config():
-        benign = gates.scan_corpus(CORPUS, sample=SAMPLE)
-        malicious = gates.scan_malicious(MALICIOUS) if MALICIOUS.exists() else []
+        benign = gates.scan_corpus(CORPUS, sample=SAMPLE, jobs=4)
+        malicious = gates.scan_malicious(MALICIOUS, jobs=4) if MALICIOUS.exists() else []
         yield benign, malicious
 
 

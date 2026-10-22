@@ -4,6 +4,10 @@
 
 Mechanics live on the [Meta system page](../rules/meta.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [M001](../rules/meta.md#m001), [M002](../rules/meta.md#m002), [M003](../rules/meta.md#m003), [M004](../rules/meta.md#m004), [M005](../rules/meta.md#m005), [M006](../rules/meta.md#m006) (6 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 An immune system that attacks the body it lives in is an **autoimmune

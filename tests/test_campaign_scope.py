@@ -391,3 +391,106 @@ def test_a_campaign_id_is_bounded_and_control_free():
     campaign_id, _scope = _campaign_identity(finding)
     assert "\x1b" not in campaign_id
     assert len(campaign_id) <= 200 + len("G001:")
+
+
+def test_g012_signal_campaign_elevates_a_neighbour(db):
+    from trustsight.db import activate_campaign, observation_seq
+    from trustsight.full_aur.pipeline import (
+        _campaign_identity, _neighborhood_elevation,
+    )
+
+    finding = {"rule_id": "G012",
+               "params": {"members": ["a", "b"], "signal": "R001",
+                          "maintainers": ["m1", "m2"]}}
+    campaign_id, scope = _campaign_identity(finding)
+    assert scope == {"package_names": ["a", "b"], "signals": ["R001"],
+                     "maintainers": ["m1", "m2"]}
+    activate_campaign(campaign_id, scope, "G012", ttl_obs=50,
+                      now_obs=observation_seq())
+
+    out = _neighborhood_elevation(
+        [{"package": "neighbour", "rules": ["R001"]}])
+    assert [f["rule_id"] for f in out] == ["G006"]
+    assert out[0]["params"]["members"] == ["neighbour"]
+    assert _neighborhood_elevation(
+        [{"package": "a", "rules": ["R001"]}]) == []
+
+
+def test_g013_url_campaign_elevates_a_neighbour(db):
+    from trustsight.db import activate_campaign, observation_seq
+    from trustsight.full_aur.pipeline import (
+        _campaign_identity, _neighborhood_elevation,
+    )
+
+    finding = {"rule_id": "G013",
+               "params": {"members": ["a", "b"],
+                          "url": "https://evil.example/x.sh",
+                          "maintainers": ["m1", "m2"]}}
+    campaign_id, scope = _campaign_identity(finding)
+    assert scope == {"package_names": ["a", "b"],
+                     "urls": ["https://evil.example/x.sh"],
+                     "maintainers": ["m1", "m2"]}
+    activate_campaign(campaign_id, scope, "G013", ttl_obs=50,
+                      now_obs=observation_seq())
+
+    out = _neighborhood_elevation(
+        [{"package": "neighbour",
+          "payload_urls": ["https://evil.example/x.sh"]}])
+    assert [f["rule_id"] for f in out] == ["G006"]
+
+
+def test_g014_campaign_elevates_an_account(db):
+    from trustsight.db import activate_campaign, observation_seq
+    from trustsight.full_aur.pipeline import (
+        _campaign_identity, _neighborhood_elevation,
+    )
+
+    finding = {"rule_id": "G014",
+               "params": {"members": ["a", "b"], "maintainers": ["m1", "m2"],
+                          "dormant_count": 2}}
+    campaign_id, scope = _campaign_identity(finding)
+    assert scope == {"package_names": ["a", "b"],
+                     "maintainers": ["m1", "m2"]}
+    activate_campaign(campaign_id, scope, "G014", ttl_obs=50,
+                      now_obs=observation_seq())
+
+    out = _neighborhood_elevation(
+        [{"package": "neighbour", "maintainer": "M1"}])
+    assert [f["rule_id"] for f in out] == ["G006"]
+
+
+def test_g007_corroborates_a_campaign_signal(db):
+    from trustsight.analysis.pipeline._analyze import _campaign_corroboration
+    from trustsight.db import activate_campaign, observation_seq
+    from trustsight.schema import ScoreEntry
+
+    activate_campaign(
+        "G012:R001", {"package_names": ["a"], "signals": ["R001"]},
+        "G012", ttl_obs=50, now_obs=observation_seq())
+    score, breakdown = _campaign_corroboration(
+        0, [ScoreEntry(rule_id="R001", severity="CRITICAL", weight=40)],
+        "unrelated", [])
+    assert [entry.rule_id for entry in breakdown] == ["R001", "G007"]
+    assert breakdown[-1].weight == 0
+
+
+def test_new_campaign_kinds_tolerate_missing_params(db):
+    from trustsight.full_aur.pipeline import _campaign_identity
+
+    for rule_id in ("G012", "G013", "G014"):
+        campaign_id, scope = _campaign_identity(
+            {"rule_id": rule_id, "params": {"members": ["a"]}})
+        assert campaign_id.startswith(f"{rule_id}:")
+        assert scope == {"package_names": ["a"]}
+
+
+def test_neighbourhood_treats_a_bare_rule_string_as_one_value(db):
+    from trustsight.db import activate_campaign, observation_seq
+    from trustsight.full_aur.pipeline import _neighborhood_elevation
+
+    activate_campaign(
+        "G012:R001", {"package_names": ["a"], "signals": ["R001"]},
+        "G012", ttl_obs=50, now_obs=observation_seq())
+    out = _neighborhood_elevation(
+        [{"package": "neighbour", "rules": "R001"}])
+    assert [f["rule_id"] for f in out] == ["G006"]

@@ -5,12 +5,25 @@
 Every rule category on the [Rule System tab](../rules/index.md) answers both
 *how* its rules detect and *why the category exists at all*. This tab is the
 second half: for each category, where the idea came from and what a finding
-means once you have one.
+means once you have one. The two pages are paired by **subject**, not by
+mechanism: a category's system page owns the mechanics and per-rule
+definitions, and its Nature page owns the provenance and interpretation.
 
-The [series page](../rules/nature.md) reads nature the other way, by
-mechanism (R, H, C, and the rest). The two cross-cut: an integrity finding is
-an integrity finding whichever series produced it, and the interpretation
-below is the same across mechanisms.
+The [Rule Series page](../rules/nature.md) reads the other axis, by
+mechanism (R, H, C, and the rest). Series cross-cut subjects: a temporal
+finding can come from an H heuristic or a T history read, and an integrity
+finding is an integrity finding whichever series produced it.
+
+Two more labels are easy to mistake for a third subject axis. The evidence
+**layer** (`L1`-`L8`) groups findings by the kind of evidence and is derived
+from the series with a small override table; it is a report view, not an
+independent taxonomy, and the numbers are not stages. The evidence **tier**
+(`A`-`D`) describes how a signal is sourced for scoring. The
+[Rule labels explained](../../explanation/rule-taxonomy.md) puts all of them side by
+side.
+
+Each page below opens with the rule IDs in its subject, so the series mix in a
+category is visible without leaving the page.
 
 ## Categories
 
@@ -40,5 +53,6 @@ below is the same across mechanisms.
 ## See also
 
 - [Rule System tab](../rules/index.md); the catalog and mechanics
-- [Rule Nature by series](../rules/nature.md); the mechanism axis
+- [Rule Series (mechanism)](../rules/nature.md); the mechanism axis
+- [Rule labels explained](../../explanation/rule-taxonomy.md); series, subject, layer and tier side by side
 - [Assurance Layers](../../assurance-layers.md); how the categories combine into a verdict

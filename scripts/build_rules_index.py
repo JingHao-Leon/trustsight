@@ -7,7 +7,10 @@ appear in ``docs_src/layout.json``.  A section's name and its ``Target`` /
 ``Severity`` / ``Category`` bullets come from ``registry_meta.json``; this
 script reassembles the pages from both, writes each heading from the
 section's *current* id (resolved from its permanent ``uid``), and derives
-``index.md``'s legend and catalog.
+``index.md``'s legend and catalog.  It also writes the one-line rule index at
+the top of each per-category page under ``docs/reference/nature/``, so the
+interpretation page never has to duplicate the names and mechanics the system
+page owns.
 
 ``tests/test_generated_docs.py`` fails if a page or the index is stale, so a
 rule author runs this after editing a section:
@@ -32,6 +35,7 @@ from trustsight.categories import RuleCategory, rules_in  # noqa: E402
 from trustsight.registry import SECTION_META, resolve  # noqa: E402
 
 RULES_DIR = ROOT / "docs" / "reference" / "rules"
+NATURE_DIR = ROOT / "docs" / "reference" / "nature"
 INDEX = RULES_DIR / "index.md"
 
 SRC = ROOT / "docs_src"
@@ -47,6 +51,11 @@ PAGE_START = "<!-- generated: page-index -->"
 PAGE_END = "<!-- /generated: page-index -->"
 PAGE_INDEX_RE = re.compile(
     rf"{re.escape(PAGE_START)}\n.*?\n{re.escape(PAGE_END)}", re.S
+)
+NATURE_START = "<!-- generated: nature-rules -->"
+NATURE_END = "<!-- /generated: nature-rules -->"
+NATURE_RE = re.compile(
+    rf"{re.escape(NATURE_START)}\n.*?\n{re.escape(NATURE_END)}", re.S
 )
 
 META = re.compile(r"^<!-- (uid|anchor): (.*) -->$")
@@ -154,6 +163,44 @@ def _page_blocks(catalog) -> dict[str, str]:
     return blocks
 
 
+def _nature_blocks(catalog) -> dict[str, str]:
+    """Nature page filename -> its generated rule index, in catalog order."""
+    by_page: dict[str, list] = {}
+    for rid, _name, _sev, _series, cat, anchor in catalog:
+        by_page.setdefault(cat.value, []).append((rid, anchor))
+
+    blocks = {}
+    for slug, rules in by_page.items():
+        links = ", ".join(
+            f"[{rid}](../rules/{slug}.md#{anchor})" for rid, anchor in rules
+        )
+        count = len(rules)
+        blocks[f"{slug}.md"] = (
+            f"{NATURE_START}\n"
+            f"**Rules in this nature:** {links} ({count} "
+            f"{'rule' if count == 1 else 'rules'}).\n"
+            f"{NATURE_END}"
+        )
+    return blocks
+
+
+def render_nature_page(page_name: str, block: str) -> str:
+    """*page_name* with its generated rule index replaced or inserted."""
+    text = (NATURE_DIR / page_name).read_text()
+    if NATURE_START in text:
+        updated, count = NATURE_RE.subn(lambda _: block, text, count=1)
+        if count != 1:
+            raise SystemExit(f"unterminated nature block in {page_name}")
+        return updated
+    pattern = re.compile(r"^(## )", re.M)
+    updated, count = pattern.subn(
+        lambda m: f"{block}\n\n{m.group(1)}", text, count=1
+    )
+    if count != 1:
+        raise SystemExit(f"no section heading in {page_name}")
+    return updated
+
+
 def render_page(page_name: str, layout, blocks) -> str:
     """The complete page text, rebuilt from its header, index and sections."""
     header = (PAGES / page_name).read_text().rstrip()
@@ -206,8 +253,13 @@ def main() -> None:
         (RULES_DIR / page_name).write_text(render_page(page_name, layout, blocks))
     INDEX.write_text(render_index(INDEX.read_text(), catalog))
 
+    nature_blocks = _nature_blocks(catalog)
+    for page_name, block in nature_blocks.items():
+        (NATURE_DIR / page_name).write_text(render_nature_page(page_name, block))
+
     print(f"{INDEX.relative_to(ROOT)}: {len(catalog)} rules across "
-          f"{len(RuleCategory)} categories; {len(blocks)} on-page indexes")
+          f"{len(RuleCategory)} categories; {len(blocks)} on-page indexes; "
+          f"{len(nature_blocks)} nature indexes")
 
 
 if __name__ == "__main__":

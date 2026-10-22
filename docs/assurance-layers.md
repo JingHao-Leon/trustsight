@@ -133,6 +133,6 @@ profile shifts to `incomplete` except `L8`, which stays `not_applicable`.
 ## See Also
 
 - [Glossary](reference/glossary.md) - family, subject, layer, tier, and the report terms
-- [Rule Nature](reference/rules/nature.md) - the rule families in full
+- [Rule Series](reference/rules/nature.md) - the rule families in full
 - [Rules Reference](reference/rules/index.md) - the catalog by category
 - [The security model](security.md) - the threat model this section complements

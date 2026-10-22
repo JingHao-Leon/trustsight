@@ -53,6 +53,27 @@ def test_index_matches_the_generator():
     )
 
 
+def test_every_nature_page_matches_the_generator():
+    build = _generator()
+    blocks = build._nature_blocks(build._catalog())
+    stale = [
+        page_name
+        for page_name, block in blocks.items()
+        if (build.NATURE_DIR / page_name).read_text()
+        != build.render_nature_page(page_name, block)
+    ]
+    assert stale == [], (
+        f"stale nature pages: {stale}; run python scripts/build_rules_index.py"
+    )
+
+
+def test_nature_indexes_cover_every_category():
+    build = _generator()
+    blocks = build._nature_blocks(build._catalog())
+    expected = {f"{category.value}.md" for category in build.RuleCategory}
+    assert set(blocks) == expected
+
+
 def test_every_page_matches_its_sources():
     build = _generator()
     layout = json.loads(build.LAYOUT.read_text())

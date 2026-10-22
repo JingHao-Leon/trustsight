@@ -137,4 +137,4 @@ from its family's. The mapping is data in `trustsight.layers`:
 ## See Also
 
 - [Part 2: How to add a useful new detector](diversity.md)
-- [Rule Nature](../reference/rules/nature.md) - the rule families in full
+- [Rule Series](../reference/rules/nature.md) - the rule families in full

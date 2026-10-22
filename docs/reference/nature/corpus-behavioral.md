@@ -5,6 +5,10 @@
 Mechanics live on the
 [Corpus Behavioral system page](../rules/corpus-behavioral.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [H028](../rules/corpus-behavioral.md#h028), [H046](../rules/corpus-behavioral.md#h046), [H057](../rules/corpus-behavioral.md#h057), [H060](../rules/corpus-behavioral.md#h060), [H061](../rules/corpus-behavioral.md#h061), [H073](../rules/corpus-behavioral.md#h073) (6 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 You know a friend has been replaced by an impostor not because they did

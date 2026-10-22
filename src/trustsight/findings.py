@@ -237,4 +237,5 @@ NON_CONTENT_RULES = {
     # G007 is a per-run score attribution (a campaign bonus), not a located
     # finding: its evidence names the campaign, not a line.
     "G007": "correlation",
+    "G012": "correlation", "G013": "correlation", "G014": "correlation",
 }

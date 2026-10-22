@@ -4,6 +4,10 @@
 
 Mechanics live on the [Composition system page](../rules/composition.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [C021](../rules/composition.md#c021), [C024](../rules/composition.md#c024), [H027](../rules/composition.md#h027), [H043](../rules/composition.md#h043), [H098](../rules/composition.md#h098), [H102](../rules/composition.md#h102) (6 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 The analogy is **chemistry**. Two reagents that are inert on their own can

@@ -60,7 +60,7 @@ def _safe_int(value, default: int) -> int:
 #: pre-typed G005 list that conflated member names and impersonated targets,
 #: which cannot be reconstructed, so it matches nothing (see _read_scope).
 _SCOPE_KEYS = ("package_names", "hosts", "targets", "dependencies",
-               "untyped_legacy")
+               "signals", "urls", "maintainers", "untyped_legacy")
 
 
 def _string_list(values) -> list[str]:

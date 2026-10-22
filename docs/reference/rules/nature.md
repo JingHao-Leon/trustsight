@@ -1,22 +1,30 @@
 <!-- description: How each rule series detects: the mechanism behind R, H, C, D, S, X, T, G, E, I, M, A, U, P and W rules, and what that means for tuning and interpretation. -->
 
-# Rule Nature
+# Rule Series
 
-Every rule in TrustSight belongs to a **series** (R, H, C, D, S, X, T, G, E, I, M, A, U, P, or W) that determines *how* it detects, not *what* it detects. The series is the mechanism; the [category](index.md) is the subject. A rule can be `category = "integrity"` and still be an R-series regex, an H-series heuristic, or a C-series structural check.
+Every rule in TrustSight belongs to a **series** (R, H, C, D, S, X, T, G, E,
+I, M, A, U, P, or W) that determines *how* it detects, not *what* it detects.
+The series is the mechanism; the [category](index.md) is the subject. A rule
+can be a regex, a heuristic, or a structural check and still claim the same
+kind of subject.
 
-Understanding the nature of a rule tells you what you can tune, what you cannot, and what the finding means.
+Understanding the series tells you what you can tune, what you cannot, and
+what the mechanism means for replay cost.
 
-### Two axes of "nature"
+### Mechanism is one axis, not the whole taxonomy
 
-This page reads nature along the **series** axis: *how* a rule detects. The
-[Rule Nature tab](../nature/index.md) reads nature along the **category**
-axis: *where a rule's idea comes from* and *what a finding means in the
-world*. The two cross-cut. An integrity finding is an integrity finding
-whether an R, H, or C rule produced it, and a C rule's structural invariant
-means the same thing across fetch-and-execution, composition, and integrity.
+This page reads the **series** axis: *how* a rule detects. The
+[Rule Nature tab](../nature/index.md) reads the **subject** axis: *where a
+rule's idea comes from* and *what a finding means in the world*. A third
+label, the evidence [layer](../../assurance-layers/evidence-categories.md)
+(`L1`-`L8`), groups findings by the kind of evidence and is derived from the
+series with a small table of per-rule overrides; it is not a second mechanism
+axis and not a sequence of stages. The
+[Rule labels explained](../../explanation/rule-taxonomy.md) puts all of them side by
+side.
 
-Use this page to tune a mechanism; use the per-category pages to interpret a
-finding. Every category page links back to its system page here.
+Use this page to tune a mechanism; use the per-category Nature pages to
+interpret a finding. Every category page links back to its system page here.
 
 ## R-series: **Regex** Pattern Matching
 
@@ -47,7 +55,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## H-series: **Heuristic** Behavioral Analysis
 
-**Count:** 103 rules (H001-H103)
+**Count:** 104 rules (H001-H104)
 
 **Mechanism:** Engine-defined logic in `analysis/*.py` examines behavioral signals: what changed relative to, what the corpus has seen before, what files exist outside the diff hunk, or what the observation database records. H-series rules need context a single regex cannot see, but unlike C-series and D-series, they reason about *behavioral suspicion* rather than structural invariants or graph properties.
 
@@ -230,7 +238,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## G-series: **Correlation** Cross-Package Joins
 
-**Count:** 10 rules (G001-G010; G006/G007/G009/G010 weight 0)
+**Count:** 13 rules (G001-G010 and G012-G014; G006/G007/G009/G010 weight 0)
 
 **Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N. G001 to G004 are the joins; G005 is the impersonation-campaign trigger; G006 (neighborhood elevation under an active campaign) and G007 (corroboration of a run inside an active campaign) are weight 0, because a set membership must not inflate any one member's score. G008 (first-seen account adoption burst) is the collective dormant-target join; G009 (watchlisted maintainer) names a package whose operator-curated watchlist entry matches, and G010 (shared first-seen host) is the G001 join restricted to a host the corpus has not met before, both weight 0. The full immune-import reading is on [Correlation: Rule Nature](../nature/correlation.md).
 
@@ -395,6 +403,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 ## See Also
 
 - [Rule Nature (per category)](../nature/index.md); where each category's rules come from and what a finding means
+- [Rule labels explained](../../explanation/rule-taxonomy.md); series, subject, layer and tier side by side
 - [Rules Reference](index.md); complete catalog by category
 - [Rule System Reference](system.md); engine internals, severity weights, field definitions
 - [Configuring Rules and Weights](../../guides/configuring-rules-and-weights.md); how to tune R-series rules

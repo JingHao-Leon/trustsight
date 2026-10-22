@@ -63,18 +63,29 @@ def _render_review(results, renderer):
 # --- the gates themselves -------------------------------------------------
 
 
-def test_every_security_gate_passes():
+@pytest.fixture(scope="module")
+def security_gates_report():
+    """Run the security gates once for the module, not once per test.
+
+    ``run_gates`` is the most expensive thing in the suite after the
+    corpus scans; the two tests below read the same report.
+    """
     from security_gates import run_gates
 
-    failed = [g.name for g in run_gates() if not g.passed]
+    return run_gates()
+
+
+def test_every_security_gate_passes(security_gates_report):
+    failed = [g.name for g in security_gates_report if not g.passed]
     assert failed == [], f"security gates failing: {failed}"
 
 
-def test_the_doc_and_the_gates_name_the_same_invariants():
+def test_the_doc_and_the_gates_name_the_same_invariants(security_gates_report):
     """A guarantee with no check, or a check with no guarantee, is a bug."""
-    from security_gates import gate_doc_lists_every_gate, run_gates
+    from security_gates import gate_doc_lists_every_gate
 
-    gates = [g for g in run_gates() if g.name != "docs/security.md matches the gates"]
+    gates = [g for g in security_gates_report
+             if g.name != "docs/security.md matches the gates"]
     assert gate_doc_lists_every_gate(gates).passed
 
 

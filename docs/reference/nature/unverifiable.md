@@ -4,6 +4,10 @@
 
 Mechanics live on the [Unverifiable system page](../rules/unverifiable.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [W001](../rules/unverifiable.md#w001), [W002](../rules/unverifiable.md#w002), [W003](../rules/unverifiable.md#w003), [W004](../rules/unverifiable.md#w004), [W005](../rules/unverifiable.md#w005), [W006](../rules/unverifiable.md#w006), [W007](../rules/unverifiable.md#w007), [W008](../rules/unverifiable.md#w008), [W009](../rules/unverifiable.md#w009), [W010](../rules/unverifiable.md#w010), [W011](../rules/unverifiable.md#w011), [W012](../rules/unverifiable.md#w012) (12 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 The old maps wrote **"here be dragons"** at the edge of the known world rather

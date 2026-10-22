@@ -166,9 +166,10 @@ def _campaign_corroboration(
     campaign's scope.
 
     Trained immunity, **unscored**: while a campaign is primed, a run whose
-    package is a campaign member, or that newly gained a host in the
-    campaign's scope, is *reported* as corroborated - one ``G007`` ``INFO``
-    finding carrying ``campaign_id``, weight 0.
+    package is a campaign member, that newly gained a host in the campaign's
+    scope, that fired a campaign signal, or that fetched a campaign URL is
+    *reported* as corroborated - one ``G007`` ``INFO`` finding carrying
+    ``campaign_id``, weight 0.
 
     It stays weight 0 because the points this used to add measured scope
     *breadth* (``len(scope)``), not corroboration, and the calibration corpus
@@ -187,14 +188,30 @@ def _campaign_corroboration(
 
     from urllib.parse import urlsplit
 
+    from ..payload_signals import canonical_payload_url, payload_urls
+
     hosts = set()
+    source_targets = set()
     for url in added_urls or ():
         try:
-            host = urlsplit(str(url)).hostname
+            parts = urlsplit(str(url))
+            host = parts.hostname
         except (ValueError, TypeError):
             host = None
         if host:
             hosts.add(host)
+        canonical = canonical_payload_url(str(url))
+        if canonical:
+            source_targets.add(canonical)
+
+    fired = {str(getattr(entry, "rule_id", "")) for entry in breakdown or ()}
+    try:
+        payload_targets = set(payload_urls(breakdown))
+    except Exception:
+        # Corroboration is report-only; a malformed finding must not break
+        # the analysis that produced it.
+        payload_targets = set()
+    targets = source_targets | payload_targets
 
     for campaign in campaigns:
         scope = campaign.get("scope", {}) or {}
@@ -202,7 +219,12 @@ def _campaign_corroboration(
             continue
         names = {str(n) for n in scope.get("package_names", ()) or ()}
         scoped_hosts = {str(h) for h in scope.get("hosts", ()) or ()}
-        if pkg_name not in names and not (hosts & scoped_hosts):
+        scoped_signals = {str(s) for s in scope.get("signals", ()) or ()}
+        scoped_urls = {str(u) for u in scope.get("urls", ()) or ()}
+        if (pkg_name not in names
+                and not (hosts & scoped_hosts)
+                and not (fired & scoped_signals)
+                and not (targets & scoped_urls)):
             continue
         from ...schema import ScoreEntry
 

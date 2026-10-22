@@ -1,16 +1,16 @@
 """The assurance layers: which kind of evidence a rule represents.
 
- introduces a second axis over the rule taxonomy. ``category``
-(:mod:`trustsight.categories`) answers *what kind of claim* a rule makes;
-``layer`` answers *where on the path from repository text to a running
-machine* the rule's evidence sits.  The two are independent by design: a
-finding carries the layer where it *caught*, not the layer it protects, so
-an evasion-shape rule caught at L4 still reports L4 even though the payload
-it would have shielded lives at L3.
+``category`` (:mod:`trustsight.categories`) answers *what kind of claim* a
+rule makes; ``layer`` groups that claim's finding by the kind of evidence it
+represents.  A layer is not a stage in an attacker's path and not a second
+mechanism axis: a finding carries the layer where it *caught*, not the layer
+it protects, so an evasion-shape rule caught at L4 still reports L4 even
+though the payload it would have shielded lives at L3.  Nor is it fully
+independent of the series: the mapping is a per-series default with a small
+table of per-rule overrides for the handful of rules whose mechanism diverges
+from their series.
 
-The mapping is data, not code: a per-series default with a small table of
-per-rule overrides for the handful of rules whose mechanism diverges from
-their series.  Every rule that appears in :data:`RULE_CATEGORIES` has
+Every rule that appears in :data:`RULE_CATEGORIES` has
 exactly one layer; :func:`layer_of` is the single lookup every consumer
 (validation, the report profile, the harness telemetry) shares, so no two
 surfaces can disagree about a rule's layer.

@@ -7,6 +7,10 @@ findings, the change summary, the coverage gaps, and the score when you ask for
 it - and you will know what none of them claim. A misread verdict is worse than
 no verdict.
 
+If the labels on a finding are unfamiliar - series, subject, layer, tier -
+[Rule Labels Explained](../explanation/rule-taxonomy.md) separates them before
+you start.
+
 ## What a score is and is not
 
 A **score** is a heuristic aggregate of weighted findings: a measurement of how many risk signals fired during analysis and how much those signals weigh. It is **not** a probability of malice, and it is **not** a guarantee of safety.
@@ -26,7 +30,7 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 A Low verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**72.3 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **30**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **50**. The calibration gates re-measure both figures against the shipped configuration on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the strict separation gate; see [using TrustSight in CI](../guides/using-in-ci.md) and [benchmarks and methodology](../explanation/benchmarks-and-methodology.md)). These numbers are the tails measured on the locked 3,739-diff corpus, not a claim that the two distributions as a whole do not overlap. Run `uv run --with pytest python -m pytest` for the current test count.
+**72.3 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **30**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **50**. The calibration gates re-measure both figures against the shipped configuration on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the strict separation gate; see [using TrustSight in CI](../guides/using-in-ci.md) and [benchmarks and methodology](../explanation/benchmarks-and-methodology.md)). These numbers are the tails measured on the locked 3,739-diff corpus, not a claim that the two distributions as a whole do not overlap. Run `uv run --extra dev pytest` for the current test count.
 
 The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 92.9nd, so about **7.1%** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 

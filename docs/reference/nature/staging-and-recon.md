@@ -4,6 +4,10 @@
 
 Mechanics live on the [Staging and Reconnaissance system page](../rules/staging-and-recon.md).
 
+<!-- generated: nature-rules -->
+**Rules in this nature:** [C025](../rules/staging-and-recon.md#c025), [C028](../rules/staging-and-recon.md#c028), [H007](../rules/staging-and-recon.md#h007), [H010](../rules/staging-and-recon.md#h010), [H038](../rules/staging-and-recon.md#h038), [H040](../rules/staging-and-recon.md#h040), [H042](../rules/staging-and-recon.md#h042), [H076](../rules/staging-and-recon.md#h076), [H085](../rules/staging-and-recon.md#h085), [R058](../rules/staging-and-recon.md#r058) (10 rules).
+<!-- /generated: nature-rules -->
+
 ## Where it comes from
 
 The analogy is **casing the joint**: the burglar walks the block before the

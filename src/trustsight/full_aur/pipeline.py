@@ -110,7 +110,8 @@ _IMPERSONATION_GATED_RULES = frozenset({"H052", "H055"})
 #: G rules that corroborate a campaign.  The report-only members of the
 #: family (G006/G007/G009/G010) never prime campaign state.
 _CAMPAIGN_RULES = frozenset(
-    {"G001", "G002", "G003", "G004", "G005", "G008"})
+    {"G001", "G002", "G003", "G004", "G005", "G008",
+     "G012", "G013", "G014"})
 
 
 def _since_cursor() -> Optional[int]:
@@ -270,6 +271,9 @@ def _campaign_identity(finding: dict) -> tuple[str, dict[str, list[str]]] | None
     * ``package_names`` - the campaign's members.
     * ``hosts`` - the shared/gained hosts a host campaign joins on.
     * ``dependencies`` - the upstream dependency a G004 campaign joins on.
+    * ``signals`` - the payload rule a G012 campaign joins on.
+    * ``urls`` - the canonical payload URL a G013 campaign joins on.
+    * ``maintainers`` - the accounts a multi-account campaign names.
     * ``targets`` - the legitimate packages a G005 campaign impersonates.
       These are **not** members: a clone is suspicious because it targets
       ``yay``, not because ``yay`` exists.
@@ -311,10 +315,28 @@ def _campaign_identity(finding: dict) -> tuple[str, dict[str, list[str]]] | None
     dependency = str(params.get("dependency", "") or "")
     if dependency:
         scope["dependencies"] = [dependency]
+    signal = str(params.get("signal", "") or "")
+    if signal:
+        scope["signals"] = [signal]
+    url = str(params.get("url", "") or "")
+    if url:
+        scope["urls"] = [url]
+    accounts = sorted({
+        str(m).strip().lower() for m in _seq(params.get("maintainers"))
+        if str(m).strip()
+    })
+    if accounts:
+        scope["maintainers"] = accounts
     if rule_id == "G004":
         # G004 joins on the (name, host) pair; keying on the name alone
         # collapsed two different remotes that happen to share a name.
         key = f"{dependency}:{host}"
+    elif rule_id == "G012":
+        key = signal
+    elif rule_id == "G013":
+        key = url
+    elif rule_id == "G014":
+        key = "adoption-window"
     else:
         key = (params.get("host") or params.get("literal")
                or params.get("literal_sha256")
@@ -432,6 +454,9 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
         return []
     host_to_campaign: dict[str, str] = {}
     target_to_campaign: dict[str, str] = {}
+    signal_to_campaign: dict[str, str] = {}
+    url_to_campaign: dict[str, str] = {}
+    maintainer_to_campaign: dict[str, str] = {}
     members_of: dict[str, set[str]] = {}
     for campaign in campaigns:
         scope = campaign.get("scope", {}) or {}
@@ -444,9 +469,21 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
             host_to_campaign.setdefault(str(host), campaign_id)
         for target in scope.get("targets", ()) or ():
             target_to_campaign.setdefault(str(target), campaign_id)
+        for signal in scope.get("signals", ()) or ():
+            signal_to_campaign.setdefault(str(signal), campaign_id)
+        for url in scope.get("urls", ()) or ():
+            url_to_campaign.setdefault(str(url), campaign_id)
+        for account in scope.get("maintainers", ()) or ():
+            maintainer_to_campaign.setdefault(str(account), campaign_id)
 
     by_campaign: dict[str, set[str]] = {}
     reasons: dict[str, set[str]] = {}
+
+    def _elevate(campaign_id: str, package: str, reason: str) -> None:
+        if campaign_id and package not in members_of.get(campaign_id, ()):
+            by_campaign.setdefault(campaign_id, set()).add(package)
+            reasons.setdefault(campaign_id, set()).add(reason)
+
     for record in records or ():
         if not isinstance(record, dict):
             continue
@@ -455,17 +492,30 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
         if isinstance(gained, str):
             gained = [gained]
         for host in gained:
-            campaign_id = host_to_campaign.get(str(host))
-            if campaign_id and package not in members_of.get(campaign_id, ()):
-                by_campaign.setdefault(campaign_id, set()).add(package)
-                reasons.setdefault(campaign_id, set()).add(f"gained host {host}")
+            _elevate(host_to_campaign.get(str(host)), package,
+                     f"gained host {host}")
         target = str(record.get("impersonated_target", "") or "")
         if target:
-            campaign_id = target_to_campaign.get(target)
-            if campaign_id and package not in members_of.get(campaign_id, ()):
-                by_campaign.setdefault(campaign_id, set()).add(package)
-                reasons.setdefault(campaign_id, set()).add(
-                    f"a new clone of impersonated {target}")
+            _elevate(target_to_campaign.get(target), package,
+                     f"a new clone of impersonated {target}")
+        rules = record.get("rules")
+        if isinstance(rules, str):
+            rules = [rules]
+        for signal in (rules if isinstance(
+                rules, (list, tuple, set, frozenset)) else ()):
+            _elevate(signal_to_campaign.get(str(signal)), package,
+                     f"fires campaign signal {signal}")
+        urls = record.get("payload_urls")
+        if isinstance(urls, str):
+            urls = [urls]
+        for url in (urls if isinstance(
+                urls, (list, tuple, set, frozenset)) else ()):
+            _elevate(url_to_campaign.get(str(url)), package,
+                     f"fetches campaign target {url}")
+        maintainer = str(record.get("maintainer", "") or "").strip().lower()
+        if maintainer:
+            _elevate(maintainer_to_campaign.get(maintainer), package,
+                     f"account {maintainer} is in the campaign")
     return [
         {
             "rule_id": "G006",
@@ -485,6 +535,7 @@ def _correlation_records(
     processed: set[str],
     popular: Optional[list[tuple[str, int]]] = None,
     source_repos: Optional[dict[str, set[str]]] = None,
+    detail: Optional[dict] = None,
 ) -> list[dict]:
     """Per-package records the G-series correlates.
 
@@ -496,6 +547,11 @@ def _correlation_records(
     already computed, so G003 can tell a maintainer co-adopting one variant
     family (one shared repo, H052's shape) from a coordinated takeover of
     unrelated packages.
+
+    ``detail`` is this cycle's per-package analysis detail.  It supplies the
+    rule ids G012 joins on and the payload URLs G013 joins on; absent detail
+    (a caller that only wants the artifact joins) leaves those feeds empty
+    rather than guessing.
     """
     from ..db import (
         correlation_feed,
@@ -505,6 +561,7 @@ def _correlation_records(
     )
 
     repo_index = source_repos or {}
+    detail_index = detail if isinstance(detail, dict) else {}
     cycle_observed_at = datetime.now(timezone.utc).isoformat()
 
     # record this cycle's maintainer transitions so the adoption_events view
@@ -533,6 +590,9 @@ def _correlation_records(
         info = feed.get(name, {})
         predicates = list(info.get("adoption_predicates", ()))
         meta = new_meta.get(name) or {}
+        package_detail = detail_index.get(name, {})
+        if not isinstance(package_detail, dict):
+            package_detail = {}
         records.append({
             "package": name,
             # A pkgbase's split outputs are one project, not several
@@ -558,6 +618,10 @@ def _correlation_records(
             "last_modified": meta.get("LastModified", 0),
             # G008: when the adoption event was observed (ISO timestamp).
             "adoption_observed_at": info.get("adoption_observed_at", ""),
+            # G012: this cycle's rule ids for the package (payload signals).
+            "rules": list(package_detail.get("rules", ()) or ()),
+            # G013: canonical URLs the payload findings reported.
+            "payload_urls": list(package_detail.get("payload_urls", ()) or ()),
         })
     return records
 
@@ -601,6 +665,7 @@ def _run_corpus_sweep(
     processed: set[str],
     scores: dict[str, int],
     popular: Optional[list[tuple[str, int]]] = None,
+    detail: Optional[dict] = None,
 ) -> list[dict]:
     """Run the Class D detectors and attach their additive weight.
 
@@ -640,7 +705,7 @@ def _run_corpus_sweep(
     from ..analysis.correlation import correlate, first_seen_adoption_burst
 
     records = _correlation_records(new_meta, old_meta, processed, popular,
-                                   source_repos)
+                                   source_repos, detail)
     config = load_config()
     findings.extend(correlate(records, config))
     # G008 reads the maintainer-event timeline to tell a first-seen account
@@ -1207,12 +1272,22 @@ def _run_baseline_build(
         # cross the bar alone), so it is tracked as its own tier.
         if any(f["rule_id"] in ("X026", "X027") for f in findings):
             refusals.add(name)
+        from ..analysis.payload_signals import payload_urls
+
+        try:
+            payload_targets = payload_urls(fact.score_breakdown)
+        except Exception:
+            # URL extraction is an auxiliary join feed; a malformed finding
+            # must not abort the cycle or the package's stored result.
+            payload_targets = []
+
         detail[name] = {
             "score": fact.final_score,
             "old_version": old_snapshot["version"] if old_snapshot else "",
             "new_version": fact.new_version or meta.get("Version", ""),
             "last_modified": meta.get("LastModified"),
             "rules": [f["rule_id"] for f in findings],
+            "payload_urls": payload_targets,
             "findings": findings,
         }
         return "ok"
@@ -1322,7 +1397,8 @@ def _run_baseline_build(
     # the snapshot advances, as in the removals-only path: a crash between
     # the two used to leave the snapshot at the new state with the cycle's
     # events unrecorded, and the next run diffed the loss away.
-    cluster_findings = _run_corpus_sweep(new_meta, old_meta, processed, scores, popular)
+    cluster_findings = _run_corpus_sweep(
+        new_meta, old_meta, processed, scores, popular, detail)
     _report_expired_campaigns(_log)
     _record_cycle_feed(new_meta, old_meta, added, changed, removed)
     save_metadata(new_meta, _meta_snapshot_path())
