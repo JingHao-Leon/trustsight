@@ -6,6 +6,7 @@ same reference facts in the default suite, so a migration that makes the
 delta disagree with the summary machinery fails locally.
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -27,3 +28,20 @@ corpus_mark = pytest.mark.skipif(
 def test_change_delta_parity_over_a_corpus_sample():
     mismatches = replay(sample=37)
     assert not mismatches, f"ChangeDelta parity mismatches: {mismatches[:10]}"
+
+
+@corpus_mark
+def test_the_parallel_replay_agrees_with_the_serial_one():
+    """The fork pool must return the serial result, order and all.
+
+    Run as a subprocess: the pool forks, and forking the live pytest
+    process (capture, hypothesis threads) deadlocks.  The standalone
+    script is exactly what CI runs.
+    """
+    script = Path(__file__).resolve().parent / "harness" / "change_parity.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "--sample", "37", "--jobs", "2"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "all diffs agree" in result.stdout

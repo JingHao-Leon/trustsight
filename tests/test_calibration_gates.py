@@ -137,3 +137,29 @@ def test_the_runner_reports_a_gate_per_plan_line(results):
 def test_manifest_benign_corpus_stays_clean():
     """The scored U-rules never fire on a benign manifest edit."""
     _assert(gates.gate_manifest_benign_corpus())
+
+
+def test_scan_rows_artifact_round_trips(tmp_path):
+    """The H-series audit reads the gates' scan, not a second one.
+
+    ``--rows`` writes the per-diff fired ids the audit needs; these must
+    survive the round trip unchanged, or the audit silently measures
+    something other than the run the gates passed.
+    """
+    import h_reduction_audit as audit
+
+    benign = [
+        {"entries": [{"rule_id": "H001"}, {"rule_id": "D002", "weight": 0}]},
+        {"entries": [{"rule_id": "H001"}]},
+    ]
+    malicious = [{"fired": {"S001", "H001"}}, {"fired": set()}]
+    path = tmp_path / "scan-rows.json"
+    gates._write_scan_rows(path, benign, malicious)
+
+    benign_rows, malicious_rows = audit._load_rows(path)
+    assert benign_rows == [["H001", "D002"], ["H001"]]
+    assert malicious_rows == [["H001", "S001"], []]
+    assert audit._rule_indices(benign_rows) == {"H001": {0, 1}, "D002": {0}}
+    counts, sets = audit._counts_and_sets(malicious_rows)
+    assert counts == {"S001": 1, "H001": 1}
+    assert sets == {"S001": {0}, "H001": {0}}

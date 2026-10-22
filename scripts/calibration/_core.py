@@ -26,7 +26,7 @@ from trustsight.rules import (
 from trustsight.sandbox.client import reset_after_fork
 from trustsight.sandbox.git_client import reset_after_fork as reset_git_after_fork
 
-__all__ = ['CLASS_C_RULES', 'CLASS_D_RULES', 'CRITICAL_MIN_SCORE', 'FIXTURES', 'Gate', 'MANIFEST_CORPUS', 'MAX_BENIGN_FIRE_RATE', 'MAX_SCORE_SIZE_CORRELATION', 'MAX_X_RATE_DRIFT', 'ROOT', 'X_RULES', '_GAP_PRIOR_RULES', '_META_ESCALATORS', '_NOT_RULES', '_S_RULES', '_WORKER_CONFIG', '_WORKER_INCLUDE_LOCATION', '_WORKER_RULES', '_benign_plan', '_benign_row', '_diff_line_count', '_fixture_failures', '_gap_detected_by_another_rule', '_init_worker', '_is_attack_fixture', '_malicious_row', '_ordered_benign_packages', '_precompile_patterns', '_resolve_jobs', '_scan_corpus_parallel', '_scan_corpus_serial', '_scan_malicious_task', '_scan_package_task', 'default_jobs', 'pearson', 'percentile', 'scan_corpus', 'scan_malicious', 'shipped_config', 'warm_dependency_corpus']
+__all__ = ['CLASS_C_RULES', 'CLASS_D_RULES', 'CRITICAL_MIN_SCORE', 'FIXTURES', 'Gate', 'MANIFEST_CORPUS', 'MAX_BENIGN_FIRE_RATE', 'MAX_SCORE_SIZE_CORRELATION', 'MAX_X_RATE_DRIFT', 'ROOT', 'X_RULES', '_GAP_PRIOR_RULES', '_META_ESCALATORS', '_NOT_RULES', '_S_RULES', '_WORKER_CONFIG', '_WORKER_INCLUDE_LOCATION', '_WORKER_RULES', '_benign_plan', '_benign_row', '_diff_line_count', '_fixture_failures', '_gap_detected_by_another_rule', '_init_worker', '_is_attack_fixture', '_malicious_row', '_ordered_benign_packages', '_precompile_patterns', '_resolve_jobs', '_scan_corpus_parallel', '_scan_corpus_serial', '_scan_malicious_task', '_scan_package_task', '_scan_task', '_shard_tasks', 'default_jobs', 'pearson', 'percentile', 'scan_corpus', 'scan_corpus_tasks', 'scan_malicious', 'shipped_config', 'warm_dependency_corpus']
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -182,10 +182,17 @@ def _ordered_benign_packages(corpus: Path) -> dict[str, list[Path]]:
         by_pkg[path.name.split("__")[0]].append(path)
     return by_pkg
 
-def _scan_corpus_serial(
+def _scan_corpus_serial_legacy(
     corpus: Path, sample: int, config: dict, rules,
     include_location: bool,
 ) -> list[dict]:
+    """The original single-process walk: no plan pass, shared novelty state.
+
+    Kept for ``jobs=1`` callers (the sampled test suite) because it reads
+    each diff once; the plan-based serial path reads them twice to
+    precompute prefixes.  ``tests/test_parallel_corpus.py`` pins it to the
+    plan-based result.
+    """
     by_pkg = _ordered_benign_packages(corpus)
     seen_urls: dict[str, set[str]] = {}
     results: list[dict] = []
@@ -200,6 +207,123 @@ def _scan_corpus_serial(
                              package_name=pkg, seen_urls=seen_urls)
             results.append(_benign_row(pkg, path, text, fact, include_location))
     return results
+
+def _scan_task(task, rules, config: dict,
+               include_location: bool) -> list[dict]:
+    """Scan one package task: its diffs stay serial, novelty in order."""
+    package, paths, prefix = task
+    pkg_seen: set[str] = set()
+    global_seen = set(prefix)
+    rows = []
+    for path_str in paths:
+        path = Path(path_str)
+        text = path.read_text(errors="replace")
+        fact = scan_diff(
+            text, rules=rules, config=config, package_name=package,
+            seen_urls={package: pkg_seen, _GLOBAL_URL_KEY: global_seen},
+        )
+        rows.append(_benign_row(package, path, text, fact, include_location))
+    return rows
+
+def _shard_tasks(plan, shard):
+    """``(task_index, task)`` pairs for shard ``I/N``, or the whole plan.
+
+    Indexing is the position in the plan (not the raw package walk), so
+    every shard agrees on which tasks are its own.  The plan carries each
+    package's precomputed novelty prefix, so a subset produces exactly the
+    rows a whole run does.
+    """
+    if shard is None:
+        return list(enumerate(plan))
+    index, total = shard
+    return [(i, task) for i, task in enumerate(plan) if i % total == index]
+
+def _scan_corpus_serial(plan, shard, rules, config: dict,
+                        include_location: bool) -> list[tuple[int, list[dict]]]:
+    return [
+        (index, _scan_task(task, rules, config, include_location))
+        for index, task in _shard_tasks(plan, shard)
+    ]
+
+def _scan_package_task(task):
+    return _scan_task(
+        task, _WORKER_RULES, _WORKER_CONFIG, _WORKER_INCLUDE_LOCATION
+    )
+
+def _scan_corpus_parallel(
+    plan, shard, workers: int, rules, config: dict, include_location: bool
+) -> list[tuple[int, list[dict]]]:
+    selected = _shard_tasks(plan, shard)
+    tasks = [
+        (pkg, [str(p) for p in paths], prefix)
+        for _index, (pkg, paths, prefix) in selected
+    ]
+    context = multiprocessing.get_context("fork")
+    with ProcessPoolExecutor(
+        max_workers=workers, mp_context=context,
+        initializer=_init_worker,
+        initargs=(str(config_module.CONFIG_DIR), str(db_module.DATA_DIR),
+                  rules, config, include_location),
+    ) as pool:
+        results: list[tuple[int, list[dict]]] = []
+        for (index, _task), package_rows in zip(
+                selected, pool.map(_scan_package_task, tasks, chunksize=1)):
+            results.append((index, package_rows))
+    return results
+
+def scan_corpus_tasks(
+    corpus: Path, sample: int = 1, jobs: int | None = None,
+    include_location: bool = False, shard: tuple[int, int] | None = None,
+) -> list[tuple[int, list[dict]]]:
+    """Indexed per-package scan rows: the unit ``scan_corpus`` flattens.
+
+    ``shard=(I, N)`` keeps tasks whose plan index is ``I mod N``; the
+    index travels with each task so a caller can merge shards back into
+    whole-corpus order.  Every task carries its precomputed novelty
+    prefix, so sharding never changes a row.
+    """
+    ensure_default_configs()
+    config = load_config()
+    rules = load_rules()
+    workers = _resolve_jobs(jobs)
+    if workers <= 1:
+        plan = _benign_plan(corpus, sample, config)
+        return _scan_corpus_serial(plan, shard, rules, config, include_location)
+    # Decide pattern safety on the idle parent; the forked workers inherit
+    # the verdict.  The schema exists before workers open read connections.
+    _precompile_patterns(rules)
+    db_module.init_db()
+    plan = _benign_plan(corpus, sample, config)
+    return _scan_corpus_parallel(
+        plan, shard, workers, rules, config, include_location
+    )
+
+def scan_corpus(
+    corpus: Path, sample: int = 1, jobs: int | None = None,
+    include_location: bool = False, shard: tuple[int, int] | None = None,
+) -> list[dict]:
+    """Scan every (or every *sample*-th) benign diff.
+
+    Novelty is order-dependent, so the replay walks packages in a stable
+    order - the same shape as ``rebaseline.py``.  Sampling keeps that
+    property by thinning whole packages' diffs uniformly rather than
+    reordering them.  ``jobs`` > 1 runs packages in worker processes: each
+    package's diffs stay serial inside its worker and the global URL prefix
+    is precomputed exactly, so the results are the serial results.
+    ``include_location`` adds the finding's file and line to each entry.
+    ``shard`` restricts the scan to one slice of the plan (see
+    :func:`scan_corpus_tasks`); the merged shards equal the whole run.
+    """
+    if shard is None and _resolve_jobs(jobs) <= 1:
+        ensure_default_configs()
+        return _scan_corpus_serial_legacy(
+            corpus, sample, load_config(), load_rules(), include_location)
+    return [
+        row
+        for _index, rows in scan_corpus_tasks(
+            corpus, sample, jobs, include_location, shard)
+        for row in rows
+    ]
 
 def _benign_plan(
     corpus: Path, sample: int, config: dict
@@ -264,7 +388,12 @@ def _init_worker(
         except Exception:
             pass
         db_module._local.cached = None
-    db_module.init_db()
+    # The parent ran ``init_db()`` before forking, so the schema already
+    # exists at this same path.  Re-running it here is not harmless: its
+    # ``DROP VIEW IF EXISTS ...; CREATE VIEW ...`` pair is not atomic, and
+    # eight workers racing it intermittently killed one with
+    # ``view gained_hosts_window already exists`` (a BrokenProcessPool).
+    # Each worker opens its own lazy connection to the existing schema.
     reset_after_fork()
     reset_git_after_fork()
     _WORKER_RULES = rules
@@ -284,70 +413,6 @@ def _precompile_patterns(rules) -> None:
     resolve_generated_patterns(rules)
     precompile_patterns(r.get("pattern", "") for r in rules)
     precompile_structural_patterns()
-
-def _scan_package_task(task):
-    package, paths, prefix = task
-    pkg_seen: set[str] = set()
-    global_seen = set(prefix)
-    rows = []
-    for path_str in paths:
-        path = Path(path_str)
-        text = path.read_text(errors="replace")
-        fact = scan_diff(
-            text, rules=_WORKER_RULES, config=_WORKER_CONFIG,
-            package_name=package,
-            seen_urls={package: pkg_seen, _GLOBAL_URL_KEY: global_seen},
-        )
-        rows.append(
-            _benign_row(package, path, text, fact, _WORKER_INCLUDE_LOCATION)
-        )
-    return rows
-
-def _scan_corpus_parallel(
-    plan, workers: int, rules, config: dict, include_location: bool
-) -> list[dict]:
-    tasks = [
-        (pkg, [str(p) for p in paths], prefix)
-        for pkg, paths, prefix in plan
-    ]
-    context = multiprocessing.get_context("fork")
-    with ProcessPoolExecutor(
-        max_workers=workers, mp_context=context,
-        initializer=_init_worker,
-        initargs=(str(config_module.CONFIG_DIR), str(db_module.DATA_DIR),
-                  rules, config, include_location),
-    ) as pool:
-        results: list[dict] = []
-        for package_rows in pool.map(_scan_package_task, tasks, chunksize=1):
-            results.extend(package_rows)
-    return results
-
-def scan_corpus(
-    corpus: Path, sample: int = 1, jobs: int | None = None,
-    include_location: bool = False,
-) -> list[dict]:
-    """Scan every (or every *sample*-th) benign diff.
-
-    Novelty is order-dependent, so the replay walks packages in a stable
-    order - the same shape as ``rebaseline.py``.  Sampling keeps that
-    property by thinning whole packages' diffs uniformly rather than
-    reordering them.  ``jobs`` > 1 runs packages in worker processes: each
-    package's diffs stay serial inside its worker and the global URL prefix
-    is precomputed exactly, so the results are the serial results.
-    ``include_location`` adds the finding's file and line to each entry.
-    """
-    ensure_default_configs()
-    config = load_config()
-    rules = load_rules()
-    workers = _resolve_jobs(jobs)
-    if workers <= 1:
-        return _scan_corpus_serial(corpus, sample, config, rules, include_location)
-    # Decide pattern safety on the idle parent; the forked workers inherit
-    # the verdict.  The schema exists before workers open read connections.
-    _precompile_patterns(rules)
-    db_module.init_db()
-    plan = _benign_plan(corpus, sample, config)
-    return _scan_corpus_parallel(plan, workers, rules, config, include_location)
 
 def _malicious_row(group: str, path: Path, fact, expected: dict) -> dict:
     return {

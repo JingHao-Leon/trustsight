@@ -71,28 +71,51 @@ def cofire_row(left: str, right: str,
     }
 
 
+def _rule_indices(per_diff: list[list[str]]) -> dict[str, set[int]]:
+    """Rule id -> the diff indices it fired on, from per-diff rule lists."""
+    fired: dict[str, set[int]] = {}
+    for index, rule_ids in enumerate(per_diff):
+        for rule_id in rule_ids:
+            fired.setdefault(rule_id, set()).add(index)
+    return fired
+
+
 def _fired_sets() -> dict[str, set[int]]:
     """Rule id -> the set of corpus-diff indices (benign) it fired on."""
     benign = gates.scan_corpus(
         gates.FIXTURES / "benign-corpus", sample=1, jobs=gates.default_jobs())
-    fired: dict[str, set[int]] = {}
-    for index, row in enumerate(benign):
-        for entry in row["entries"]:
-            fired.setdefault(entry["rule_id"], set()).add(index)
-    return fired
+    return _rule_indices([[e["rule_id"] for e in row["entries"]]
+                          for row in benign])
 
 
 def _malicious_sets() -> tuple[dict[str, int], dict[str, set[int]]]:
     """Counts per rule and rule -> the malicious-fixture indices it fired on."""
     malicious = gates.scan_malicious(
         gates.FIXTURES / "malicious", jobs=gates.default_jobs())
+    return _counts_and_sets([sorted(row["fired"]) for row in malicious])
+
+
+def _counts_and_sets(
+    per_diff: list[list[str]],
+) -> tuple[dict[str, int], dict[str, set[int]]]:
     counts: dict[str, int] = {}
     sets: dict[str, set[int]] = {}
-    for index, row in enumerate(malicious):
-        for rule_id in row["fired"]:
+    for index, rule_ids in enumerate(per_diff):
+        for rule_id in rule_ids:
             counts[rule_id] = counts.get(rule_id, 0) + 1
             sets.setdefault(rule_id, set()).add(index)
     return counts, sets
+
+
+def _load_rows(path: Path) -> tuple[list[list[str]], list[list[str]]]:
+    """The fired rule ids calibration_gates wrote, or a hard error.
+
+    The audit's whole point is that it reads the corpus the gates measured,
+    so a stale or sampled file must not silently stand in for it.  The
+    caller only reaches here with the whole-corpus file ``--rows`` names.
+    """
+    data = json.loads(Path(path).read_text())
+    return data["benign"], data["malicious"]
 
 
 def main(argv: list[str]) -> int:
@@ -100,10 +123,19 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--sample", type=int, default=1)
     parser.add_argument("--epsilon", type=float, default=0.95)
     parser.add_argument("--json", type=Path)
+    parser.add_argument("--rows", type=Path,
+                        help="Reuse the per-diff fired rule ids written by "
+                             "`calibration_gates.py --rows` instead of "
+                             "re-scanning the corpus")
     args = parser.parse_args(argv)
 
-    fired = _fired_sets()
-    mal_counts, mal_sets = _malicious_sets()
+    if args.rows:
+        benign_rows, malicious_rows = _load_rows(args.rows)
+        fired = _rule_indices(benign_rows)
+        mal_counts, mal_sets = _counts_and_sets(malicious_rows)
+    else:
+        fired = _fired_sets()
+        mal_counts, mal_sets = _malicious_sets()
 
     # The history cycles exercise the observation-history rules the
     # stateless corpus cannot, so they join the co-fire measurement.

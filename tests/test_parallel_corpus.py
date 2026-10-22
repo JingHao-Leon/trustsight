@@ -61,3 +61,29 @@ def test_parallel_rows_equal_serial_rows():
             serial = gates.scan_corpus(corpus, sample=1, jobs=1)
             parallel = gates.scan_corpus(corpus, sample=1, jobs=2)
     assert serial == parallel
+
+
+def test_sharded_rows_merge_to_the_whole_scan():
+    """A shard is a slice of the plan, not a different measurement."""
+    with tempfile.TemporaryDirectory() as tmp:
+        corpus = _write_corpus(Path(tmp))
+        with gates.shipped_config():
+            full = gates.scan_corpus_tasks(corpus, sample=1, jobs=1)
+        parts = []
+        for index in range(3):
+            with gates.shipped_config():
+                parts += gates.scan_corpus_tasks(
+                    corpus, sample=1, jobs=1, shard=(index, 3))
+        merged = [rows for _index, rows in sorted(parts, key=lambda t: t[0])]
+        assert merged == [rows for _index, rows in full]
+
+
+def test_shard_artifact_round_trips_to_the_whole_scan(tmp_path):
+    """The JSON artifact the CI merge reads restores rows and their order."""
+    corpus = _write_corpus(tmp_path)
+    with gates.shipped_config():
+        full = gates.scan_corpus_tasks(corpus, sample=1, jobs=1)
+    artifact = tmp_path / "shard-0.json"
+    gates.scan_shard(corpus, sample=1, jobs=1, shard=(0, 1), out=artifact)
+    merged = gates.merge_shard_rows(tmp_path, corpus)
+    assert merged == [row for _index, rows in full for row in rows]
