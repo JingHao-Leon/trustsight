@@ -410,6 +410,12 @@ The release tarball refuses a worktree with untracked files and names what it fo
 
 **Enforced by:** `scripts/build_release_tarball.py` and [Releasing](contributing/releasing.md).
 
+### A baseline release ships the whole signed family
+
+A `baseline-*` release is not a place for one convenient asset. It ships `baseline-seed.tar.gz`, `baseline-corpus.tar.zst` and `baseline-manifest.json`, each with its detached `.sig` under the pinned distribution key. The manifest records every asset's SHA-256 and size, and the tool refuses a download whose signature does not verify. The CI-only calibration corpus (`baseline-benign-corpus.tar.gz`) is the one deliberate exception: it is unsigned because the tool never consumes it, and its bytes are anchored by `corpus_content_sha256` in `baseline.json`. Publishing a partial or unsigned family is a release defect, not a shortcut.
+
+**Enforced by:** `scripts/build_release_baselines.py`, `scripts/pack_calibration_corpus.py`, `.github/workflows/baselines.yml` and [Publishing Baselines](contributing/publishing-baselines.md).
+
 ### Gates report measured values
 
 A gate returns what it measured, not just pass or fail. A gate that cannot name its measurement is not a gate.
