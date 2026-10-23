@@ -8,7 +8,7 @@ from ...config import (
 )
 from ._common import _EXEC_WRAPPER
 
-__all__ = ['X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough']
+__all__ = ['X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough', '_x024_is_test_pythonpath']
 
 _X017_FIND_RE = re.compile(
     r"\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
@@ -181,6 +181,28 @@ X024_RE = re.compile(
 )
 
 _X024_VALUE_VAR_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
+
+def _x024_is_test_pythonpath(body: str, match: re.Match,
+                            function: str | None) -> bool:
+    """True for ``PYTHONPATH=...`` before a test runner inside ``check()``.
+
+    `PYTHONPATH` names a module search path, not code the shell runs.  A
+    package that points it at the staged test tree before running pytest is
+    ordinary packaging; X012 still claims the dangerous shape (a library
+    path pointed into the source tree).  A command substitution keeps the
+    finding: the value is then produced by shell code, not a literal path.
+    """
+    var = match.groupdict().get("x024var", "")
+    if var.upper() != "PYTHONPATH":
+        return False
+    value = match.group(0)
+    if "$(" in value or "`" in value:
+        return False
+    tail = body[match.end():].lstrip(" \t\"';|&")
+    token = tail.split(None, 1)[0].strip("\"'").lower() if tail else ""
+    return token in {"python", "python3", "pypy3"} or token.startswith(
+        ("pytest", "py.test", "tox", "nox", "nose", "unittest"))
+
 
 def _x024_is_passthrough(body: str, match: re.Match) -> bool:
     """True when the indirect value is the assigned variable's own name.

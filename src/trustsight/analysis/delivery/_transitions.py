@@ -7,8 +7,11 @@ from ...config import (
 from ...diffdoc import parse_diff_lines
 from ...tokenizer import split_lines
 from ._common import _VCS_SOURCE_RE, _source_basename
+from ...deps import _strip_comment
+from ...line_lex import _printed_heredoc_body_indices
+from ...rules import _PRINTER_LINE_RE, _blank_quoted, _printer_quote_body_indices
 
-__all__ = ['_FLOATING_PATH_RE', '_SOURCE_ARRAY_NAME_RE', '_URL_HOST_RE', '_pinning_of', '_recipe_states', '_registered_domain_of', '_source_urls_by_local_name', 'install_hook_transition', 'pinning_lost', 'source_name_host_swaps']
+__all__ = ['_FLOATING_PATH_RE', '_SOURCE_ARRAY_NAME_RE', '_URL_HOST_RE', '_pinning_of', '_recipe_states', '_registered_domain_of', '_source_urls_by_local_name', 'install_hook_notice_only', 'install_hook_transition', 'pinning_lost', 'source_name_host_swaps']
 
 _SOURCE_ARRAY_NAME_RE = re.compile(r"^source(?:_[a-z0-9_]+)?$")
 
@@ -92,6 +95,78 @@ def source_name_host_swaps(
         if old_dom and new_dom and old_dom != new_dom:
             swaps.append((name, old_host, new_host, old_dom, new_dom, new_span))
     return swaps
+
+_HOOK_SAFE_LINE_RE = re.compile(
+    r"^(?:_?[A-Za-z]\w*\s*\(\)\s*\{.*|"
+    r"cat|echo|printf|msg|note|warning|error|info|local|unset|tput|true|false|:|"
+    r"if|then|else|elif|fi|\[\[?|\]\]?)",
+    re.IGNORECASE,
+)
+_CAT_LINE_RE = re.compile(r"^\s*cat\b")
+_HOOK_DANGER_RE = re.compile(
+    r"\b(?:curl|wget|nc|ncat|socat|bash|sh|zsh|dash|ksh|python3?|perl|ruby|node|"
+    r"php|lua|chmod|chown|chattr|rm|mv|cp|install|ln|mkdir|touch|tee|dd|"
+    r"systemctl|pacman|unshare|sudo|su|doas|eval|source)\b|(?:^|[;&|]\s*)\."
+)
+
+
+def install_hook_notice_only(diff_text: str, hook_name: str = "") -> bool:
+    """True when the added install hook only prints text.
+
+    A notice-only hook (libfprint's transitional package, aqua's PATH hint)
+    runs as root but changes nothing: it is a real `install=` transition,
+    not a reason to raise H100 to HIGH.  Heredoc bodies and printer-quoted
+    text are blanked before the line scan, so a message that mentions a
+    dangerous command is still a message.
+    """
+    doc = parse_diff_lines(split_lines(diff_text))
+    for file in doc.files:
+        if not file.path.endswith(".install") or file.status == "removed":
+            continue
+        if hook_name and file.path.rsplit("/", 1)[-1] != hook_name:
+            continue
+        text = "\n".join(
+            line.content for line in doc.lines
+            if line.file == file.path and line.side in ("add", "context")
+        )
+        if not text.strip():
+            return False
+        body_lines = split_lines(text)
+        defined = {
+            match.group(1) for line in body_lines
+            if (match := re.match(r"\s*([A-Za-z_]\w*)\s*\(\)", line))
+        }
+        heredoc_delimiters = {
+            match.group(1)
+            for line in body_lines
+            if (match := re.search(r"<<-?\s*[\"']?([A-Za-z_]\w*)", line))
+        }
+        printed = _printed_heredoc_body_indices(body_lines)
+        quoted = _printer_quote_body_indices(body_lines)
+        saw_printer = False
+        for index, raw in enumerate(body_lines):
+            if index in printed or index in quoted:
+                continue
+            line = _strip_comment(raw).strip()
+            if not line:
+                continue
+            if _PRINTER_LINE_RE.match(raw) or _CAT_LINE_RE.match(raw):
+                saw_printer = True
+                line = _blank_quoted(line)
+            if line in ("{", "}") or line in heredoc_delimiters:
+                continue
+            if _HOOK_DANGER_RE.search(line):
+                return False
+            call = re.match(r"^([A-Za-z_]\w*)\s*;?$", line)
+            if call and call.group(1) in defined:
+                continue
+            if _HOOK_SAFE_LINE_RE.match(line):
+                continue
+            # A command not on the safe list is behaviour, not a notice.
+            return False
+        return saw_printer
+    return False
+
 
 def install_hook_transition(
     diff_text: str,

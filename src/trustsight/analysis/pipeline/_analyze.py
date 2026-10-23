@@ -396,7 +396,12 @@ def analyze_package(
         if pkg_row and pkg_row.get("current_maintainer"):
             old_maintainer = pkg_row["current_maintainer"]
 
-    maintainer_changed = bool(old_maintainer and new_maintainer and old_maintainer != new_maintainer)
+    from ..maintainer import maintainer_identity
+
+    maintainer_changed = bool(
+        old_maintainer and new_maintainer
+        and maintainer_identity(old_maintainer) != maintainer_identity(new_maintainer)
+    )
 
     # An acknowledged URL is known to the operator for this package, so it
     # contributes no novelty and no bucket prior.  The structural rules

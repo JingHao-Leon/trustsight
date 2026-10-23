@@ -380,22 +380,58 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
     # `checkdepends` eliminates the test-suite execution outright, so it is
     # the HIGH candidate the spec gates on fire rates; `optdepends` removal
     # is far more often cleanup, so it stays MEDIUM.
-    for name in ("checkdepends", "optdepends"):
-        lost = array_diff(_family_values(pre.arrays, name),
-                          _family_values(post.arrays, name)).lost
-        if not lost:
-            continue
-        touched = any(
-            pre.functions.get(fn) != post.functions.get(fn)
-            for fn in ("build", "prepare", "check")
-        )
-        if touched:
-            severity = "HIGH" if name == "checkdepends" else "MEDIUM"
-            add("C021", "Dependency Removal During A Build Change", severity,
-                "composition",
-                f"{name} lost {', '.join(sorted(set(lost))[:3])} while a "
-                "build function changed",
-                line=None, field=name, lost=", ".join(sorted(set(lost))[:5]))
+    # A transitional package removes the build function itself; there is no
+    # build change left to hide a removed check behind.  C021's claim is
+    # "tests/dependencies were dropped while the build changed", not "the
+    # package stopped building".
+    build_remains = any(post.functions.get(fn) for fn in
+                        ("build", "prepare", "check"))
+    # A dependency moved between arrays (optdepends -> checkdepends) was
+    # reclassified, not lost.
+    def dependency_name(entry: str) -> str:
+        # `foo: description`, `foo>=1.0`, `foo=1:2` all name `foo`.
+        return re.split(r"[:<>=]", str(entry), maxsplit=1)[0].strip().lower()
+
+    post_dependencies = {
+        dependency_name(entry)
+        for field in ("depends", "makedepends", "checkdepends",
+                      "optdepends", "provides", "replaces", "conflicts")
+        for entry in _family_values(post.arrays, field)
+    }
+    if build_remains:
+        for name in ("checkdepends", "optdepends"):
+            lost = [
+                entry for entry in array_diff(
+                    _family_values(pre.arrays, name),
+                    _family_values(post.arrays, name)).lost
+                if dependency_name(entry) not in post_dependencies
+            ]
+            if not lost:
+                continue
+            if name == "checkdepends":
+                # Removing a coverage/lint plugin while the runner and the
+                # rest of the check dependencies remain does not eliminate
+                # the test-suite execution C021 claims to protect.  Only a
+                # removed runner (or an emptied array) is the HIGH shape.
+                runners = [
+                    entry for entry in lost
+                    if re.search(r"(?:^|[-_])(?:pytest|py\.test|nose2?|tox|"
+                                 r"unittest|bats|prove)$", dependency_name(entry))
+                ]
+                if not runners and _family_values(post.arrays, name):
+                    continue
+                lost = runners or lost
+            touched = any(
+                pre.functions.get(fn) != post.functions.get(fn)
+                for fn in ("build", "prepare", "check")
+            )
+            if touched:
+                severity = "HIGH" if name == "checkdepends" else "MEDIUM"
+                add("C021", "Dependency Removal During A Build Change", severity,
+                    "composition",
+                    f"{name} lost {', '.join(sorted(set(lost))[:3])} while a "
+                    "build function changed",
+                    line=None, field=name, lost=", ".join(sorted(set(lost))[:5]))
 
     # G4 (C022): verification downgraded to a weaker algorithm.  The
     # strongest array must be *declared removed in this diff* (a partial

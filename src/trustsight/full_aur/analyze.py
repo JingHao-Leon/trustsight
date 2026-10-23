@@ -568,8 +568,11 @@ def analyze_package_text(
     pkg_row = get_package(pkg_name)
     if pkg_row and pkg_row.get("current_maintainer"):
         old_maintainer = pkg_row["current_maintainer"]
+    from ..analysis.maintainer import maintainer_identity
+
     maintainer_changed = bool(
-        old_maintainer and maintainer and old_maintainer != maintainer
+        old_maintainer and maintainer
+        and maintainer_identity(old_maintainer) != maintainer_identity(maintainer)
     )
 
     from ..recipedoc import parse_recipe as _parse_recipe

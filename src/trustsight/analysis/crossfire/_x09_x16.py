@@ -248,7 +248,13 @@ X014_STANDDOWN_RE = re.compile(
     # `install`, `cp`, `mv` and `ln` name paths to copy; their arguments
     # are not exec slots. `rsync` is deliberately absent - its `-e` names
     # the transport program it runs.
-    r"(?:\A\s*|[;&|(]\s*|&&\s*)(?:install|cp|mv|ln)\s"
+    # A normal interpreter invocation (`python -P "$srcdir/test.py"`) is a
+    # command, not a flag whose value the tool will execute.  The flag arm
+    # below is flag-agnostic, so without this it read Python's `-P` as an
+    # exec slot whenever a build-tree script followed.
+    r"(?:\A\s*|[;&|(]\s*|&&\s*)(?:[A-Za-z_]\w*=\S+\s+)*"
+    r"(?:python3?|pypy3?)\b[^\n;&|]*?\s-\S+\s+[\"']?\$\{?(?:srcdir|startdir|PWD|BUILDDIR)\}?/"
+    r"|(?:\A\s*|[;&|(]\s*|&&\s*)(?:install|cp|mv|ln)\s"
     r"|=\s*[\"']?(?:cat|true|false|:|/bin/true|/usr/bin/true|less|more|vi|vim"
     r"|nano|/dev/null)[\"']?\s*(?:;|$)",
     re.IGNORECASE,

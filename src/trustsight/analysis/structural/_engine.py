@@ -20,6 +20,7 @@ from ..build import (
 )
 from ..delivery import (
     _delivery_findings,
+    install_hook_notice_only,
     install_hook_transition,
     pinning_lost,
     source_name_host_swaps,
@@ -379,13 +380,17 @@ def _structural_findings(
     # declaration alone moves (the script may predate it).
     old_hook, new_hook, hook_in_diff, hook_span = install_hook_transition(diff_text)
     if new_hook and old_hook != new_hook:
+        notice_only = install_hook_notice_only(diff_text, new_hook)
         add("H100", "Install Hook Added Or Retargeted",
-            "HIGH" if hook_in_diff else "MEDIUM", "installer",
+            "INFO" if notice_only else ("HIGH" if hook_in_diff else "MEDIUM"),
+            "installer",
             (f"install hook retargeted: {old_hook} -> {new_hook}" if old_hook
              else f"install hook added: {new_hook}")
-            + ("; hook script is in this diff" if hook_in_diff else ""),
+            + ("; hook script is in this diff" if hook_in_diff else "")
+            + ("; hook body only prints a notice" if notice_only else ""),
             span=hook_span,
-            old=old_hook, new=new_hook)
+            old=old_hook, new=new_hook,
+            weight_override=0 if notice_only else None)
 
     # H101 - a verifiable source becomes a moving target.  P008 says where
     # a floating source stands; this says the package *lost* pinning,
