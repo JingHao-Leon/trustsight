@@ -61,7 +61,7 @@ a check that samples.
    catches the sixth producer someone adds next year; calling the four you know
    about does not.
 5. **When only a behavioural gate is possible, loop over the sites** rather
-   than picking one. `terminal output is inert` renders through seven paths and
+   than picking one. `terminal output is inert` renders through eleven paths and
    names them in its output, so the gate's own result says what it covered.
 6. **If a path cannot be called without a CLI invocation, extract it.** A
    renderer that cannot be exercised cannot be gated, and an uncoverable path
@@ -82,8 +82,8 @@ Worth knowing when you are relying on one:
 `sandbox responses are capped before framing`,
 `every cited invariant is defined`, and `docs/security.md matches the gates`.
 
-**Behavioural, loop over every known site:** `terminal output is inert` (seven
-renderers, including the CLI stderr log handler), `reserved names are refused by every writer` (three writers),
+**Behavioural, loop over every known site:** `terminal output is inert` (eleven
+renderers, including `explain`, `forget` and the CLI stderr log handler), `reserved names are refused by every writer` (three writers),
 `FATAL rules cannot be switched off` (every shipped FATAL rule).
 
 **Structural, over a named set of modules:** `artifact reads are bounded before
