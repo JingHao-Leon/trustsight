@@ -18,6 +18,10 @@ import json
 import time
 from pathlib import Path
 
+from .bounded_io import ReadTooLarge, read_file_capped
+
+MAX_CHANNEL_STATE_BYTES = 1024 * 1024
+
 #: The kinds of channel this tracks.
 BASELINE = "baseline"
 IOC = "ioc"
@@ -32,7 +36,8 @@ def _path() -> Path:
 
 def _read() -> dict:
     try:
-        data = json.loads(_path().read_text(encoding="utf-8"))
+        data = json.loads(read_file_capped(
+            _path(), MAX_CHANNEL_STATE_BYTES, "channel pull state"))
     except Exception:  # noqa: BLE001 - a missing or corrupt file is a miss
         return {}
     return data if isinstance(data, dict) else {}

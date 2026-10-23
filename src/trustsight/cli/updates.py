@@ -21,6 +21,10 @@ from __future__ import annotations
 
 import json
 import os
+
+from ..bounded_io import read_file_capped
+
+MAX_UPDATE_CACHE_BYTES = 1024 * 1024
 import sys
 import time
 from pathlib import Path
@@ -68,7 +72,8 @@ def _cache_path() -> Path:
 def _read_cache(max_age: float) -> str | None:
     """The cached release tag when it is *max_age* seconds old or newer."""
     try:
-        data = json.loads(_cache_path().read_text(encoding="utf-8"))
+        data = json.loads(read_file_capped(
+            _cache_path(), MAX_UPDATE_CACHE_BYTES, "update cache"))
         if time.time() - float(data.get("checked_at", 0)) <= max_age:
             return str(data.get("latest", "") or "") or None
     except Exception:  # noqa: BLE001 - a missing or corrupt cache is a miss
@@ -124,7 +129,8 @@ def _pending_cache_path() -> Path:
 
 def _read_json_cache(path: Path, max_age: float) -> dict | None:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(read_file_capped(
+            path, MAX_UPDATE_CACHE_BYTES, "update cache"))
         if time.time() - float(data.get("checked_at", 0)) <= max_age:
             return data
     except Exception:  # noqa: BLE001 - a missing or corrupt cache is a miss

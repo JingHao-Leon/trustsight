@@ -487,8 +487,9 @@ def load_resume_state(path: Path | None = None) -> Optional[dict]:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text())
-    except (json.JSONDecodeError, OSError):
+        from ..bounded_io import read_file_capped
+        return json.loads(read_file_capped(path, 1024 * 1024, "resume state"))
+    except Exception:  # noqa: BLE001 - a bad resume file is a miss
         return None
 
 

@@ -219,7 +219,7 @@ def gate_every_stream_read_is_bounded() -> Gate:
         if path.name == _BOUNDED_IO_MODULE:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        path_owned = path.name in _PATH_READ_MODULES
+        path_owned = path.relative_to(SRC).as_posix() in _PATH_READ_MODULES
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue

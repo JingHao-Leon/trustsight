@@ -91,13 +91,15 @@ def watchlist_import(
     The document is the same shape the signed release carries; this path does
     not verify a signature, so use it only for a file you already trust.
     """
-    from ..watchlist import import_release
+    from ..bounded_io import read_file_capped
+    from ..watchlist import MAX_WATCHLIST_BYTES, import_release
 
     ensure_default_configs()
     init_db()
 
     try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        data = json.loads(read_file_capped(
+            Path(path), MAX_WATCHLIST_BYTES, "watchlist"))
         result = import_release(data, source=source or "")
     except (OSError, ValueError) as exc:
         if json_output:

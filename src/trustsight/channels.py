@@ -58,7 +58,8 @@ def channel_key_fingerprint(channel: release.Channel) -> str | None:
         if channel.key_bytes is not None:
             raw = channel.key_bytes
         elif channel.key_path is not None:
-            raw = Path(channel.key_path).read_bytes()
+            from .bounded_io import read_file_capped
+            raw = read_file_capped(Path(channel.key_path), 1024, "channel key")
         else:
             return None
     except OSError:
