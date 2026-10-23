@@ -59,6 +59,11 @@ def test_child_process_gate_rejects_an_exec_family_call(monkeypatch, tmp_path):
     assert not g.gate_every_child_process_gets_an_explicit_environment().passed
 
 
+def test_interpreter_gate_rejects_exec_family(monkeypatch, tmp_path):
+    _run(monkeypatch, tmp_path, "from os import execv\nexecv('/bin/sh', ['sh'])\n")
+    assert not g.gate_no_interpreter_calls().passed
+
+
 def test_child_process_gate_accepts_explicit_env(monkeypatch, tmp_path):
     _run(monkeypatch, tmp_path,
          "import subprocess\nsubprocess.run(['echo'], env={})\n")

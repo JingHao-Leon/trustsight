@@ -19,6 +19,13 @@ def gate_no_interpreter_calls() -> Gate:
                 name = _call_name(node)
                 if name in _FORBIDDEN_CALLS:
                     hits.append(f"{_rel(path)}:{node.lineno} {name}()")
+                if (name.startswith(("os.exec", "os.spawn", "posix_spawn", "pty.spawn", "runpy.run"))
+                        or name.split(".")[-1] in {
+                            "execv", "execve", "execvp", "execvpe", "fexecve",
+                            "spawnv", "spawnve", "spawnvp", "spawnvpe",
+                            "posix_spawn", "posix_spawnp",
+                        }):
+                    hits.append(f"{_rel(path)}:{node.lineno} {name}()")
                 if name.endswith("run") or name.endswith("Popen") or name.endswith("call"):
                     for kw in node.keywords:
                         if kw.arg == "shell" and not (
