@@ -107,6 +107,12 @@ def _classify_line_context(lines: list[str]) -> dict[int, str]:
             # function-body classification so the write rules see it.
             if not _unquoted_redirect_after(lex.text, open_quote):
                 contexts[i] = "message"
+            else:
+                # The quote closes and a real redirect follows, so the line
+                # is code.  It still needs a context: the quote-state scan
+                # below reads it.
+                contexts[i] = ("function_body"
+                               if depth > 0 or _inline_body(code) else "other")
         elif depth > 0 or _inline_body(code):
             contexts[i] = "function_body"
         else:

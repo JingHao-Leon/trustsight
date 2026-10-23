@@ -101,6 +101,18 @@ def test_scope_stays_in_the_body_past_a_quoted_close():
     assert contexts[4] == "other"
 
 
+def test_a_spanning_message_that_closes_with_a_redirect_gets_a_context():
+    """The quote-state scan reads contexts[i]; a closing redirect must set it."""
+    lines = [
+        '+post_install() {',
+        '+  echo "do not run these lines:',
+        '+  rm -rf /tmp/x" > /tmp/notice',
+        '+}',
+    ]
+    contexts = _classify_line_context(lines)
+    assert contexts[2] in {"function_body", "other"}
+
+
 def test_a_quoted_header_string_does_not_open_a_function():
     lines = ['+build() {', '+  echo "package() {"', "+  make", "+}"]
     enclosing = _enclosing_function_map(lines)
