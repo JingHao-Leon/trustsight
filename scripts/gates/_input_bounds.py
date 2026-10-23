@@ -39,63 +39,126 @@ def gate_every_child_process_gets_an_explicit_environment() -> Gate:
     an explicit ``env=`` - in practice ``trustsight.subproc.minimal_env()``.
     """
     calls = {
-        "subprocess.run", "subprocess.call", "subprocess.check_call",
-        "subprocess.check_output", "subprocess.Popen",
+        "run", "call", "check_call", "check_output", "Popen",
+        "execv", "execve", "execvp", "execvpe", "spawnv", "spawnve",
+        "spawnvp", "spawnvpe", "posix_spawn", "posix_spawnp", "spawn",
     }
     hits: list[str] = []
     for path in _python_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        imported: dict[str, str] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                prefix = node.module or ""
+                for alias in node.names:
+                    imported[alias.asname or alias.name] = f"{prefix}.{alias.name}".strip(".")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported[alias.asname or alias.name] = alias.name
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
-            name = _call_name(node)
-            if name not in calls:
+            raw = _call_name(node)
+            name = raw.split(".")[-1]
+            resolved = imported.get(raw, imported.get(raw.split(".")[0], raw))
+            if name not in calls and resolved.split(".")[-1] not in calls:
                 continue
             if not any(kw.arg == "env" for kw in node.keywords):
-                hits.append(f"{_rel(path)}:{node.lineno} {name} without env=")
+                hits.append(f"{_rel(path)}:{node.lineno} {raw} without env=")
     return Gate("every child process gets an explicit environment", not hits,
                 hits)
 
 def gate_network_is_confined() -> Gate:
-    """Only the listed fetch and notify modules may open a connection."""
+    """Only the listed fetch and notify modules may import or open a connection.
+
+    Both halves matter.  A call-name check alone misses ``requests.get`` and
+    an aliased ``from urllib.request import urlopen as fetch``; an import
+    check alone misses a transport reached through a helper.  Enumerating
+    imports also keeps a future module from opening a socket without ever
+    spelling one of the four names the old gate knew.
+    """
     hits: list[str] = []
+    banned_imports = {
+        "urllib.request", "http.client", "socket", "requests", "httpx",
+        "aiohttp", "ftplib", "telnetlib",
+    }
     for path in _python_files():
         rel = path.relative_to(SRC).as_posix()
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        allowed = rel in _NETWORK_MODULES
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in banned_imports and not allowed:
+                        hits.append(f"{_rel(path)}:{node.lineno} import {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module in banned_imports and not allowed:
+                    hits.append(f"{_rel(path)}:{node.lineno} from {module}")
+                elif module == "urllib" and any(a.name == "request" for a in node.names) and not allowed:
+                    hits.append(f"{_rel(path)}:{node.lineno} from urllib import request")
+                elif module == "http" and any(a.name == "client" for a in node.names) and not allowed:
+                    hits.append(f"{_rel(path)}:{node.lineno} from http import client")
+            if not isinstance(node, ast.Call) or allowed:
                 continue
             name = _call_name(node).split(".")[-1]
-            if name in _NETWORK_CALLS and rel not in _NETWORK_MODULES:
+            if name in _NETWORK_CALLS:
                 hits.append(f"{_rel(path)}:{node.lineno} {name}()")
     return Gate("network confined to the fetch modules", not hits, hits)
 
+#: Documentation/template modules carry example URLs that are never fetched.
+#: Documentation/template modules carry example URLs that are never fetched.
+_HOST_LITERAL_EXEMPT_MODULES = frozenset({
+    "config/_default_config.py", "config/_default_rules.py",
+})
+
+#: Public documentation links are prose, never fetch targets.
+_DOCUMENTATION_HOSTS = frozenset({"docs.trustsight.org"})
+
+
+def _url_constants(node: ast.AST):
+    """Yield every string carrying an http(s) URL in an assignment/f-string."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        yield node.value
+    elif isinstance(node, ast.JoinedStr):
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                yield value.value
+
+
 def gate_single_network_host() -> Gate:
-    """Every endpoint constant names a declared host: the AUR, the declared
-    AUR mirror from the fetch modules, or the release channel from the
-    release module and nothing else."""
+    """Every endpoint URL names a declared host, whatever the variable is called.
+
+    The earlier name filter (``*URL``) was itself the seam: ``AUR_ENDPOINT``
+    or a dynamically named base could carry a new host and stay invisible.
+    Scan the string value instead, including literal parts of f-strings, and
+    keep the declared-host/module pairs as the only exceptions.
+    """
     hits: list[str] = []
     found = set()
     for path in _python_files():
         rel = path.relative_to(SRC).as_posix()
+        if rel in _HOST_LITERAL_EXEMPT_MODULES:
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Assign):
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
                 continue
-            names = [t.id for t in node.targets if isinstance(t, ast.Name)]
-            if not any(n.upper().rstrip("_").endswith("URL") for n in names):
+            value = node.value
+            if value is None:
                 continue
-            if not isinstance(node.value, ast.Constant) or not isinstance(node.value.value, str):
-                continue
-            for host in _URL_LITERAL_RE.findall(node.value.value):
-                found.add(host)
-                if host == _ENDPOINT_HOST:
-                    continue
-                if host in _MIRROR_HOSTS and rel in _MIRROR_MODULES:
-                    continue
-                if host in _RELEASE_HOSTS and rel in _RELEASE_MODULES:
-                    continue
-                hits.append(f"{_rel(path)}:{node.lineno} {host}")
+            for text in _url_constants(value):
+                for host in _URL_LITERAL_RE.findall(text):
+                    found.add(host)
+                    if host == _ENDPOINT_HOST:
+                        continue
+                    if host in _DOCUMENTATION_HOSTS:
+                        continue
+                    if host in _MIRROR_HOSTS and rel in _MIRROR_MODULES:
+                        continue
+                    if host in _RELEASE_HOSTS and rel in _RELEASE_MODULES:
+                        continue
+                    hits.append(f"{_rel(path)}:{node.lineno} {host}")
     if not found:
         hits.append("no endpoint constant found: the check is not looking at anything")
     return Gate("one network host, declared", not hits, hits or sorted(found))
@@ -236,12 +299,22 @@ def gate_sql_is_parameterised() -> Gate:
                 continue
             sql = node.args[0]
             if isinstance(sql, ast.JoinedStr):
+                # An f-string in SQL is only acceptable for an identifier
+                # chosen from a literal list in the same module.  A bare Name
+                # is not proof of that: `table` may be anything.  The explicit
+                # allowlist is the reviewed set; adding a name is a deliberate
+                # change with this gate in view.
+                safe_names = {
+                    "table", "source_table", "where", "placeholders",
+                    "name", "decl", "_SCHEMA_VERSION",
+                }
                 for value in sql.values:
-                    if isinstance(value, ast.FormattedValue) and not isinstance(
-                        value.value, ast.Name
-                    ):
-                        hits.append(f"{_rel(path)}:{node.lineno} computed SQL")
-                        break
+                    if not isinstance(value, ast.FormattedValue):
+                        continue
+                    if isinstance(value.value, ast.Name) and value.value.id in safe_names:
+                        continue
+                    hits.append(f"{_rel(path)}:{node.lineno} computed SQL")
+                    break
             elif isinstance(sql, ast.BinOp):
                 hits.append(f"{_rel(path)}:{node.lineno} concatenated SQL")
     return Gate("SQL is parameterised", not hits, hits)
