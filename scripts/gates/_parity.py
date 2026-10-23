@@ -34,21 +34,26 @@ def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
     return Gate(name, not problems, problems)
 
 def gate_every_invariant_is_defined() -> Gate:
-    """Every ``A<n>`` invariant the enforcement map cites is defined in Part A.
+    """Every invariant the enforcement map cites is defined in its Part.
 
-    The map is the bridge between a stated guarantee and the gate that
-    enforces it.  A citation of ``A16`` with no A16 paragraph means the map
-    points at a claim the model never makes, which is the same defect as a
-    gate with no entry: the reader cannot check what "A16" requires.
+    Part A lives in ``program-under-attack.md`` (``**A<n>.`` and ``**P1.``),
+    Part B in ``what-a-result-claims.md`` (``### B<n>.``).  The map cites all
+    three families, so checking only A left a cited B or P invariant able to
+    point at nothing.
     """
     part = ROOT / "docs" / "security" / "program-under-attack.md"
+    claims = ROOT / "docs" / "security" / "what-a-result-claims.md"
     enforcement = ROOT / "docs" / "security" / "enforcement-map.md"
-    if not part.exists() or not enforcement.exists():
+    if not part.exists() or not claims.exists() or not enforcement.exists():
         return Gate("every cited invariant is defined", False, "missing")
-    defined = set(re.findall(
-        r"\*\*(A\d+[a-z]?)\.", part.read_text(encoding="utf-8")))
+    part_text = part.read_text(encoding="utf-8")
+    defined = set(re.findall(r"\*\*(A\d+[a-z]?)\.", part_text))
+    defined |= set(re.findall(r"\*\*(P\d+)\.", part_text))
+    defined |= set(re.findall(
+        r"^### (B\d+[a-z]?)\.", claims.read_text(encoding="utf-8"),
+        re.MULTILINE))
     cited = set(re.findall(
-        r"\b(A\d+[a-z]?)\b", enforcement.read_text(encoding="utf-8")))
+        r"\b([ABP]\d+[a-z]?)\b", enforcement.read_text(encoding="utf-8")))
     missing = sorted(cited - defined)
     return Gate("every cited invariant is defined", not missing,
                 missing or sorted(cited))

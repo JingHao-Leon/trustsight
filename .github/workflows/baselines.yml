@@ -169,6 +169,9 @@ jobs:
             --corpus /tmp/release-assets/baseline-corpus.tar.zst \
             "${SEED_ARGS[@]}"
 
+      - name: Verify the signed family against the pinned key
+        run: uv run python scripts/verify_baseline_release.py --dir /tmp/baselines
+
       - name: Upload baseline-* assets to the release
         env:
           TAG: ${{ inputs.tag }}
