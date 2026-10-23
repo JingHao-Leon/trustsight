@@ -1,7 +1,7 @@
 """Extracted from _tokenizer_engine.py: _aliases."""
 
 import re
-from ._common import _MAX_VALUE_LEN
+from ._common import _MAX_LINE_LEN
 
 __all__ = ['_ALIAS_DEF_RE', '_ALIAS_USE_PREFIX', '_MAX_ALIASES', '_MAX_ALIAS_LEN', '_alias_pairs', '_alias_table', '_expand_aliases']
 
@@ -67,8 +67,21 @@ def _alias_pairs(rest: str):
         while i < len(rest) and rest[i] == " ":
             i += 1
 
-def _expand_aliases(line: str, table: dict[str, str]) -> str:
-    """Replace command-position alias names in *line* with their expansion."""
+def _expand_aliases(
+    line: str, table: dict[str, str], limit: int = _MAX_LINE_LEN
+) -> str:
+    """Replace command-position alias names in *line* with their expansion.
+
+    Alias values are small by construction (``_MAX_ALIAS_LEN``), but a line
+    can invoke one many times: a 64 KiB line of ``; z`` with ``z`` expanding
+    to 200 characters used to produce a 200 KiB result, and the size check
+    only ran after the whole pass.  A6's line bound is enforced *before*
+    each replacement instead, and an expansion that would cross it is
+    refused whole - the original line is returned - rather than truncated
+    or partially applied.  A truncated line would look fully resolved with
+    its tail quietly removed, which is the failure the bound exists to
+    prevent.
+    """
     if not table:
         return line
     out = line
@@ -86,11 +99,13 @@ def _expand_aliases(line: str, table: dict[str, str]) -> str:
                     and _ALIAS_USE_PREFIX.search(out[:idx]) is not None
                 )
                 if boundary_ok and value.split(None, 1)[:1] != [name]:
+                    if len(out) - len(name) + len(value) > limit:
+                        return line
                     out = out[:idx] + value + out[after:]
                     changed = True
                     start = idx + len(value)
                 else:
                     start = after
-        if not changed or len(out) > _MAX_VALUE_LEN:
+        if not changed or len(out) > limit:
             break
     return out

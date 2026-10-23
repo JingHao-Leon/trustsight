@@ -4,7 +4,7 @@ import itertools
 import re
 from functools import lru_cache
 import shlex
-from ._common import _ARRAY_ASSIGNMENT_RE, _ASSIGNMENT_RE, _MAX_ARRAY_ENTRIES, _MAX_LINE_LEN, _MAX_TABLE_BYTES, _MAX_VALUE_LEN, _VAR_REF_RE, _split_top_level, _tail_continues
+from ._common import _ARRAY_ASSIGNMENT_RE, _ASSIGNMENT_RE, _MAX_ARRAY_ENTRIES, _MAX_LINE_LEN, _MAX_TABLE_BYTES, _MAX_VALUE_LEN, _VAR_REF_RE, _join_logical, _split_top_level
 from ._expansion import resolve_expansions
 from ._quotes import reconstruct_literals
 
@@ -69,45 +69,12 @@ def _join_line_continuations_cached(lines: tuple[str, ...]) -> tuple[str, ...]:
     and the payload arrives as an unrelated fragment.  Only lines
     carrying the same diff marker are joined, so an addition is never
     spliced onto a removal.
+
+    The joining itself lives in ``_common._join_logical``, shared with
+    ``_joined_indexed``: the rule path and the coverage path must read the
+    same logical lines, and two copies is how they stop doing that.
     """
-    out: list[str] = []
-    # Accumulated as parts and joined once.  Appending to a string per
-    # continuation line made this quadratic, so a diff of many backslash
-    # continuations (which an untrusted PKGBUILD controls) cost time
-    # proportional to the square of its length.
-    parts: list[str] | None = None
-    marker = ""
-
-    def flush() -> str:
-        return "".join(parts)
-
-    for line in lines:
-        this_marker = line[0] if line[:1] in ("+", "-") else ""
-        body = line[1:] if this_marker else line
-        if parts is not None and this_marker == marker:
-            # Verbatim, with no separator inserted.  A backslash-newline is
-            # *removed* by the shell, it is not whitespace: `cur\` + `l ...`
-            # is `curl ...`, and joining with a space produced `cur l ...`,
-            # which splits a command name into two words and defeats every
-            # rule that matches it. Indentation on the continuation line
-            # still separates arguments, because it is kept as written.
-            parts.append(body)
-        else:
-            if parts is not None:
-                out.append(marker + flush())
-            parts, marker = [body], this_marker
-        tail = parts[-1]
-        stripped_tail = tail.rstrip()
-        if stripped_tail.endswith("\\"):
-            parts[-1] = stripped_tail[:-1].rstrip()
-        elif _tail_continues(stripped_tail):
-            pass  # still accumulating: an operator promises more input
-        else:
-            out.append(marker + flush())
-            parts, marker = None, ""
-    if parts is not None:
-        out.append(marker + flush())
-    return tuple(out)
+    return tuple(text for _index, text in _join_logical(lines))
 
 def _strip_outer_quotes(value: str) -> str:
     """Remove one matching pair of surrounding quotes, if present."""
@@ -318,7 +285,80 @@ _SHELL_SOURCE_FILE_RE = re.compile(
 
 _DIFF_TARGET_LINE_RE = re.compile(r"^\+\+\+ (?:b/)?(.+?)(?:\t.*)?$")
 
-_HEREDOC_OPENER_RE = re.compile(r"<<-?\s*['\"]?(\w+)['\"]?")
+#: A heredoc opener, anchored where it is tried.  The delimiter is a shell
+#: word - quoted (any content) or unquoted (an identifier) - never the
+#: numeric right operand of an arithmetic shift (`x=$((1 << 2))`), which the
+#: old `\w+` form read as a heredoc named `2` and used to blank every line
+#: after it.
+_HEREDOC_OPENER_RE = re.compile(
+    r"<<-?[ \t]*(?:'([^'\n]+)'|\"([^\"\n]+)\"|\\([A-Za-z_][A-Za-z0-9_]*)"
+    r"|([A-Za-z_][A-Za-z0-9_]*))"
+)
+
+def _opens_a_comment(line: str, index: int) -> bool:
+    """True when ``line[index]`` is an unquoted ``#`` that starts a comment.
+
+    The rule :mod:`trustsight.line_lex` applies, without importing it: a
+    comment starts at the beginning of a word.  ``x#fragment`` and
+    ``${var#pat}`` are data, and treating them as prose would blank real
+    code.
+    """
+    return line[index] == "#" and (
+        index == 0
+        or line[index - 1].isspace()
+        or line[index - 1] in ";|&("
+    )
+
+def _heredoc_delimiters(line: str) -> list[str]:
+    """Delimiters a shell opens on *line*, quote- and comment-aware.
+
+    The previous reader was a bare regex over the whole line, so a ``<<EOF``
+    inside a comment or a quoted message pushed a delimiter bash never
+    pushed, and an arithmetic shift (``1 << 2``) named its right operand as
+    the delimiter.  Every following line was then classified as heredoc
+    data, which stops `_assignments_are_shell` folding assignments.  The
+    scan also missed the shapes bash does open - a backslash-quoted
+    delimiter (``<<\EOF``) - and those bodies were read as shell code, so
+    their ``ExecStart=`` lines were folded away and never matched.
+
+    The opener scan now agrees with :func:`trustsight.line_lex._scan` on
+    what bash executes: quoted text and comments are data, ``<<<`` is a
+    here-string with no body, a backslash-quoted delimiter opens, and an
+    arithmetic shift does not.
+    """
+    found: list[str] = []
+    quote = ""
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if quote:
+            if char == "\\" and quote == '"':
+                index += 2
+                continue
+            if char == quote:
+                quote = ""
+            index += 1
+            continue
+        if char in "'\"":
+            quote = char
+            index += 1
+            continue
+        if char == "#" and _opens_a_comment(line, index):
+            break
+        if line.startswith("<<<", index):
+            index += 3
+            continue
+        if line.startswith("<<", index):
+            match = _HEREDOC_OPENER_RE.match(line, index)
+            if match:
+                delimiter = (match.group(1) or match.group(2)
+                             or match.group(3) or match.group(4))
+                if delimiter:
+                    found.append(delimiter)
+                index = match.end()
+                continue
+        index += 1
+    return found
 
 def _assignments_are_shell(lines: list[str]) -> list[bool]:
     """Per line: may a `KEY=value` here be folded away as an assignment?
@@ -355,9 +395,11 @@ def _assignments_are_shell(lines: list[str]) -> list[bool]:
                 delimiter = ""
             continue
         flags.append(shell)
-        opener = _HEREDOC_OPENER_RE.search(body)
-        if opener:
-            delimiter = opener.group(1)
+        openers = _heredoc_delimiters(body)
+        if openers:
+            # Bash reads bodies in opener order; this reader tracks one at a
+            # time, so the first is the delimiter whose body comes next.
+            delimiter = openers[0]
     return flags
 
 def _variable_table(

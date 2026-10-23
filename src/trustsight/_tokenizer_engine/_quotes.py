@@ -130,8 +130,8 @@ def _strip_shell_quotes(text: str) -> str:
 
 _ANSI_C_ESCAPES = {
     "n": "\n", "t": "\t", "r": "\r", "a": "\a", "b": "\b",
-    "f": "\f", "v": "\v", "e": "\x1b", "\\": "\\", "'": "'",
-    '"': '"',
+    "f": "\f", "v": "\v", "e": "\x1b", "E": "\x1b", "\\": "\\",
+    "'": "'", '"': '"',
 }
 
 def _decode_ansi_c(body: str) -> str:
@@ -160,13 +160,47 @@ def _decode_ansi_c(body: str) -> str:
             else:
                 out.append("\\x")
                 i += 1
+        elif e in "uU":
+            # Bash's Unicode escapes: 1-4 hex digits for \u, 1-8 for \U.
+            # They were missing here, so `$'\u0063url'` reconstructed as
+            # `u0063url` - the obfuscated command name stayed obfuscated and
+            # H065 never saw `curl`.  A code point past Unicode's range is
+            # left literal rather than raising.
+            limit = 4 if e == "u" else 8
+            j = i + 1
+            digits = ""
+            while (j < len(body) and len(digits) < limit
+                   and body[j] in "0123456789abcdefABCDEF"):
+                digits += body[j]
+                j += 1
+            if not digits:
+                out.append(e)
+                i += 1
+            else:
+                # ``chr`` refuses a code point past Unicode's range.  The
+                # caller keeps the whole ``$'...'`` literal and marks the
+                # line unreconstructed rather than inventing a value for
+                # an escape bash itself encodes as invalid UTF-8.
+                out.append(chr(int(digits, 16)))
+                i = j
+        elif e == "c":
+            # `\cX` is the control character. `\c?` is DEL, the conventional
+            # exception.
+            if i + 1 < len(body):
+                nxt = body[i + 1]
+                out.append(chr(0x7F if nxt == "?" else ord(nxt) & 0x1F))
+                i += 2
+            else:
+                out.append("c")
+                i += 1
         elif e in "01234567":
             j = i
             octs = ""
             while j < len(body) and j < i + 3 and body[j] in "01234567":
                 octs += body[j]
                 j += 1
-            out.append(chr(int(octs, 8)))
+            # Bash truncates an octal escape to one byte (`\777` is 0xFF).
+            out.append(chr(int(octs, 8) & 0xFF))
             i = j
         elif e in _ANSI_C_ESCAPES:
             out.append(_ANSI_C_ESCAPES[e])
@@ -193,13 +227,24 @@ def reconstruct_literals(text: str) -> tuple[str, bool]:
     not by itself force the line to be inconclusive: it is dynamic content,
     not an obfuscation marker.
     """
-    result = _ANSI_C_QUOTE_RE.sub(lambda m: _decode_ansi_c(m.group(1)), text)
+    def _ansi_sub(match: re.Match) -> str:
+        try:
+            return _decode_ansi_c(match.group(1))
+        except ValueError:
+            # An impossible code point stays as the original literal, so
+            # the opener check below still marks the line unreconstructed.
+            return match.group(0)
+
+    result = _ANSI_C_QUOTE_RE.sub(_ansi_sub, text)
 
     def _printf_sub(match: re.Match) -> str:
         fmt = match.group(2)
         if "%" in fmt or fmt == "":
             return match.group(0)
-        return _decode_ansi_c(fmt)
+        try:
+            return _decode_ansi_c(fmt)
+        except ValueError:
+            return match.group(0)
 
     result = _PRINTF_LITERAL_RE.sub(_printf_sub, result)
     result = _EMPTY_QUOTE_CONCAT_RE.sub("", result)

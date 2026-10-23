@@ -2,4 +2,4 @@
 +++ b/PKGBUILD
 @@ -1,0 +1,2 @@
 +build() {
-+  wget -qO- http://1.2. \
++  wget -qO- http://1.2.\

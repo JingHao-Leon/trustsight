@@ -164,7 +164,7 @@ def test_a_command_name_split_across_a_continuation_is_rejoined():
     ]
     # Indentation on the continuation still separates arguments.
     assert join_line_continuations(["+  curl \\", "+    https://x"]) == [
-        "+  curl    https://x"
+        "+  curl     https://x"
     ]
 
     diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n build() {\n"

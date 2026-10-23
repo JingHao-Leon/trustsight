@@ -57,10 +57,12 @@ _MAX_TEXT_LEN = 8 * 1024 * 1024
 #: regex, and a bounded matcher must still answer it (A6/A14).
 _MAX_GLOB_PATTERN_LEN = 256
 
-#: Total state visits one substitution may spend.  Affix stripping is a
-#: single O(text x pattern) pass; a global substitution can search repeatedly,
-#: so the budget makes the whole operation constant-bounded.  Exceeding it is
-#: a refusal, not a truncated result.
+#: Total state visits one ``resolve_expansions`` call may spend, shared by
+#: every glob match, affix strip and global substitution on that line.  A
+#: single expansion is O(text x pattern), but a line can hold sixteen of
+#: them, so the budget bounds the line rather than one operator: without it
+#: a crafted line could multiply the per-expansion cost by the pass cap.
+#: Exceeding it is a refusal, not a truncated result.
 _MAX_GLOB_STEPS = 8_000_000
 
 _INNERMOST_RE = re.compile(r"\$\{([^{}]*)\}")
@@ -151,12 +153,17 @@ def _glob_char_matches(token: tuple[str, object], char: str) -> bool:
 
 
 def _glob_prefix_ends(tokens: tuple[tuple[str, object], ...],
-                      text: str) -> list[int]:
+                      text: str,
+                      budget: list[int] | None = None) -> list[int]:
     """End indices where *tokens* match ``text[:end]`` exactly, ascending.
 
     One table pass, O(len(text) x len(tokens)); a ``*`` is an epsilon edge
-    plus a self-loop, never a backtracking point.
+    plus a self-loop, never a backtracking point.  The pass spends from
+    *budget* when one is given, so affix stripping is bounded like the
+    substitution path rather than being the one unbudgeted matcher.
     """
+    if budget is None:
+        budget = [_MAX_GLOB_STEPS]
     length = len(tokens)
     start = _MAX_GLOB_STEPS + 1
     current = [start] * (length + 1)
@@ -167,6 +174,9 @@ def _glob_prefix_ends(tokens: tuple[tuple[str, object], ...],
 
     ends = [0] if current[length] != start else []
     for position, char in enumerate(text):
+        budget[0] -= length + 1
+        if budget[0] < 0:
+            raise re.error("glob match exceeded its step budget")
         following = [start] * (length + 1)
         for index in range(length + 1):
             origin = current[index]
@@ -190,12 +200,18 @@ def _glob_prefix_ends(tokens: tuple[tuple[str, object], ...],
 
 
 def _glob_fixed_find(tokens: tuple[tuple[str, object], ...], text: str,
-                     start: int) -> int | None:
+                     start: int,
+                     budget: list[int] | None = None) -> int | None:
     """Leftmost match start for a star-free token list, in O(text x tokens)."""
     width = len(tokens)
     if width == 0:
         return start if start <= len(text) else None
+    if budget is None:
+        budget = [_MAX_GLOB_STEPS]
     for position in range(start, len(text) - width + 1):
+        budget[0] -= width
+        if budget[0] < 0:
+            raise re.error("glob match exceeded its step budget")
         if all(_glob_char_matches(token, text[position + offset])
                for offset, token in enumerate(tokens)):
             return position
@@ -213,7 +229,7 @@ def _glob_find(tokens: tuple[tuple[str, object], ...], text: str,
     if budget is None:
         budget = [_MAX_GLOB_STEPS]
     if not any(token[0] == "*" for token in tokens):
-        found = _glob_fixed_find(tokens, text, start)
+        found = _glob_fixed_find(tokens, text, start, budget)
         return (found, found + len(tokens)) if found is not None else None
 
     length = len(tokens)
@@ -261,7 +277,8 @@ def _glob_find(tokens: tuple[tuple[str, object], ...], text: str,
 
 
 def _glob_sub(tokens: tuple[tuple[str, object], ...], text: str,
-              replacement: str, count: int = 0) -> str:
+              replacement: str, count: int = 0,
+              budget: list[int] | None = None) -> str:
     """Replace glob matches in *text*; mirrors ``re.sub`` for empty patterns.
 
     ``count=0`` replaces every non-overlapping match, ``count=1`` the first.
@@ -274,7 +291,8 @@ def _glob_sub(tokens: tuple[tuple[str, object], ...], text: str,
             return replacement + text
         return replacement + replacement.join(text) + replacement
 
-    budget = [_MAX_GLOB_STEPS]
+    if budget is None:
+        budget = [_MAX_GLOB_STEPS]
     # ``count=0`` means every match, as in ``re.sub``.
     remaining = None if count == 0 else count
     if not any(token[0] == "*" for token in tokens):
@@ -282,7 +300,7 @@ def _glob_sub(tokens: tuple[tuple[str, object], ...], text: str,
         last = 0
         position = 0
         while remaining is None or remaining > 0:
-            found = _glob_fixed_find(tokens, text, position)
+            found = _glob_fixed_find(tokens, text, position, budget)
             if found is None:
                 break
             parts.append(text[last:found])
@@ -321,7 +339,8 @@ def _glob_sub(tokens: tuple[tuple[str, object], ...], text: str,
     return "".join(parts)
 
 
-def _strip_affix(val: str, op: str, pat: str) -> str:
+def _strip_affix(val: str, op: str, pat: str,
+                 budget: list[int] | None = None) -> str:
     """Apply bash ## / # / %% / % stripping using glob patterns.
 
     The operators differ on two axes at once: ``#``/``##`` match a prefix
@@ -337,13 +356,13 @@ def _strip_affix(val: str, op: str, pat: str) -> str:
     """
     tokens = _glob_tokens(pat)
     if op == "#":
-        ends = _glob_prefix_ends(tokens, val)
+        ends = _glob_prefix_ends(tokens, val, budget)
         return val[min(ends):] if ends else val
     if op == "##":
-        ends = _glob_prefix_ends(tokens, val)
+        ends = _glob_prefix_ends(tokens, val, budget)
         return val[max(ends):] if ends else val
     if op in ("%", "%%"):
-        reversed_ends = _glob_prefix_ends(tokens[::-1], val[::-1])
+        reversed_ends = _glob_prefix_ends(tokens[::-1], val[::-1], budget)
         if not reversed_ends:
             return val
         width = min(reversed_ends) if op == "%" else max(reversed_ends)
@@ -355,6 +374,7 @@ def _expand_one_unbounded(
     body: str,
     vars_: dict[str, str],
     arrays: dict[str, list[str]] | None = None,
+    budget: list[int] | None = None,
 ) -> str | None:
     """Resolve a single innermost ${...} body.
 
@@ -406,7 +426,8 @@ def _expand_one_unbounded(
         rep = _REPLACEMENT_ESCAPE_RE.sub(r"\1", rep)
         try:
             tokens = _glob_tokens(pat)
-            return _glob_sub(tokens, val, rep, 0 if mode == "//" else 1)
+            return _glob_sub(tokens, val, rep, 0 if mode == "//" else 1,
+                             budget)
         except re.error:
             # A pattern we cannot compile is refused, not fatal.
             return None
@@ -453,7 +474,7 @@ def _expand_one_unbounded(
         if val is None:
             return ""
         try:
-            return _strip_affix(val, op, pat)
+            return _strip_affix(val, op, pat, budget)
         except re.error:
             # A pattern we cannot compile is refused, not fatal.
             return None
@@ -487,14 +508,16 @@ def _expand_one(
     body: str,
     vars_: dict[str, str],
     arrays: dict[str, list[str]] | None = None,
+    budget: list[int] | None = None,
 ) -> str | None:
     """The bounded form of :func:`_expand_one_unbounded`.
 
     A replacement larger than a line is refused rather than returned: the
     caller inserts it into attacker-controlled text, and accepting it would
-    let one expansion choose the size of the result (A6/A14).
+    let one expansion choose the size of the result (A6/A14).  *budget* is
+    shared by every expansion on one line.
     """
-    result = _expand_one_unbounded(body, vars_, arrays)
+    result = _expand_one_unbounded(body, vars_, arrays, budget)
     if result is not None and len(result) > _MAX_LINE_LEN:
         return None
     return result
@@ -516,12 +539,16 @@ def resolve_expansions(
     """
     arrays = arrays or {}
     all_resolved = True
+    # One budget for the whole line: every affix strip and substitution in
+    # this call spends from it, so `_MAX_EXPANSION_PASSES` multiplies a
+    # bounded cost rather than an unbounded one.
+    budget = [_MAX_GLOB_STEPS]
     for _ in range(_MAX_EXPANSION_PASSES):
         before = text
         m = _INNERMOST_RE.search(text)
         if m is None:
             return text, all_resolved and "${" not in text
-        replacement = _expand_one(m.group(1), vars_, arrays)
+        replacement = _expand_one(m.group(1), vars_, arrays, budget)
         if replacement is None:
             all_resolved = False
         else:

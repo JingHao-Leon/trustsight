@@ -2,7 +2,14 @@
 
 import re
 from ._aliases import _alias_table, _expand_aliases
-from ._common import _ASSIGNMENT_RE, _VAR_REF_RE, _memoised, _split_top_level, _tail_continues
+from ._common import (
+    _ASSIGNMENT_RE,
+    _MAX_LINE_LEN,
+    _VAR_REF_RE,
+    _join_logical,
+    _memoised,
+    _split_top_level,
+)
 from ._quotes import split_lines
 from ._variables import _assignments_are_shell, _substitute_with_resolve, _variable_table, join_line_continuations
 
@@ -78,6 +85,10 @@ def _resolve_side_lines(diff_text: str, marker: str) -> list[str]:
         if line.startswith(marker):
             r, _ok = _substitute_with_resolve(line[1:], var_table, array_table)
             r = collapse_traversal(_expand_aliases(r, alias_table))
+            if len(r) > _MAX_LINE_LEN:
+                # A6: an expansion past the line bound is left unresolved,
+                # never truncated.
+                r = line[1:]
             resolved_lines.append(marker + r)
         else:
             resolved_lines.append(line)
@@ -99,40 +110,12 @@ def _joined_indexed(lines: list[str]) -> list[tuple[int, str]]:
     candidate list omits assignment lines, so its own positions are not
     the keys of :func:`~trustsight.differ.map_diff_lines`, which are raw
     diff-line indexes.
+
+    Delegates to ``_common._join_logical``, the same implementation
+    ``join_line_continuations`` uses, so the two cannot disagree about
+    which physical lines the shell runs as one.
     """
-    out: list[tuple[int, str]] = []
-    parts: list[str] | None = None
-    marker = ""
-    start_index = -1
-
-    def flush() -> str:
-        return "".join(parts)
-
-    for i, line in enumerate(lines):
-        this_marker = line[0] if line[:1] in ("+", "-") else ""
-        body = line[1:] if this_marker else line
-        if parts is not None and this_marker == marker:
-            # Verbatim, exactly as `join_line_continuations` does: a
-            # backslash-newline is removed by the shell rather than being
-            # whitespace. These two joiners must agree, or the rule path and
-            # the coverage path read different text from the same diff.
-            parts.append(body)
-        else:
-            if parts is not None:
-                out.append((start_index, marker + flush()))
-            parts, marker, start_index = [body], this_marker, i
-        tail = parts[-1]
-        stripped_tail = tail.rstrip()
-        if stripped_tail.endswith("\\"):
-            parts[-1] = stripped_tail[:-1].rstrip()
-        elif _tail_continues(stripped_tail):
-            pass  # still accumulating: an operator promises more input
-        else:
-            out.append((start_index, marker + flush()))
-            parts, marker, start_index = None, "", -1
-    if parts is not None:
-        out.append((start_index, marker + flush()))
-    return out
+    return _join_logical(lines)
 
 def tokenize_and_resolve_indexed(
     diff_text: str,
@@ -194,6 +177,10 @@ def tokenize_and_resolve_indexed(
     for _raw_index, line in candidates:
         r, ok = _substitute_with_resolve(line, var_table, array_table)
         expanded = collapse_traversal(_expand_aliases(r, alias_table))
+        if len(expanded) > _MAX_LINE_LEN:
+            # A6: an expansion past the line bound is left unresolved, never
+            # truncated.
+            expanded = line
         resolved.append(expanded)
         # "Could not fully resolve" (report-schema.md), not "was literal":
         # a plain `+echo hello` expands to itself and is not unresolved.
