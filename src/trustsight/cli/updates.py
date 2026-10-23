@@ -21,15 +21,15 @@ from __future__ import annotations
 
 import json
 import os
-
-from ..bounded_io import read_file_capped
-
-MAX_UPDATE_CACHE_BYTES = 1024 * 1024
 import sys
 import time
 from pathlib import Path
 
 import typer
+
+from ..bounded_io import read_file_capped
+
+MAX_UPDATE_CACHE_BYTES = 1024 * 1024
 
 #: How long a fetched release tag is trusted before it is checked again.  The
 #: notice still prints on every command; only the network call is throttled.

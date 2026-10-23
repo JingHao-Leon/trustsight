@@ -18,7 +18,7 @@ import json
 import time
 from pathlib import Path
 
-from .bounded_io import ReadTooLarge, read_file_capped
+from .bounded_io import read_file_capped
 
 MAX_CHANNEL_STATE_BYTES = 1024 * 1024
 

@@ -306,7 +306,6 @@ def register_commands(app: typer.Typer):
                     f"{rule_id.upper()} did not fire in recorded analysis "
                     f"#{history_id} ({pkg_name})"
                 )
-            analysis = explanation["analysis"]
             if json_output:
                 typer.echo(json.dumps(explanation, indent=2))
                 return
