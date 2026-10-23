@@ -264,6 +264,24 @@ def test_companion_hunks_emit_a_named_file(cache):
     assert "echo hi" in out["text"]
 
 
+def test_companion_hunks_carry_the_baseline(cache):
+    repo = pygit2.init_repository(str(cache / "comp-base"))
+    old = _commit_files(repo, {
+        "PKGBUILD": b"pkgname=x\nsource=(\"helper.sh\")\n",
+        "helper.sh": b"trap 'rm x' EXIT\n",
+    }, [])
+    new = _commit_files(repo, {
+        "PKGBUILD": b"pkgname=x\npkgver=2\nsource=(\"helper.sh\")\n",
+        "helper.sh": b"trap 'rm x' EXIT\n",
+    }, [pygit2.Oid(hex=old)])
+    out = gw._companion_hunks({
+        "pkg": "comp-base", "cache_dir": str(cache), "oid": new,
+        "baseline": old, "max_bytes": None,
+    })
+    assert out["text"] == ""
+    assert out["truncated"] is False
+
+
 def test_tree_files_reports_incomplete_when_capped(cache, monkeypatch):
     repo = pygit2.init_repository(str(cache / "many"))
     oid = _commit_files(repo, {f"f{i}": b"x\n" for i in range(3)}, [])

@@ -244,10 +244,11 @@ class GitSession:
         return files, result["complete"]
 
     def companion_hunks(self, pkg: str, cache_dir: str, oid: str,
-                        max_bytes: int | None = None):
+                        max_bytes: int | None = None,
+                        baseline_oid: str = ""):
         return self.request("companion_hunks", {
             "pkg": pkg, "cache_dir": cache_dir, "oid": oid,
-            "max_bytes": max_bytes,
+            "max_bytes": max_bytes, "baseline": baseline_oid,
         })
 
     def opaque_changed(self, pkg: str, cache_dir: str, old: str, new: str):
@@ -404,9 +405,10 @@ class GitProject:
     def tree_files(self, oid: str):
         return self._session.tree_files(self.pkg, self.cache_dir, oid)
 
-    def companion_hunks(self, oid: str, max_bytes: int | None = None):
+    def companion_hunks(self, oid: str, max_bytes: int | None = None,
+                        baseline_oid: str = ""):
         result = self._session.companion_hunks(
-            self.pkg, self.cache_dir, oid, max_bytes)
+            self.pkg, self.cache_dir, oid, max_bytes, baseline_oid)
         return result["text"], result["truncated"]
 
     def opaque_changed(self, old: str, new: str) -> list[str]:

@@ -365,7 +365,8 @@ def analyze_package(
     # rules as the PKGBUILD, or a curl|bash simply moves one file over and the
     # filename filter above drops it.  Appended before the byte cap, so an
     # oversized companion truncates the combined diff and fails closed.
-    companion, companion_truncated = project.companion_hunks(head_commit)
+    companion, companion_truncated = project.companion_hunks(
+        head_commit, baseline_oid=old_commit)
     if companion:
         diff_text = f"{diff_text.rstrip(chr(10))}\n{companion}" if diff_text.strip() else companion
 

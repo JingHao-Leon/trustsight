@@ -507,12 +507,15 @@ def _companion_hunks(payload: dict) -> dict:
     from trustsight.sandbox.git_project import companion_source_hunks
 
     oid = _require_oid(payload.get("oid"), "commit id")
+    baseline = _require_oid(payload.get("baseline") or "", "commit id")
     repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     max_bytes = _positive_int(payload.get("max_bytes"), 0)
     if max_bytes:
-        text, truncated = companion_source_hunks(repo, oid, max_bytes=max_bytes)
+        text, truncated = companion_source_hunks(
+            repo, oid, max_bytes=max_bytes, baseline_oid=baseline)
     else:
-        text, truncated = companion_source_hunks(repo, oid)
+        text, truncated = companion_source_hunks(
+            repo, oid, baseline_oid=baseline)
     return {"text": text, "truncated": truncated}
 
 

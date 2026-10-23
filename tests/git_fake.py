@@ -70,11 +70,12 @@ class FakeGitProject:
     def tree_files(self, oid):
         return git_project.collect_tree_files(self._repo, oid)
 
-    def companion_hunks(self, oid, max_bytes=None):
+    def companion_hunks(self, oid, max_bytes=None, baseline_oid=""):
         if max_bytes is None:
-            return git_project.companion_source_hunks(self._repo, oid)
+            return git_project.companion_source_hunks(
+                self._repo, oid, baseline_oid=baseline_oid)
         return git_project.companion_source_hunks(
-            self._repo, oid, max_bytes=max_bytes)
+            self._repo, oid, max_bytes=max_bytes, baseline_oid=baseline_oid)
 
     def opaque_changed(self, old, new):
         return git_project.changed_opaque_members(self._repo, old, new)

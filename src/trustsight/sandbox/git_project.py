@@ -13,6 +13,7 @@ copy of each.
 
 from __future__ import annotations
 
+import difflib
 import re
 import time
 from pathlib import Path
@@ -368,7 +369,8 @@ def binary_metadata_paths(repo, old_oid: str, new_oid: str) -> list[str]:
 
 
 def companion_source_hunks(
-    repo: pygit2.Repository, commit_oid: str, max_bytes: int = _COMPANION_MAX_BYTES
+    repo: pygit2.Repository, commit_oid: str, max_bytes: int = _COMPANION_MAX_BYTES,
+    baseline_oid: str = "",
 ) -> tuple[str, bool]:
     """Committed companion files as added-file hunks, and whether any was cut.
 
@@ -378,12 +380,18 @@ def companion_source_hunks(
 
     Every committed text file the PKGBUILD names (a declared ``source=()``
     entry or one it merely executes/sources/patches by path) is emitted as
-    a ``+++ b/<name>`` hunk whose whole current content is added lines, so the
-    ordinary line rules, the tokenizer and ``map_diff_lines`` see it with
-    correct file attribution.  Binary and ELF files are left out: H066-tree
-    already owns embedded binaries, and text rules over binary bytes are
-    noise.  The full current content is emitted, not just this commit's diff,
-    so a payload committed earlier and merely referenced now is still read.
+    a ``+++ b/<name>`` hunk, so the ordinary line rules, the tokenizer and
+    ``map_diff_lines`` see it with correct file attribution.  Binary and ELF
+    files are left out: H066-tree already owns embedded binaries, and text
+    rules over binary bytes are noise.
+
+    With *baseline_oid*, a companion the baseline PKGBUILD already named is
+    diffed instead of replayed in full: unchanged content contributes no
+    hunk, and a changed file contributes only its added lines.  Otherwise
+    every update scored an install file, a cleanup trap or a Documentation=
+    URL that had not moved.  A file the baseline did not name is still
+    emitted whole, so a payload committed earlier and merely referenced now
+    is read.
     """
     max_bytes = max(1, min(max_bytes, MAX_COMPANION_BYTES))
     commit = repo.get(commit_oid)
@@ -412,6 +420,27 @@ def companion_source_hunks(
     hunks: list[str] = []
     used = 0
     truncated = False
+    baseline_tree = None
+    baseline_selected: set[str] = set()
+    if baseline_oid and baseline_oid != commit_oid:
+        base = repo.get(baseline_oid)
+        if base is not None:
+            base_pkgbuild = _top_level_blob(base.tree, "PKGBUILD")
+            if base_pkgbuild is not None:
+                try:
+                    base_blob = repo[base_pkgbuild.id]
+                    if getattr(base_blob, "size", 0) <= MAX_PKG_BUILD_BYTES:
+                        base_head = read_blob_head(
+                            base_blob, MAX_PKG_BUILD_BYTES)
+                        if base_head is not None:
+                            baseline_tree = base.tree
+                            baseline_selected = set(_companion_names(
+                                base.tree,
+                                base_head.decode("utf-8", errors="replace")))
+                except (KeyError, TypeError, ValueError):
+                    # An unreadable baseline falls back to the full scan: it
+                    # over-scores rather than silently skipping a companion.
+                    baseline_tree = None
     selected = set(_companion_names(commit.tree, pkgbuild_text))
     if _COMPANION_INCOMPLETE in selected:
         # The *selection* was cut, not just the reading: a name past the
@@ -432,6 +461,16 @@ def companion_source_hunks(
     for name in selected:
         entry = _top_level_blob(commit.tree, name)
         if entry is None:
+            continue
+        old_entry = (
+            _top_level_blob(baseline_tree, name)
+            if baseline_tree is not None and name in baseline_selected
+            else None
+        )
+        if old_entry is not None and old_entry.id == entry.id:
+            # Already present at the baseline and still referenced: it was
+            # scored when it arrived, and replaying it as added lines made
+            # every later update start at the same baseline noise.
             continue
         remaining = min(share, max_bytes - used)
         if remaining <= 0:
@@ -466,8 +505,46 @@ def companion_source_hunks(
         if b"\x00" in data[:8192] or data[:4] == b"\x7fELF":
             continue
         text = data.decode("utf-8", errors="replace")
+        new_lines = split_lines(text)
+        if not new_lines:
+            continue
+        def whole() -> list[str]:
+            return [
+                "--- /dev/null",
+                f"+++ b/{name}",
+                f"@@ -0,0 +1,{len(new_lines)} @@",
+            ] + ["+" + ln for ln in new_lines]
+
+        if old_entry is None:
+            chunk = whole()
+        else:
+            # A companion the baseline already named: only the lines this
+            # update adds are new evidence.  Context lines stay visible to
+            # the reader but are not scored as additions.
+            try:
+                old_blob = repo[old_entry.id]
+            except (KeyError, TypeError, ValueError):
+                truncated = True
+                old_blob = None
+            old_lines = None
+            if old_blob is not None:
+                if getattr(old_blob, "size", 0) > remaining:
+                    truncated = True
+                old_data = read_blob_head(old_blob, remaining)
+                if old_data is not None and b"\x00" not in old_data[:8192]:
+                    old_lines = split_lines(
+                        old_data.decode("utf-8", errors="replace"))
+            if old_lines is None:
+                # The prior text is unavailable; keep the conservative
+                # whole-file scan rather than call an unread change clean.
+                chunk = whole()
+            else:
+                chunk = list(difflib.unified_diff(
+                    old_lines, new_lines,
+                    fromfile=f"a/{name}", tofile=f"b/{name}",
+                    lineterm=""))
         lines: list[str] = []
-        for ln in split_lines(text):
+        for ln in chunk:
             if used + len(ln) + 1 > max_bytes:
                 truncated = True
                 break
@@ -475,10 +552,7 @@ def companion_source_hunks(
             used += len(ln) + 1
         if not lines:
             continue
-        hunks.append(
-            f"--- /dev/null\n+++ b/{name}\n@@ -0,0 +1,{len(lines)} @@\n"
-            + "\n".join("+" + ln for ln in lines)
-        )
+        hunks.append("\n".join(lines))
     return "\n".join(hunks), truncated
 
 

