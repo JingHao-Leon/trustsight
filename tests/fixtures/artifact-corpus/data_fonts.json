@@ -1,0 +1,26 @@
+{
+  "declared": {
+    "depends": []
+  },
+  "description": "Negative control: a font package's manifest must trip no A rule.",
+  "expected": [],
+  "manifest": [
+    {
+      "mode": 420,
+      "path": "/usr/share/fonts/TTF/Demo-Regular.ttf"
+    },
+    {
+      "mode": 420,
+      "path": "/usr/share/fonts/TTF/Demo-Bold.ttf"
+    },
+    {
+      "mode": 420,
+      "path": "/usr/share/licenses/demo-font/LICENSE"
+    },
+    {
+      "mode": 420,
+      "path": "/usr/share/fonts/TTF/"
+    }
+  ],
+  "stratum": "data_fonts"
+}

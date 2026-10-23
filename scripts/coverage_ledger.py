@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""Build the per-rule coverage ledger from every benign source.
+
+This is the corpus-expansion control panel.  It reuses the calibration scan,
+so it costs one replay (shared with the gates when CI passes rows) and then
+adds the sources a diff replay cannot cover: the history corpus, the manifest
+corpus, the artifact corpus and the labelled attack fixtures.
+
+Usage:
+    uv run python scripts/coverage_ledger.py
+    uv run python scripts/coverage_ledger.py --jobs 8 \\
+        --out tests/fixtures/coverage-ledger.json
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import tomllib
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+import calibration_gates as cg  # noqa: E402
+from calibration._ledger import (  # noqa: E402
+    Observation,
+    build_ledger,
+    expected_from_strata,
+    observation_from_rows,
+    write_ledger,
+)
+
+ROOT = Path(__file__).resolve().parent.parent
+FIXTURES = ROOT / "tests" / "fixtures"
+
+
+def _stratum_map(manifest: Path) -> dict[str, str]:
+    if not manifest.exists():
+        return {}
+    lock = json.loads(manifest.read_text())
+    return {e["pkg"]: e["stratum"] for e in lock.get("entries", [])}
+
+
+def _load_history() -> list[dict]:
+    sys.path.insert(0, str(ROOT / "tests" / "fixtures"))
+    sys.path.insert(0, str(ROOT / "tests" / "harness"))
+    try:
+        from history_replay import replay
+    except Exception as exc:  # pragma: no cover - a source is optional
+        print(f"coverage: history corpus unavailable: {exc}", file=sys.stderr)
+        return []
+    return replay()
+
+
+def _scan_manifest_corpus() -> list[dict]:
+    if not cg.MANIFEST_CORPUS.exists():
+        return []
+    rows = cg.scan_corpus(cg.MANIFEST_CORPUS)
+    for row in rows:
+        row["stratum"] = "signed_sources"
+    return rows
+
+
+def _scan_artifact_corpus(directory: Path) -> list[dict]:
+    """Load committed artifact manifests and run the A-series inspector."""
+    if not directory.exists():
+        return []
+    from trustsight.analysis.artifact import inspect_manifest
+
+    rows: list[dict] = []
+    for path in sorted(directory.glob("*.json")):
+        if path.name == "expected.json":
+            continue
+        doc = json.loads(path.read_text())
+        findings = inspect_manifest(doc.get("manifest") or [], doc.get("declared") or {})
+        rows.append({
+            "name": path.stem,
+            "stratum": doc.get("stratum", "artifact"),
+            "fired": sorted({f["rule_id"] for f in findings}),
+        })
+    return rows
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Build the coverage ledger")
+    parser.add_argument("--corpus", type=Path, default=FIXTURES / "benign-corpus")
+    parser.add_argument("--manifest", type=Path, default=FIXTURES / "corpus.lock")
+    parser.add_argument("--strata", type=Path, default=ROOT / "scripts" / "strata.toml")
+    parser.add_argument("--artifact-dir", type=Path,
+                        default=FIXTURES / "artifact-corpus")
+    parser.add_argument("--out", type=Path,
+                        default=FIXTURES / "coverage-ledger.json")
+    parser.add_argument("--jobs", type=int, default=cg.default_jobs())
+    parser.add_argument("--no-history", action="store_true")
+    parser.add_argument("--no-manifest", action="store_true")
+    parser.add_argument("--no-artifact", action="store_true")
+    parser.add_argument("--no-malicious", action="store_true")
+    parser.add_argument("--rows", type=Path,
+                        help="reuse a calibration --rows artifact instead of rescanning")
+    args = parser.parse_args()
+
+    if not args.corpus.exists():
+        print(f"corpus not found: {args.corpus}", file=sys.stderr)
+        return 2
+
+    strata_cfg = tomllib.loads(args.strata.read_text()) if args.strata.exists() else {}
+    strata_of = _stratum_map(args.manifest)
+    expected = expected_from_strata(strata_cfg)
+
+    if args.rows:
+        doc = json.loads(args.rows.read_text())
+        cold = []
+        packages = doc.get("benign_packages") or [""] * len(doc.get("benign", []))
+        for pkg, rules in zip(packages, doc.get("benign", [])):
+            cold.append({
+                "package": pkg,
+                "stratum": strata_of.get(pkg, "unknown"),
+                "entries": [{"rule_id": rid} for rid in rules],
+            })
+    else:
+        with cg.shipped_config():
+            cold = cg.scan_corpus(args.corpus, jobs=args.jobs)
+        for row in cold:
+            row["stratum"] = strata_of.get(row["package"], "unknown")
+    observations: list[Observation] = [observation_from_rows(cold, "cold")]
+
+    if not args.no_history:
+        history = _load_history()
+        for row in history:
+            row.setdefault("stratum", row.get("stratum", "history"))
+        observations.append(observation_from_rows(history, "history"))
+
+    if not args.no_manifest:
+        observations.append(observation_from_rows(_scan_manifest_corpus(), "manifest"))
+
+    if not args.no_artifact:
+        observations.append(observation_from_rows(
+            _scan_artifact_corpus(args.artifact_dir), "artifact"))
+
+    if not args.no_malicious:
+        with cg.shipped_config():
+            malicious = cg.scan_malicious(FIXTURES / "malicious", jobs=args.jobs)
+        observations.append(observation_from_rows(malicious, "malicious"))
+
+    baseline_path = FIXTURES / "baseline.json"
+    if baseline_path.exists():
+        baseline = json.loads(baseline_path.read_text())
+        warm = (baseline.get("warm") or {}).get("strata") or {}
+        warm_obs = Observation(source="warm")
+        for stratum, row in warm.items():
+            for rule_id, rate in (row.get("rules") or {}).items():
+                if rate:
+                    warm_obs.fires[rule_id] = warm_obs.fires.get(rule_id, 0) + 1
+                    warm_obs.strata[rule_id].add(stratum)
+        if warm_obs.fires:
+            observations.append(warm_obs)
+
+    digest = ""
+    if (FIXTURES / "baseline.json").exists():
+        digest = json.loads((FIXTURES / "baseline.json").read_text()).get(
+            "corpus_content_sha256", "")
+    ledger = build_ledger(observations, expected=expected, corpus_sha256=digest, version="2")
+    write_ledger(args.out, ledger)
+
+    print(f"coverage ledger: {args.out}")
+    print(f"  catalog: {ledger['catalog_size']} ids")
+    for state, count in ledger["counts"].items():
+        print(f"  {state:16} {count}")
+    unnamed = [rid for rid, row in ledger["rules"].items()
+               if row["state"] != "measured" and not row["reason"]]
+    if unnamed:
+        print(f"  ERROR: {len(unnamed)} non-measured rules have no reason",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -9,7 +9,7 @@ on:
 # lock names, packed by scripts/pack_calibration_corpus.py.  The same env
 # as calibration.yml, because both jobs must measure the same bytes.
 env:
-  CALIBRATION_CORPUS_TAG: baseline-2026-09-24
+  CALIBRATION_CORPUS_TAG: baseline-2026-10-22
 
 permissions:
   issues: write
@@ -42,6 +42,10 @@ jobs:
           mkdir -p tests/fixtures/benign-corpus
           tar -xzf /tmp/baseline-benign-corpus.tar.gz -C tests/fixtures/benign-corpus
           uv run python scripts/pack_calibration_corpus.py --check
+          uv run python scripts/corpus_provenance.py --corpus tests/fixtures/benign-corpus
+
+      - name: Check AUR shape drift
+        run: uv run python scripts/corpus_shape_drift.py --json /tmp/shape-drift.json || true
 
       - name: Compute current baseline
         run: |

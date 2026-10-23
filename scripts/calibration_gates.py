@@ -64,6 +64,8 @@ def _write_scan_rows(path: Path, benign: list[dict],
     """
     path.write_text(json.dumps({
         "benign": [[e["rule_id"] for e in row["entries"]] for row in benign],
+        "benign_packages": [row.get("package", "") for row in benign],
+        "benign_paths": [str(row.get("path", "")) for row in benign],
         "malicious": [sorted(row["fired"]) for row in malicious],
     }) + "\n")
 
@@ -166,6 +168,8 @@ def _evaluate(benign: list[dict], malicious: list[dict]) -> list[Gate]:
         gate_homograph_single_script(),
         gate_meta_escalation_below_cap(benign),
         gate_manifest_benign_corpus(),
+        gate_coverage_ledger_complete(),
+        gate_artifact_corpus(),
     ]
     if malicious:
         gates.append(gate_separation(benign, malicious))
@@ -294,7 +298,9 @@ from scripts.calibration._core import (
 )
 from scripts.calibration._gates import (
     gate_benign_fire_rates,
+    gate_artifact_corpus,
     gate_cluster_rate_below_members,
+    gate_coverage_ledger_complete,
     gate_d_series_warm,
     gate_h035_position,
     gate_homograph_single_script,

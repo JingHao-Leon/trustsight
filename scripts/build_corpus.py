@@ -23,6 +23,9 @@ import tomllib
 import urllib.request
 from pathlib import Path
 
+import corpus_select
+import corpus_provenance
+
 AUR_META = "https://aur.archlinux.org/packages-meta-ext-v1.json.gz"
 REPO_BASE = "https://github.com/archlinux/aur.git"
 CACHE_DIR = Path.home() / ".cache" / "trustsight"
@@ -182,31 +185,37 @@ def get_diff(repo_dir: Path, old_sha: str, new_sha: str) -> str:
 
 
 def filter_by_stratum(pkgs: list[dict], stratum_name: str) -> list[dict]:
-    sel = {
-        "bin_repack": lambda n, d: n.endswith("-bin") and not n.endswith("-git"),
-        "vcs_git": lambda n, d: n.endswith("-git"),
-        "lang_ecosystem": lambda n, d: any(
-            n.startswith(p) for p in ("python-", "ruby-", "perl-", "rust-", "go-")
-        ),
-        "data_fonts": lambda n, d: any(
-            n.startswith(p) for p in ("ttf-", "otf-", "fonts-")
-        ) or "font" in d,
-        "dkms_kernel": lambda n, d: "dkms" in n.lower() or "dkms" in d,
-        "source_patched": lambda n, d: "patch" in d or n.endswith("-patched"),
-        "autotools": lambda n, d: ("autotools" in d or "configure" in d
-                                   or "autoconf" in d or "automake" in d),
-        "large_electron": lambda n, d: "electron" in n.lower() or "asar" in d,
-    }
-    fn = sel.get(stratum_name)
-    if fn is None:
-        return pkgs
-    filtered = []
-    for p in pkgs:
-        name = p.get("Name", "")
-        desc = (p.get("Description", "") or "").lower()
-        if fn(name, desc):
-            filtered.append(p)
-    return filtered
+    """Stage 1 of the selector: metadata-only shape matching."""
+    return [p for p in pkgs if corpus_select.metadata_match(p, stratum_name)]
+
+
+def repo_tree(repo_dir: Path, branch: str) -> list[str]:
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "ls-tree", "-r", "--name-only", branch],
+        capture_output=True, text=True, timeout=60,
+    )
+    return result.stdout.splitlines() if result.returncode == 0 else []
+
+
+def repo_file(repo_dir: Path, branch: str, name: str,
+              max_bytes: int = 512 * 1024) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "show", f"{branch}:{name}"],
+        capture_output=True, text=False, timeout=60,
+    )
+    if result.returncode != 0 or len(result.stdout) > max_bytes:
+        return ""
+    return result.stdout.decode("utf-8", errors="replace")
+
+
+def distinct_authors(repo_dir: Path, branch: str, limit: int = 200) -> int:
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "log", branch, "--format=%ae", f"-{limit}"],
+        capture_output=True, text=True, timeout=60,
+    )
+    if result.returncode != 0:
+        return 0
+    return len({line.strip().lower() for line in result.stdout.splitlines() if line.strip()})
 
 
 def ensure_sparse_repo(repo_dir: Path) -> Path:
@@ -307,7 +316,7 @@ def main():
     parser.add_argument("--strata", type=Path, help="strata.toml path (selection mode only)")
     parser.add_argument("--manifest", type=Path, default=FIXTURES / "corpus.lock")
     parser.add_argument("--out", type=Path, default=FIXTURES / "benign-corpus")
-    parser.add_argument("--max-per-stratum", type=int, default=40)
+    parser.add_argument("--max-per-stratum", type=int, default=120)
     parser.add_argument("--max-diffs-per-pkg", type=int, default=30)
     parser.add_argument("--min-diffs", type=int, default=3)
     parser.add_argument("--refresh-meta", action="store_true", help="re-fetch meta")
@@ -319,6 +328,15 @@ def main():
     parser.add_argument(
         "--repo-dir", type=Path, default=CACHE_DIR / "aur.git",
         help="bare AUR repo used as the object cache",
+    )
+    parser.add_argument(
+        "--append", action="store_true",
+        help="keep every package already in --manifest and add candidates "
+             "until each stratum reaches its target (corpus v2)",
+    )
+    parser.add_argument(
+        "--corpus-version", type=int, default=1,
+        help="version recorded in the lock (append mode usually 2)",
     )
     args = parser.parse_args()
 
@@ -343,10 +361,29 @@ def main():
     print("=== Fetching AUR metadata ===")
     all_pkgs = fetch_meta(force=args.refresh_meta)
 
-    print("\n=== Setting up AUR clone ===")
-    aur_repo = ensure_aur_clone()
+    print("\n=== Setting up AUR object cache ===")
+    # Selection mode fetches only the branches it examines.  A full bare
+    # clone of the AUR monorepo is tens of GB; the sparse cache is the same
+    # object store the reconstruction path uses.
+    aur_repo = ensure_sparse_repo(args.repo_dir)
+    indicators = corpus_provenance.load_indicators()
+    provenance_excluded: list[dict] = []
 
-    lock_entries = []
+    previous_lock = None
+    lock_entries: list[dict] = []
+    if args.append and args.manifest.exists():
+        previous_lock = json.loads(args.manifest.read_text())
+        lock_entries = list(previous_lock.get("entries", []))
+        if not any(args.out.glob("*.diff")):
+            print("=== Reconstructing the existing corpus first ===")
+            code = reconstruct_from_manifest(args.manifest, args.out, args.repo_dir)
+            if code != 0:
+                sys.exit(code)
+    existing_names = {e["pkg"] for e in lock_entries}
+    existing_by_stratum: dict[str, set[str]] = {}
+    for entry in lock_entries:
+        existing_by_stratum.setdefault(entry["stratum"], set()).add(entry["pkg"])
+
     pkg_counter = 0
     diff_counter = 0
     total_fetch_time = 0.0
@@ -354,7 +391,8 @@ def main():
 
     for stratum_name, cfg in strata.get("strata", {}).items():
         target = cfg.get("target", 20)
-        print(f"\n=== {stratum_name} (target: {target}) ===")
+        already = len(existing_by_stratum.get(stratum_name, ()))
+        print(f"\n=== {stratum_name} (target: {target}, existing: {already}) ===")
 
         candidates = filter_by_stratum(all_pkgs, stratum_name)
         print(f"  Candidates: {len(candidates)}")
@@ -363,12 +401,18 @@ def main():
             candidates, key=lambda p: p.get("Popularity", 0), reverse=True
         )
 
-        selected = 0
-        for pkg in by_popularity[:args.max_per_stratum]:
+        selected = already
+        cap = cfg.get("max_candidates", args.max_per_stratum)
+        for pkg in by_popularity[:cap]:
             if selected >= target:
                 break
             name = pkg.get("Name", "")
-            if not name:
+            if not name or name in existing_names:
+                continue
+            reason = corpus_provenance.package_excluded(name, indicators)
+            if reason:
+                provenance_excluded.append({"pkg": name, "reason": reason})
+                print(f"{name}: excluded by provenance ({reason})")
                 continue
 
             pkg_counter += 1
@@ -387,6 +431,17 @@ def main():
             if commit_count < args.min_diffs:
                 print(f"too few commits ({commit_count})")
                 continue
+
+            if corpus_select.requires_tree(stratum_name):
+                paths = repo_tree(aur_repo, name)
+                pkgbuild = repo_file(aur_repo, name, "PKGBUILD")
+                authors = (distinct_authors(aur_repo, name)
+                           if stratum_name == "maintainer_churn" else None)
+                if not corpus_select.tree_match(
+                        pkg, stratum_name, paths=paths,
+                        pkgbuild=pkgbuild, authors=authors):
+                    print("shape mismatch")
+                    continue
 
             t1 = time.time()
             commits = get_commits(aur_repo, name, args.max_diffs_per_pkg + 1)
@@ -433,12 +488,25 @@ def main():
     lock = {
         "generated": time.strftime("%Y-%m-%d"),
         "strata_file": args.strata.name,
+        "corpus_version": args.corpus_version,
         "total_entries": len(lock_entries),
         "xfuncname": XFUNCNAME,
         "diff_flags": ["-W"],
         "core_abbrev": ABBREV,
         "entries": sorted(lock_entries, key=lambda e: (e["stratum"], e["pkg"], e["old_sha"])),
+        "provenance": {
+            "indicator_source_sha256": indicators["source_sha256"],
+            "excluded": provenance_excluded,
+            "excluded_of": f"{len(provenance_excluded)} candidates excluded",
+        },
     }
+    if previous_lock is not None:
+        import hashlib
+        lock["previous_lock_sha256"] = hashlib.sha256(
+            json.dumps(previous_lock, sort_keys=True).encode()).hexdigest()
+        old = previous_lock.get("provenance") or {}
+        lock["provenance"]["excluded"] = (
+            list(old.get("excluded") or []) + provenance_excluded)
     args.manifest.write_text(json.dumps(lock, indent=2) + "\n")
 
     print(f"\n{'=' * 50}")

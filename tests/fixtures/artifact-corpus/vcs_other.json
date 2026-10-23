@@ -1,0 +1,14 @@
+{
+  "declared": {
+    "depends": []
+  },
+  "description": "An ordinary ELF install from a non-git VCS; no artifact finding.",
+  "expected": [],
+  "manifest": [
+    {
+      "mode": 493,
+      "path": "/usr/bin/demo"
+    }
+  ],
+  "stratum": "vcs_other"
+}

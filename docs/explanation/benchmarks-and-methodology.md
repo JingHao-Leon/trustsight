@@ -31,8 +31,8 @@ The benign corpus includes package updates that are not perfectly clean: routine
 The fix was to split by class. When CRITICAL-only packages were isolated from the rest, the separation became meaningful:
 
 - **CRITICAL** p5 = 60
-- **Benign** p95 = 30
-- Gap = +30 points
+- **Benign** p95 = 35
+- Gap = +25 points
 
 Pooling was hiding the separation. Advisory-level and low-severity malware dragged the malicious-class average down, while the benign tail dragged the benign average up. Per-class measurement revealed that the tool cleanly separates the threats that matter.
 
@@ -42,7 +42,7 @@ Absolute p95 on either class is not useful in isolation. A tool that scores ever
 
 The gap between the bottom 5th percentile of malicious scores and the top 95th percentile of benign scores is the operational separation. It answers the question: how much room is there to set a threshold that catches real threats without false-positive burden?
 
-If the CRITICAL p5 is 60 and the benign p95 is 30, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 30-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
+If the CRITICAL p5 is 60 and the benign p95 is 30, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 25-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
 
 The gap is measured as p5 of the worst class (CRITICAL) versus p95 of the benign class because these are the tails that matter for threshold setting. The center of the distribution is irrelevant for operational decision-making.
 
@@ -68,21 +68,21 @@ The gates together enforce three distinct properties: detection (no missed label
 
 ### Current numbers
 
-Measured against the locked benign corpus as `tests/fixtures/corpus.lock` records it - **3,739** diffs - with the same code path the calibration gates use. Re-derive with `scripts/rebaseline.py` when scoring changes; `test_the_documented_corpus_size_matches_the_lock` keeps the figure and the lock from drifting apart.
+Measured against the locked benign corpus as `tests/fixtures/corpus.lock` records it - **8,393** diffs - with the same code path the calibration gates use. Re-derive with `scripts/rebaseline.py` when scoring changes; `test_the_documented_corpus_size_matches_the_lock` keeps the figure and the lock from drifting apart.
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
-| Benign zero-rate | 72.3% | no minimum; fire-rate cap controls FPs |
-| Ruleset trigger rate | 31.2% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
-| Benign flag rate | 7.1% | about **1 in 14** benign corpus diffs exceed the default profile's 20-point threshold |
+| Benign zero-rate | 69.7% | no minimum; fire-rate cap controls FPs |
+| Ruleset trigger rate | 33.6% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
+| Benign flag rate | 8.9% | about **1 in 11** benign corpus diffs exceed the default profile's 20-point threshold |
 | Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 60 | > benign p95 |
-| Benign p95 | 30 | < CRITICAL p5 (margin: 30) |
+| Benign p95 | 35 | < CRITICAL p5 (margin: 25) |
 | Tests | Run `uv run --extra dev pytest` for the current checkout | n/a |
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model on this corpus and fixture set. CI rejects gate regressions, not changes to an external performance claim.
 
-In one line: 72.3% benign zero-rate, benign p95 = 30 against malicious p5 = 60 on the 3,739-diff locked corpus.
+In one line: 69.7% benign zero-rate, benign p95 = 35 against malicious p5 = 60 on the 8,393-diff locked corpus.
 
 ## Reproducible methodology
 
@@ -94,11 +94,13 @@ The pinned corpus prevents a common failure mode in security tooling: benchmarks
 
 ## Per-stratum evaluation
 
-The benign corpus is divided into eight strata (`source_patched`, `bin_repack`, `vcs_git`, `lang_ecosystem`, `data_fonts`, `dkms_kernel`, `autotools`, `large_electron`). Breaking the corpus down by package shape keeps a rule that is loud on one shape from hiding inside an aggregate rate: `scripts/rebaseline.py` records fire rates per stratum under `strata.<name>.rules` in `baseline.json`, and [Fire Rates](fire-rates.md) reports them per rule.
+The benign corpus is divided into sixteen strata: the original eight (`source_patched`, `bin_repack`, `vcs_git`, `lang_ecosystem`, `data_fonts`, `dkms_kernel`, `autotools`, `large_electron`) plus eight expansion cohorts (`persist_surface`, `signed_sources`, `multi_client_fetch`, `maintainer_churn`, `dependency_heavy`, `vcs_other`, `appimage_repack`, `lang_deep`). Every catalog id is accounted for in `tests/fixtures/coverage-ledger.json` as measured, zero-fire with a reason, cold-only, or adversarial-only; the ledger is the expansion's control panel and is checked by the `coverage ledger is complete` gate. Breaking the corpus down by package shape keeps a rule that is loud on one shape from hiding inside an aggregate rate: `scripts/rebaseline.py` records fire rates per stratum under `strata.<name>.rules` in `baseline.json`, and [Fire Rates](fire-rates.md) reports them per rule.
+
+A stratum is selected by packaging shape, never by a rule target. The provenance screen rejects any candidate or diff already on a compromised-package, IOC or watchlist list, and records the `N of M` exclusion count. A `vcs_other` cohort is deliberately labelled low-power because Mercurial/Subversion/Bazaar/Fossil packaging is rare; padding it would measure duplicates, not the ecosystem.
 
 The corpus-level gate is the `>= 30%` benign fire-rate cap (`scripts/calibration_gates.py`): no scoring rule may fire on 30% or more of the benign diffs, so a rule cannot become a census on ordinary packaging.
 
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 72.3% zero-rate means 72.3% of benign diffs score 0, while **7.1% exceed the 20-point threshold**: roughly one reviewer workload item per fourteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 69.7% zero-rate means 69.7% of benign diffs score 0, while **8.9% exceed the 20-point threshold**: roughly one reviewer workload item per fourteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

@@ -84,6 +84,8 @@ def gate_published_figures(benign: list[dict], malicious: list[dict]) -> Gate:
     is not a threshold the gate sets: it is the published record, and this
     gate is what keeps the record from outliving the measurement.
     """
+    from trustsight.scoring import FLAG_THRESHOLD
+
     published = json.loads(
         (FIXTURES / "published-figures.json").read_text()
     )["calibration"]
@@ -100,9 +102,9 @@ def gate_published_figures(benign: list[dict], malicious: list[dict]) -> Gate:
         "malicious_p5": malicious_p5,
         "malicious_minimum": critical[0] if critical else 0,
         "benign_above_threshold_pct": round(
-            sum(1 for s in scores if s > 20) / n * 100, 1),
+            sum(1 for s in scores if s > FLAG_THRESHOLD) / n * 100, 1),
         "threshold_percentile": round(
-            sum(1 for s in scores if s <= 20) / n * 100, 1),
+            sum(1 for s in scores if s <= FLAG_THRESHOLD) / n * 100, 1),
         "separation_margin": malicious_p5 - benign_p95,
         "ruleset_trigger_rate_pct": round(
             sum(1 for r in benign
@@ -390,6 +392,82 @@ def gate_s_series_last_fired_coverage(
         ("never fired outside its own fixture: " + ", ".join(never))
         if never else "every S rule has fired outside its own fixture",
     )
+
+
+def gate_coverage_ledger_complete() -> Gate:
+    """Every catalog id has exactly one coverage state and a reason.
+
+    The ledger is the expansion's control panel.  A rule missing from it, a
+    state outside the closed set, or a non-measured rule with no reason is a
+    silent hole in the claim that the corpus covers the catalog.
+    """
+    from trustsight.contract import pseudo_rule_ids, rule_ids
+
+    name = "coverage ledger is complete"
+    path = FIXTURES / "coverage-ledger.json"
+    if not path.exists():
+        return Gate(name, False, 0, 0, "coverage-ledger.json missing")
+    doc = json.loads(path.read_text())
+    rows = doc.get("rules") or {}
+    expected = set(rule_ids()) | set(pseudo_rule_ids())
+    states = {"measured", "zero_fire", "cold_only", "adversarial_only"}
+    problems: list[str] = []
+    missing = sorted(expected - set(rows))
+    extra = sorted(set(rows) - expected)
+    if missing:
+        problems.append(f"missing ids: {missing[:8]}")
+    if extra:
+        problems.append(f"unknown ids: {extra[:8]}")
+    bad_state = sorted(rid for rid, row in rows.items()
+                       if row.get("state") not in states)
+    if bad_state:
+        problems.append(f"bad state: {bad_state[:8]}")
+    no_reason = sorted(rid for rid, row in rows.items()
+                       if row.get("state") != "measured" and not row.get("reason"))
+    if no_reason:
+        problems.append(f"no reason: {no_reason[:8]}")
+    measured_no_source = sorted(rid for rid, row in rows.items()
+                                if row.get("state") == "measured" and not row.get("sources"))
+    if measured_no_source:
+        problems.append(f"measured without source: {measured_no_source[:8]}")
+    return Gate(name, not problems, {"rules": len(rows), "expected": len(expected)},
+                0, "; ".join(problems))
+
+
+def gate_artifact_corpus() -> Gate:
+    """The A-series has shape coverage and a clean negative control.
+
+    Diffs never touch artifacts, so the A rules were exercised only by unit
+    tests.  The committed manifest corpus gives every stratum a representative
+    artifact; the font manifest is the negative control and must trip nothing.
+    """
+    from trustsight.analysis.artifact import inspect_manifest
+
+    name = "artifact corpus: A-series coverage, negative control clean"
+    root = FIXTURES / "artifact-corpus"
+    expected_path = root / "expected.json"
+    if not expected_path.exists():
+        return Gate(name, False, 0, 0, "artifact corpus missing")
+    expected = json.loads(expected_path.read_text())
+    problems: list[str] = []
+    fired: set[str] = set()
+    for filename, record in sorted(expected.items()):
+        path = root / filename
+        if not path.exists():
+            problems.append(f"{filename}: missing")
+            continue
+        doc = json.loads(path.read_text())
+        findings = inspect_manifest(doc.get("manifest") or [],
+                                    doc.get("declared") or {})
+        ids = {f["rule_id"] for f in findings}
+        fired |= ids
+        want = set(record.get("expected") or ())
+        if ids != want:
+            problems.append(f"{filename}: fired {sorted(ids)}, expected {sorted(want)}")
+    if not fired:
+        problems.append("corpus exercises no A rule (vacuous)")
+    return Gate(name, not problems, sorted(fired), "A001-A008",
+                "; ".join(problems))
 
 def gate_x_series_rate_stability(benign: list[dict]) -> Gate:
     """Every X rule's benign rate matches the committed baseline.

@@ -19,6 +19,7 @@ from pathlib import Path
 
 from trustsight.analysis import scan_diff
 from trustsight.config import load_config
+from trustsight.deps import extract_dependency_changes
 from trustsight.rules import load_rules
 
 FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
@@ -80,6 +81,30 @@ def _order_by_chain(diff_files: list[Path], stems: list[str]) -> tuple[list[Path
     return sorted(diff_files, key=lambda p: rank[p.stem]), True
 
 
+def _stats_block(per_stratum) -> dict:
+    out = {}
+    for stratum, data in per_stratum.items():
+        scores = sorted(data["scores"])
+        n = data["diffs"]
+        out[stratum] = {
+            "n_diffs": n,
+            "n_pkgs": len(data["pkgs"]),
+            "p95": scores[int(n * 0.95)] if n else 0,
+            "zero_pct": sum(1 for s in scores if s == 0) / n if n else 0,
+            "rules": {rid: count / n for rid, count in data["rules"].items()},
+        }
+    return out
+
+
+def _x_rates(per_stratum, total_diffs: int, x_rules) -> dict:
+    return {
+        rid: (sum(data["rules"].get(rid, 0)
+                  for data in per_stratum.values()) / total_diffs
+              if total_diffs else 0.0)
+        for rid in x_rules
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Rebaseline FP rates")
     parser.add_argument("--corpus", type=Path, default=FIXTURES / "benign-corpus")
@@ -110,8 +135,10 @@ def main():
 
     strata_lookup = {}
     chain_index: dict[str, list[str]] = {}
+    corpus_version = 1
     if args.manifest.exists():
         lock = json.loads(args.manifest.read_text())
+        corpus_version = lock.get("corpus_version", 1)
         strata_lookup = {e["pkg"]: e["stratum"] for e in lock.get("entries", [])}
         chain_index = _build_chain_index(lock.get("entries", []))
 
@@ -125,9 +152,15 @@ def main():
         pkg_diffs.setdefault(pkg, []).append(diff_file)
 
     fallbacks = 0
+    warm_per_stratum = defaultdict(
+        lambda: {"diffs": 0, "pkgs": set(), "scores": [], "rules": Counter()}
+    ) if args.warm else None
     with shipped_config():
         config = load_config()
         rules = load_rules()
+        if args.warm:
+            from trustsight.db import init_db
+            init_db()
         seen_urls: dict[str, set[str]] = {}
         observations = 0
         for pkg, diff_files in pkg_diffs.items():
@@ -139,10 +172,16 @@ def main():
                 diff_files.sort(key=lambda p: p.stem)
             for diff_file in diff_files:
                 stratum = strata_lookup.get(pkg, "unknown")
-                fact = scan_diff(diff_file.read_text(), rules=rules, config=config,
+                text = diff_file.read_text()
+                fact = scan_diff(text, rules=rules, config=config,
                                  package_name=pkg, seen_urls=seen_urls,
-                                 observation_count=observations if args.warm else 0)
+                                 observation_count=0)
                 observations += 1
+                if args.warm:
+                    from trustsight.db import record_dependency_names
+                    added = extract_dependency_changes(text, pkg)
+                    record_dependency_names(sorted(
+                        {name for names in added.values() for name in names}))
                 per_stratum[stratum]["diffs"] += 1
                 per_stratum[stratum]["pkgs"].add(pkg)
                 per_stratum[stratum]["scores"].append(fact.final_score)
@@ -153,35 +192,53 @@ def main():
                         key = entry.rule_id
                     per_stratum[stratum]["rules"][key] += 1
 
+        if args.warm:
+            # Second pass against the first pass's observations.  State is
+            # seeded from the corpus itself, never a downloaded seed.
+            warm_seen = {key: set(values) for key, values in seen_urls.items()}
+            warm_obs = observations
+            for pkg, diff_files in pkg_diffs.items():
+                if args.order == "chain":
+                    diff_files, _ok = _order_by_chain(
+                        diff_files, chain_index.get(pkg, []))
+                else:
+                    diff_files = sorted(diff_files, key=lambda p: p.stem)
+                for diff_file in diff_files:
+                    stratum = strata_lookup.get(pkg, "unknown")
+                    fact = scan_diff(diff_file.read_text(), rules=rules,
+                                     config=config, package_name=pkg,
+                                     seen_urls=warm_seen,
+                                     observation_count=warm_obs)
+                    warm_per_stratum[stratum]["diffs"] += 1
+                    warm_per_stratum[stratum]["pkgs"].add(pkg)
+                    warm_per_stratum[stratum]["scores"].append(fact.final_score)
+                    for entry in fact.score_breakdown:
+                        if entry.rule_id in ("SOURCE_BUCKET", "NOVELTY"):
+                            key = f"{entry.rule_id}/{entry.weight}"
+                        else:
+                            key = entry.rule_id
+                        warm_per_stratum[stratum]["rules"][key] += 1
+
     baseline = {
         "generated": date.today().isoformat(),
         "corpus_content_sha256": _corpus_content_hash(args.corpus),
         "pipeline_version": _pipeline_version(),
+        "corpus_version": corpus_version,
         "strata": {},
     }
 
-    for stratum, data in per_stratum.items():
-        scores = sorted(data["scores"])
-        n = data["diffs"]
-        baseline["strata"][stratum] = {
-            "n_diffs": n,
-            "n_pkgs": len(data["pkgs"]),
-            "p95": scores[int(n * 0.95)] if n else 0,
-            "zero_pct": sum(1 for s in scores if s == 0) / n if n else 0,
-            "rules": {
-                rid: count / n for rid, count in data["rules"].items()
-            },
-        }
-
+    baseline["strata"] = _stats_block(per_stratum)
     baseline["replay_order"] = args.order
     baseline["warm_novelty"] = args.warm
     total_diffs = sum(data["diffs"] for data in per_stratum.values())
-    baseline["x_rates"] = {
-        rid: (sum(data["rules"].get(rid, 0)
-                  for data in per_stratum.values()) / total_diffs
-              if total_diffs else 0.0)
-        for rid in X_RULES
-    }
+    baseline["x_rates"] = _x_rates(per_stratum, total_diffs, X_RULES)
+    if warm_per_stratum is not None:
+        total_warm = sum(data["diffs"] for data in warm_per_stratum.values())
+        baseline["warm"] = {
+            "replay": "second pass against the first pass's observations",
+            "strata": _stats_block(warm_per_stratum),
+            "x_rates": _x_rates(warm_per_stratum, total_warm, X_RULES),
+        }
     if args.order == "chain" and fallbacks:
         print(f"  note: {fallbacks} package(s) had an unusable commit chain "
               f"and fell back to filename order", file=sys.stderr)

@@ -1,47 +1,121 @@
 [strata.bin_repack]
 description = "Prebuilt .deb/.tar unpackers. Trivial build(), templated URLs."
-target = 40
+target = 45
 selection = "pkgname ends in '-bin' and not '-git'"
 source = "aur_rpc"
+expected_rules = ["H001", "H083", "H084", "H085"]
 
 [strata.vcs_git]
-description = "Live VCS checkouts. SKIP is mandatory → must NOT fire H001."
-target = 30
+description = "Live VCS checkouts. SKIP is mandatory -> must NOT fire H001."
+target = 45
 selection = "pkgname ends in '-git'"
 source = "aur_rpc"
+expected_rules = ["H001", "H002", "H083"]
 
 [strata.source_patched]
 description = "Real prepare() with patches. Exercises tokenizer and R001 scope."
-target = 30
-selection = "PKGBUILD contains 'prepare()'"
+target = 40
+selection = "PKGBUILD contains 'patch' or pkgname ends in '-patched'"
 source = "grep"
+expected_rules = ["H001", "H002", "H015", "H023"]
 
 [strata.dkms_kernel]
 description = "Kernel modules. .install runs depmod/dkms as root."
-target = 20
-selection = "pkgname contains 'dkms' or .install contains 'depmod'"
-source = "aur_rpc + grep"
+target = 30
+selection = "pkgname contains 'dkms' or description names a kernel module"
+source = "aur_rpc"
+expected_rules = ["H023", "H039", "H084"]
 
 [strata.lang_ecosystem]
 description = "python-/ruby-/perl-/rust-/go- packages. May build-download."
-target = 25
+target = 40
 selection = "pkgname starts with python- ruby- perl- rust- go-"
 source = "aur_rpc"
+expected_rules = ["H053", "H059"]
 
 [strata.autotools]
 description = "./configure generators. The xz shape."
-target = 20
-selection = "PKGBUILD contains './configure'"
-source = "grep"
+target = 30
+selection = "description or name names autotools/configure/autoconf/automake"
+source = "aur_rpc"
+expected_rules = ["H015", "H023", "H048"]
 
 [strata.data_fonts]
 description = "NEGATIVE CONTROL. Font packages must never score HIGH/CRITICAL/FATAL."
-target = 15
-selection = "pkgname starts with ttf- otf- fonts-"
+target = 20
+selection = "pkgname starts with ttf- otf- fonts- or description names a font"
 source = "aur_rpc"
+expected_rules = []
 
 [strata.large_electron]
 description = "Electron/asar surgery. Long weird diffs."
-target = 10
-selection = "PKGBUILD contains 'electron' or 'asar'"
+target = 25
+selection = "description or name names electron/asar"
+source = "aur_rpc"
+expected_rules = ["H017", "H032", "H035"]
+
+# --- Phase 2 strata: the shapes the v1 corpus did not carry. -------------
+
+[strata.persist_surface]
+description = "Packages that install services, timers, tmpfiles, udev, dbus, polkit or autostart entries."
+target = 30
+selection = "tree installs a unit/timer/tmpfiles/udev/dbus/polkit/autostart file, or PKGBUILD writes one"
 source = "grep"
+requires_tree = true
+expected_rules = ["C017", "C029", "C031", "H032", "H035", "H039", "H084", "H089", "H093", "H095", "R017", "R052", "R054"]
+
+[strata.signed_sources]
+description = "PKGBUILD declares validpgpkeys or a detached .asc/.sig source."
+target = 25
+selection = "PKGBUILD has validpgpkeys or an .asc/.sig source"
+source = "grep"
+requires_tree = true
+expected_rules = ["H001", "H002", "H083", "H085", "T001", "T003"]
+
+[strata.multi_client_fetch]
+description = "Build functions fetch through aria2/axel/lftp/wget2/wget/curl/git/python requests."
+target = 25
+selection = "build/prepare/package uses an alternate fetch client or an interpreter HTTP call"
+source = "grep"
+requires_tree = true
+expected_rules = ["H016", "H041", "H068", "H069", "H071", "H072", "H075", "H082", "H090", "H094", "R044", "R045", "R046", "R047", "R048", "R049", "R050", "R051", "R052", "R053", "R054", "R055", "R056", "R057"]
+
+[strata.maintainer_churn]
+description = "Packages whose recent mirror history carries at least three distinct authors."
+target = 20
+selection = "git log over the package branch names >= 3 distinct author emails"
+source = "grep"
+requires_tree = true
+expected_rules = ["C006", "H026", "H037", "H044", "H049", "H050", "H051", "H054", "H058", "H074", "H086", "H088"]
+
+[strata.dependency_heavy]
+description = "Wide depends/makedepends/checkdepends/optdepends/provides/conflicts/replaces surfaces."
+target = 25
+selection = "sum of dependency-array entries is >= 15"
+source = "aur_rpc"
+expected_rules = ["D001", "D002", "D004", "H006", "H029", "H048", "H053", "H059", "H064"]
+
+[strata.vcs_other]
+description = "Mercurial/subversion/bazaar/fossil sources (low-power stratum: the ecosystem is small)."
+target = 10
+selection = "source=() names hg/svn/bzr/fossil"
+source = "grep"
+requires_tree = true
+low_power = true
+expected_rules = ["H001", "H002", "H016", "H083"]
+
+[strata.appimage_repack]
+description = "AppImage extraction/surgery: a bin_repack cousin with desktop and sandbox shapes."
+target = 15
+selection = "pkgname or description names AppImage, or the repository extracts one"
+source = "grep"
+requires_tree = true
+expected_rules = ["C017", "H032", "H035", "H039", "H076", "H084"]
+
+[strata.lang_deep]
+description = "Vendored cargo, Go modules, npm globals, Julia/R/Haskell/dotnet/composer/Maven shapes."
+target = 30
+selection = "tree carries vendor+cargo config, go.mod, package-lock/npm-shrinkwrap, cabal/csproj/fsproj, DESCRIPTION, Project.toml, composer.lock"
+source = "grep"
+requires_tree = true
+expected_rules = ["D001", "D002", "H029", "H048", "H053"]

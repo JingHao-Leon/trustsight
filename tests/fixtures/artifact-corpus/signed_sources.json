@@ -1,0 +1,20 @@
+{
+  "declared": {
+    "depends": []
+  },
+  "description": "A normal signed-source package installs an unusual executable.",
+  "expected": [
+    "A005"
+  ],
+  "manifest": [
+    {
+      "mode": 493,
+      "path": "/opt/demo/bin/demo"
+    },
+    {
+      "mode": 420,
+      "path": "/usr/share/licenses/demo/LICENSE"
+    }
+  ],
+  "stratum": "signed_sources"
+}

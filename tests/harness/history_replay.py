@@ -40,6 +40,7 @@ def replay() -> list[dict]:
         )
         rows.append({
             "name": cycle["name"],
+            "stratum": cycle.get("stratum", "history"),
             "fired": sorted({f["rule_id"] for f in findings}),
             "expected": sorted(cycle["expected"]),
         })

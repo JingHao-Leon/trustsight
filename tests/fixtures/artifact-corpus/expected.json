@@ -1,0 +1,59 @@
+{
+  "appimage_repack.json": {
+    "description": "An AppImage is unpacked and installed executable outside /usr/bin.",
+    "expected": [
+      "A005"
+    ],
+    "stratum": "appimage_repack"
+  },
+  "data_fonts.json": {
+    "description": "Negative control: a font package's manifest must trip no A rule.",
+    "expected": [],
+    "stratum": "data_fonts"
+  },
+  "dependency_heavy.json": {
+    "description": "A polkit rule is installed by a package that does not explain it.",
+    "expected": [
+      "A007"
+    ],
+    "stratum": "dependency_heavy"
+  },
+  "lang_deep.json": {
+    "description": "A package ships an eBPF object.",
+    "expected": [
+      "A008"
+    ],
+    "stratum": "lang_deep"
+  },
+  "maintainer_churn.json": {
+    "description": "An ordinary ELF install; no artifact finding.",
+    "expected": [],
+    "stratum": "maintainer_churn"
+  },
+  "multi_client_fetch.json": {
+    "description": "A helper links zlib without declaring it in depends.",
+    "expected": [
+      "A003"
+    ],
+    "stratum": "multi_client_fetch"
+  },
+  "persist_surface.json": {
+    "description": "A service is installed but the recipe declares no units.",
+    "expected": [
+      "A002"
+    ],
+    "stratum": "persist_surface"
+  },
+  "signed_sources.json": {
+    "description": "A normal signed-source package installs an unusual executable.",
+    "expected": [
+      "A005"
+    ],
+    "stratum": "signed_sources"
+  },
+  "vcs_other.json": {
+    "description": "An ordinary ELF install from a non-git VCS; no artifact finding.",
+    "expected": [],
+    "stratum": "vcs_other"
+  }
+}

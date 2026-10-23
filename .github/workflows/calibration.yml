@@ -14,7 +14,7 @@ permissions:
 # It moves in the same commit as corpus.lock: the asset IS the corpus the
 # lock names, packed by scripts/pack_calibration_corpus.py.
 env:
-  CALIBRATION_CORPUS_TAG: baseline-2026-09-24
+  CALIBRATION_CORPUS_TAG: baseline-2026-10-22
   # Shard count.  Keep in sync with the matrix below.  The plan's per-package
   # tasks are independent (each carries its novelty prefix), so the merged
   # shards are byte-identical to a single-process scan.
@@ -53,6 +53,7 @@ jobs:
           mkdir -p tests/fixtures/benign-corpus
           tar -xzf /tmp/baseline-benign-corpus.tar.gz -C tests/fixtures/benign-corpus
           uv run python scripts/pack_calibration_corpus.py --check
+          uv run python scripts/corpus_provenance.py --corpus tests/fixtures/benign-corpus
 
       - name: Scan shard ${{ matrix.shard }} of ${{ env.CALIBRATION_SHARDS }}
         run: >-
@@ -104,6 +105,18 @@ jobs:
           --merge-dir scan-shards
           --json gates.json
           --rows scan-rows.json
+
+      # The coverage ledger is built from the same shard rows: no second
+      # corpus replay.  It accounts for every catalog id and is uploaded with
+      # the gate results so a stratum that moved nothing is visible.
+      - name: Build the coverage ledger
+        run: >-
+          uv run python scripts/coverage_ledger.py
+          --rows scan-rows.json
+          --out coverage-ledger.json
+
+      - name: Audit provenance of the reconstructed corpus
+        run: uv run python scripts/corpus_provenance.py --corpus tests/fixtures/benign-corpus
 
       # Addendum 3 Phase 5: the H-series overlap/zero-fire audit.  Reporting
       # only: it measures the co-fire matrix and the zero-fire ledger the
@@ -160,3 +173,4 @@ jobs:
             gates.json
             h-reduction-audit.json
             history-replay.json
+            coverage-ledger.json

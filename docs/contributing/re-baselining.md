@@ -27,7 +27,7 @@ uv run python scripts/build_corpus.py --from-manifest \
   --out tests/fixtures/benign-corpus
 ```
 
-This regenerates the exact diffs recorded in the lock (~200 packages, ~11 minutes cold; the fetched objects are cached under `~/.cache/trustsight/aur.git`). The selection is deterministic: the same lock names the same packages and diffs on any machine. The reconstructed *bytes* are not byte-identical across git versions, though - `git diff -W` output is not byte-stable, which is why the calibration workflows download the packed release asset rather than rebuilding from the lock (see `.github/workflows/corpus-drift.yml`).
+This regenerates the exact diffs recorded in the lock (426 packages, ~9 minutes cold; the fetched objects are cached under `~/.cache/trustsight/aur.git`). The selection is deterministic: the same lock names the same packages and diffs on any machine. The reconstructed *bytes* are not byte-identical across git versions, though - `git diff -W` output is not byte-stable, which is why the calibration workflows download the packed release asset rather than rebuilding from the lock (see `.github/workflows/corpus-drift.yml`).
 
 Do **not** use plain `build_corpus.py --strata ...` for this. That mode re-selects packages by current AUR popularity and rewrites the lock, producing a different corpus each run.
 
@@ -50,6 +50,62 @@ The script:
 5. Writes the new `tests/fixtures/baseline.json`, recording `corpus_content_sha256` so a baseline can be tied to the corpus it came from.
 
 `rebaseline.py` only reports these numbers; it does not enforce thresholds or fail on regression.
+
+## The coverage ledger
+
+Every catalog id must be accounted for exactly once as `measured`,
+`zero_fire`, `cold_only` or `adversarial_only`. The ledger is built from the
+same replay as the baseline (no second corpus scan) plus the sibling sources:
+
+```bash
+uv run python scripts/coverage_ledger.py --jobs 8
+```
+
+It writes `tests/fixtures/coverage-ledger.json`. A measured rule records the
+source and strata that exercised it; a zero-fire rule names the shape it
+expects; a cold-only rule points at the history/warm replay; an
+adversarial-only rule points at its attack fixtures. The `coverage ledger is
+complete` gate fails when an id is missing, a state is outside the closed set,
+or a non-measured rule has no reason.
+
+`strata.toml` carries `expected_rules` per stratum. After a rebase, audit the
+ledger delta against those names with `calibration._ledger.ledger_audit`.
+A stratum that moves no expected row is either redundant or its predicate is
+wrong; both are findings, not a reason to add a rule-targeted package.
+
+## Provenance screen
+
+The corpus is a negative control, so a package or diff already on a known-bad
+list must never enter it. The screen runs at build time over the lock and in
+CI over the reconstructed diffs:
+
+```bash
+uv run python scripts/corpus_provenance.py --lock tests/fixtures/corpus.lock
+uv run python scripts/corpus_provenance.py --corpus tests/fixtures/benign-corpus
+```
+
+It checks compromised-package lists, IOC package/hash/domain/path/pattern
+entries, the official watchlist and known malicious commits, and records the
+indicator-source digest and `N of M` exclusion counts in the lock/report.
+
+## Warm replay
+
+`rebaseline.py --warm` runs a second pass over the corpus against the first
+pass's observation state. State is seeded from the corpus itself, never a
+downloaded seed. The cold rates remain the gate; the `warm` block is the
+second measurement for novelty and corpus-behavioral rules.
+
+## Artifact manifests
+
+Diffs never exercise the A-series. `tests/fixtures/artifact-corpus/` carries
+one reviewed manifest per stratum plus negative controls, and the
+`artifact corpus` gate checks every expected finding and requires the font
+manifest to trip nothing. Real manifests can be imported from the out-of-tree
+build lane with:
+
+```bash
+python scripts/build_artifact_corpus.py --from-dir /tmp/manifests
+```
 
 ## Reading the strata table
 

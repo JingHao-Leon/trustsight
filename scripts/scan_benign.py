@@ -42,6 +42,8 @@ def main() -> int:
     with cg.shipped_config():
         rows = cg.scan_corpus(args.corpus, sample=args.sample, jobs=args.jobs)
 
+    from trustsight.scoring import FLAG_THRESHOLD
+
     n = len(rows)
     if not n:
         print("no diffs scanned", file=sys.stderr)
@@ -53,7 +55,7 @@ def main() -> int:
         f"diffs={n} "
         f"zero-rate={sum(1 for s in scores if s == 0) / n * 100:.1f}% "
         f"p95={cg.percentile(scores, 0.95)} "
-        f"flag>20={sum(1 for s in scores if s > 20) / n * 100:.1f}% "
+        f"flag>{FLAG_THRESHOLD}={sum(1 for s in scores if s > FLAG_THRESHOLD) / n * 100:.1f}% "
         f"trigger={len(fired) / n * 100:.1f}%"
     )
 

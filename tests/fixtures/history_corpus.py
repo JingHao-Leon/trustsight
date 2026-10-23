@@ -110,3 +110,36 @@ CYCLES: list[dict] = [
         "expected": ["H026", "H044", "H074"],
     },
 ]
+
+
+#: One handover and one shared-repo cycle per Phase-2 stratum.  The shape
+#: under test is packaging, not the rule: a stratum's history coverage grows
+#: with its diff coverage, so temporal rules track the corpus, not just the
+#: eight original cohorts.
+_NEW_STRATA = (
+    "persist_surface", "signed_sources", "multi_client_fetch",
+    "maintainer_churn", "dependency_heavy", "vcs_other",
+    "appimage_repack", "lang_deep",
+)
+
+for _stratum in _NEW_STRATA:
+    CYCLES.append({
+        "name": f"{_stratum}-handover",
+        "stratum": _stratum,
+        "old": {"pkg-a": _pkg("pkg-a", "alice"),
+                "pkg-b": _pkg("pkg-b", "bob")},
+        "new": {"pkg-a": _pkg("pkg-a", "bob"),
+                "pkg-b": _pkg("pkg-b", "bob")},
+        "expected": ["H044"],
+    })
+    CYCLES.append({
+        "name": f"{_stratum}-shared-repo",
+        "stratum": _stratum,
+        "old": {},
+        "new": _bulk(f"{_stratum[:3]}", 3, "m"),
+        "source_repos": {
+            f"{_stratum[:3]}-{i:02d}": {"https://git.example/shared/repo"}
+            for i in range(1, 4)
+        },
+        "expected": ["H052"],
+    })
