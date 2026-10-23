@@ -221,7 +221,7 @@ upstream. Operators can exempt a legitimate non-forge distribution CDN or
 mirror by adding its registered domain to `[source_host_divergence] allow`
 in `config.toml`; the shipped list covers projects that publish prebuilt
 binaries from their own official site while `url=` names a source
- repository. Measured against the 3,739-diff benign corpus, C011's benign
+ repository. Measured against the v1 benign corpus, C011's benign
 rate is 0.05 %.
 
 ### C013: Source Fork Diverges From Declared Upstream {#c013}
@@ -382,7 +382,7 @@ replaced by a digest, is tightening and stays quiet. A digest variable that
 feeds a patch URL rather than a git ref is not a checkout pin, and the edit it
 belongs to is C003's neutral fact.
 
-Fire rate: 4 of 3739 benign diffs (0.12 %), all maintainers tracking a moving
+Fire rate: 4 on the v1 corpus benign diffs (0.12 %), all maintainers tracking a moving
 patch branch under a fixed version, which is the shape the rule describes.
 
 ### H066: Embedded Binary In Tree {#h066}
@@ -446,7 +446,7 @@ existing set widens who may sign. Introducing `validpgpkeys` where there was
 none is signature checking being switched on, so it is reported as a neutral
 fact rather than as a finding against the package.
 
-Fire rate: 6 of 3739 (0.16 %), two introductions and four upstream key
+Fire rate: 6 on the v1 corpus (0.16 %), two introductions and four upstream key
 rotations.
 
 ### H079: Build Flags Weakened {#h079}
@@ -469,7 +469,7 @@ value carrying no literal flag (`CFLAGS="${_cflags[@]}"`) is a set this rule
 cannot read, so it says nothing about it. Only the recipe's own lines count; a
 vendored Makefile inside a shipped patch is not the packager's assignment.
 
-Fire rate: 3 of 3739 (0.09 %), all one wine package that genuinely disables
+Fire rate: 3 on the v1 corpus (0.09 %), all one wine package that genuinely disables
 FORTIFY_SOURCE.
 
 ### H047: Security-Relevant Build Flag Change {#h047}
@@ -500,7 +500,7 @@ or `pkgver` means the package points at different upstream bytes, which is an
 ordinary update however much else changed with it, and H087 stays silent.
 
 Both halves of the recipe have to move, and that is measured rather than
-assumed. Against the 3,739-diff locked benign corpus: `deps or build` fires on
+assumed. Against the v1 locked benign corpus: `deps or build` fires on
 11.53%, `deps only` on 4.36%, `build only` on 5.75%, and `deps and build` on
 **1.42%**. The disjunction passes the 30% ceiling comfortably, but it is eight
 times the noise for no additional detection - the campaign changed both,
@@ -544,7 +544,7 @@ checksum list nobody recounted is caught on both paths.
 (`"$_pkgsrc"::"git+$url.git"`) is a single element. Elements are split on
 *unquoted* whitespace, not by a token pattern.
 
-Zero occurrences in the 3,739-diff benign corpus.
+Zero occurrences in the v1 benign corpus.
 
 ### H103: Metadata And Recipe Disagree {#h103}
 
@@ -613,7 +613,7 @@ These variables control makepkg's archive compression command. Overriding
 them can pipe decompressed content through an arbitrary binary. Legitimate
 uses are rare (custom compression tuning for size/performance).
 
-Fire rate: 0% on the 3,739-diff benign corpus.
+Fire rate: 0% on the v1 benign corpus.
 
 ### R091: Privilege Escalation Override {#r091}
 
@@ -627,7 +627,7 @@ This variable controls how pacman gains elevated privileges during
 `makepkg -S`. Overriding it in a PKGBUILD means the package is trying
 to control privilege escalation on the builder's machine.
 
-Fire rate: 0% on the 3,739-diff benign corpus.
+Fire rate: 0% on the v1 benign corpus.
 
 ### R099: Trap Statement {#r099}
 
@@ -642,7 +642,7 @@ Fire rate: 0% on the 3,739-diff benign corpus.
 or perform legitimate cleanup. Legitimate cleanup traps exist but are
 uncommon enough to flag.
 
-Fire rate: ~0.21% on the 3,739-diff benign corpus. Excludes when R104
+Fire rate: ~0.21% on the v1 benign corpus. Excludes when R104
 already claimed the more specific form.
 
 ### R104: Error Handling Suppressed {#r104}
@@ -674,7 +674,7 @@ Overriding it in a PKGBUILD redirects all source downloads through the
 attacker's chosen binary. Any change to DLAGENTS is flagged: legitimate
 recipes do not modify it.
 
-Fire rate: ~0.03% on the 3,739-diff benign corpus.
+Fire rate: ~0.03% on the v1 benign corpus.
 
 ### H097: Function Shadowing {#h097}
 
@@ -742,7 +742,7 @@ Set semantics discard position, so a hash shuffled away from the slot a
 reviewer checks was invisible. A pure reformat - reorder with no content
 change and no `SKIP` movement - stands down via
 `[thresholds] c014.require_content_change` (default true). Measured on the
-locked benign corpus: 0/3,739.
+locked benign corpus: 0 on the v1 corpus.
 
 ### C018: Executable File Committed {#c018}
 
@@ -754,7 +754,7 @@ locked benign corpus: 0/3,739.
   that arrives runnable is caught even when its content is never read.
 
 A projection of the typed `DiffFile.new_mode`; no new walker. Measured on
-the locked benign corpus: 0/3,739.
+the locked benign corpus: 0 on the v1 corpus.
 
 ### C019: File Renamed {#c019}
 
@@ -767,7 +767,7 @@ the locked benign corpus: 0/3,739.
 
 A projection of the typed `DiffFile.rename_from`/`rename_to`. A pure rename
 carries no hunk, so the parser materialises the file from its rename
-metadata alone. Measured on the locked benign corpus: 0/3,739.
+metadata alone. Measured on the locked benign corpus: 0 on the v1 corpus.
 
 ### C020: Credentials In A Source URL {#c020}
 
@@ -778,7 +778,7 @@ metadata alone. Measured on the locked benign corpus: 0/3,739.
   host (`https://token@host/...`).
 
 The evidence names the host only; the credential value itself is never
-printed. Measured on the locked benign corpus: 0/3,739.
+printed. Measured on the locked benign corpus: 0 on the v1 corpus.
 
 ### C022: Checksum Strength Downgraded {#c022}
 
@@ -791,7 +791,7 @@ printed. Measured on the locked benign corpus: 0/3,739.
   variants count with their base.
 
 Stands down when every checksum array was removed together - H002 owns
-that shape. Measured on the locked benign corpus: 43/3,739 (1.15%), every
+that shape. Measured on the locked benign corpus: 43 on the v1 corpus (1.15%), every
 firing a declared strongest-array removal; the rate is published as the
 calibration floor.
 
@@ -804,7 +804,7 @@ calibration floor.
   (`https://203.0.113.7/...`, `https://[2001:db8::1]/...`).
 
 Direct-IP fetches are a C2 shape that generic novelty under-weights.
-Measured on the locked benign corpus: 0/3,739.
+Measured on the locked benign corpus: 0 on the v1 corpus.
 
 ### C026: Empty File Added {#c026}
 
@@ -816,7 +816,7 @@ Measured on the locked benign corpus: 0/3,739.
   informational.
 
 A projection of the typed `DiffFile` status and hunk count. Measured on the
-locked benign corpus: 0/3,739.
+locked benign corpus: 0 on the v1 corpus.
 
 ### C027: Declared Install Script Is Absent {#c027}
 

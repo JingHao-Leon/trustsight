@@ -159,7 +159,7 @@ x"`) is output for the reader, not a command, and does not fire.
 
 - **Condition:** A build or install function writes into `$HOME`, `.bashrc`, `.zshrc`, `.profile` or `.config`, outside `$pkgdir` staging.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 The severity is contextual. A write into a user's home during `build()` is
 HIGH; the same write from an **install scriptlet** is CRITICAL, because pacman
@@ -177,7 +177,7 @@ categorical rather than suspicious.
 The rule reads the unit's *content*, including a heredoc body, not the unit's
 filename. A name proves nothing; the `ExecStart` line is the fact.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 ### H062: Pacman Hook Installed {#h062}
 
@@ -189,7 +189,7 @@ Fire rate: 0 of 3739.
 A pacman hook runs on every later transaction, which is why it is reported;
 packages legitimately ship them, which is why it is MEDIUM.
 
-Fire rate: 4 of 3739 (0.12 %), all packages that legitimately ship hooks.
+Fire rate: 4 on the v1 corpus (0.12 %), all packages that legitimately ship hooks.
 
 ### H084: Service ExecStart Targets Undeclared Binary {#h084}
 
@@ -229,7 +229,7 @@ here - the observable is the *destination*, not the code.
 
 Order-free, because the recipe may write the config and then name the path or
 the reverse, and anchored at `^` so each lookahead runs once. Zero
-occurrences in the 3,739-diff benign corpus: a package pointing its own
+occurrences in the v1 benign corpus: a package pointing its own
 config at `/tmp` is not something the ecosystem does.
 
 ### H089: Packaged File Names A Build-Only Path {#h089}
@@ -267,7 +267,7 @@ written. The rule splits a single-line write at its redirect and reads only
 the content half, and for a heredoc it reads the body against the target
 named on the opener.
 
-Zero occurrences in the 3,739-diff benign corpus.
+Zero occurrences in the v1 benign corpus.
 
 ### H093: Committed Config Points At A Build-Only Path {#h093}
 
@@ -393,7 +393,7 @@ C032 yields, so one piece of evidence never scores twice.
 
 System destinations (`/etc/skel`, `/usr/...`) are not this rule's
 business; the S-series and H032/H038 own hook writes to system paths.
-Measured on the locked benign corpus: 0/3,739.
+Measured on the locked benign corpus: 0 on the v1 corpus.
 
 ### C029: Backup Array Gains Entries {#c029}
 
@@ -424,4 +424,4 @@ this covers the tool run against the live host (`mkinitcpio -P`,
 A package that builds must not rewrite the builder's boot configuration.
 Install hooks are where these legitimately run, so `post_upgrade() {
 mkinitcpio -P; }` stays silent; only the build-time functions are in scope.
-Measured on the locked benign corpus: 0/3,739.
+Measured on the locked benign corpus: 0 on the v1 corpus.

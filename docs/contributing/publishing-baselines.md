@@ -22,7 +22,7 @@ prefix, and **a baseline release ships the whole family**:
 
 One further asset is **not** part of the signed family:
 `baseline-benign-corpus.tar.gz` packs the calibration corpus
-(`tests/fixtures/benign-corpus`, the 3,739 diffs named by
+(`tests/fixtures/benign-corpus`, the 8,393 diffs named by
 `tests/fixtures/corpus.lock`) for CI alone. The tool never downloads it, so
 it is unsigned; the Calibration Gates workflow verifies the extracted bytes
 against the `corpus_content_sha256` recorded in `tests/fixtures/baseline.json`.

@@ -106,5 +106,5 @@ both and keeps the transports they cannot see. When the recipe also carries no
 `validpgpkeys`, no third party can see the source and no signature vouches for
 it, so the finding is amplified to the top of the band.
 
-Measured on the 3,739-diff benign corpus, U010 fires on none: the transports it
+Measured on the v1 benign corpus, U010 fires on none: the transports it
 reads are deliberate choices, not background churn.

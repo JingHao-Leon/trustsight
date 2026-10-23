@@ -463,7 +463,7 @@ See [C007: Command Substitution In Source Array](fetch-and-execution.md#c007).
 
 ## Expanded ruleset (R039+) {#expanded-ruleset}
 
-These rules roughly double the pattern-based detection surface. They are **enabled by default**, having been calibrated against a 3739-diff stratified benign corpus: fourteen fire on zero benign diffs, and every remaining hit was inspected individually; all but one were true positives. Enabling them costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
+These rules roughly double the pattern-based detection surface. They are **enabled by default**, having been calibrated against a 8393-diff stratified benign corpus: fourteen fire on zero benign diffs, and every remaining hit was inspected individually; all but one were true positives. Enabling them costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 
 The `experimental` flag remains supported for future additions. A rule carrying `experimental = true` is skipped unless `config.toml` sets:
 
@@ -602,7 +602,7 @@ See [H016: Hidden Network Fetch In Build](fetch-and-execution.md#h016).
 
 ## Measured fire rates {#experimental-fire-rates}
 
-The corpus-dependent rows below (D-series, H029, H030) were measured against the 3,739-diff benign corpus with the published 215,504-name dependency corpus (`baseline-2026-09-24`); the stateless rows are the cold-database replay counts. They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, H016-H019, and H035-H036 rules are **on by default**, as are the code-emitted rules H037-H079. These are **false-positive rates**: every hit is a benign package.
+The corpus-dependent rows below (D-series, H029, H030) were measured against the 8,393-diff benign corpus with the published 215,504-name dependency corpus (`baseline-2026-09-24`); the stateless rows are the cold-database replay counts. They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, H016-H019, and H035-H036 rules are **on by default**, as are the code-emitted rules H037-H079. These are **false-positive rates**: every hit is a benign package.
 
 The numbers are enforced, not just recorded. `scripts/calibration_gates.py` replays the corpus against the *shipped* configuration in a temporary directory with a cold database, and fails the build if any scoring rule exceeds a 0.30 fire rate, if benign p95 reaches the malicious p5, if a weight-0 annotation starts scoring, or if a labelled attack fixture stops being detected. It runs on every push. Class C and Class D rules are absent from this table because they cannot fire on a stateless diff at all, which is itself one of the gates.
 
@@ -1719,13 +1719,13 @@ Measured against the TrustSight test corpus.
 
 !!! warning "Two rows measure a narrower configuration"
 
-    The recall rows above were measured with `observation_count` unpopulated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and against a smaller ruleset than the one documented here. Read them as a floor, not as current recall. The three distribution rows below are re-measured by the calibration gates against the current 3,739-diff corpus on every push.
+    The recall rows above were measured with `observation_count` unpopulated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and against a smaller ruleset than the one documented here. Read them as a floor, not as current recall. The three distribution rows below are re-measured by the calibration gates against the current 8,393-diff corpus on every push.
 
 | Rule | Recall | Notes |
 |------|--------|-------|
 | CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
 | R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 72.3 % | Percentage of benign diffs scoring 0. |
-| Benign p95 | 30 | 95th percentile score on benign corpus. |
+| Benign zero-rate | 69.7 % | Percentage of benign diffs scoring 0. |
+| Benign p95 | 35 | 95th percentile score on benign corpus. |
 | CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |

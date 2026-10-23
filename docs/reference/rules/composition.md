@@ -87,7 +87,7 @@ score: the point is that several independent stages co-occurred, which is what
 separated the 2018 acroread attack and the 2026 Atomic Arch campaign from
 single-signal noise.
 
-Fire rate: 0 of 3739. A benign diff with one or two rule hits cannot reach
+Fire rate: 0 on the v1 corpus. A benign diff with one or two rule hits cannot reach
 three distinct stages.
 
 ### H098: Naming/Deception Cluster {#h098}
@@ -127,7 +127,7 @@ and the combination is materially stronger than the sum, so the cluster is
 scored once on top. The members still score; the stack is the point. Cite
 X007 for the same design in the crossfire family.
 
-Fire rate: 0 of 3739. A benign diff with one or two rule hits cannot carry
+Fire rate: 0 on the v1 corpus. A benign diff with one or two rule hits cannot carry
 two naming/deception signals.
 
 ### H102: Maintainer Change With Signing Key Change {#h102}
@@ -158,7 +158,7 @@ Dropping `checkdepends` eliminates the test-suite execution that would
 catch a payload; the conjunction with a build change is what makes the
 removal suspicious rather than hygienic. `optdepends` removal is far more
 often ordinary cleanup, so it stays MEDIUM. Measured on the locked benign
-corpus: 27/3,739 (0.72%) combined, the published calibration floor; the
+corpus: 27 on the v1 corpus (0.72%) combined, the published calibration floor; the
 fire-rate gate clears `checkdepends` for HIGH.
 
 ### C024: Install Script Not Declared {#c024}
@@ -172,4 +172,4 @@ fire-rate gate clears `checkdepends` for HIGH.
 
 The dangling-declaration half (an `install=` naming an absent file) needs
 tree knowledge and is not yet filed. Measured on the locked benign corpus:
-12/3,739 (0.32%).
+12 on the v1 corpus (0.32%).

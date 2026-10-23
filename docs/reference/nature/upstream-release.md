@@ -30,7 +30,7 @@ embedded credential.
 The spec's flagship, a release re-tagged under an unchanged URL and
 version, is already [C001 Checksum Changed Without Source
 Change](../rules/integrity.md). This family does not file it twice. On the
-3,739-diff benign corpus C001 fires on 5 (0.13%), the false-positive floor the
+8,393-diff benign corpus C001 fires on 5 (0.13%), the false-positive floor the
 re-tag reading carries against ordinary package churn.
 
 ## What a finding means

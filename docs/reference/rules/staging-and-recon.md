@@ -64,7 +64,7 @@ when the diff shows it, such as [H076](#h076) and [R058](#r058).
 
 - **Condition:** `/tmp`, `/var/tmp` or `/dev/shm` is used as a working or execution directory. `mktemp -d` is excluded wholesale: a random private directory is not a fixed world-writable path.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 ### H042: Hidden Drop {#h042}
 
@@ -78,7 +78,7 @@ not fire three times: a hidden write that is later executed belongs to
 H069/H072, one in a world-writable directory to H038, one in the user's home to
 H032. H042 claims only the hidden drop none of those own.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 ### H076: Build Writes Outside Staging Root {#h076}
 
@@ -95,7 +95,7 @@ are excluded, since H032/H038/H039/H062 own the target system. Devices
 (`> /dev/null`) and extractor artefacts are excluded by requiring a plain
 absolute path.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 ### H085: PATH Injection With Undeclared Directory {#h085}
 
@@ -121,7 +121,7 @@ A lone `uname -m` is an architecture check and is reported at INFO by design.
 `env`, `dmidecode` and `systemd-detect-virt` are deliberately absent: the first
 produced a false positive on a `sed` expression, and the other two are H067's.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 ### C025: Hardening Option Disabled {#c025}
 
@@ -133,7 +133,7 @@ Fire rate: 0 of 3739.
 
 Debug packages set these routinely, so the benign fire rate is the
 published number that decides this rule's weight. Measured on the locked
-benign corpus: 20/3,739 (0.53%).
+benign corpus: 20 on the v1 corpus (0.53%).
 
 ### C028: Build Cache Outside The Build Trees {#c028}
 

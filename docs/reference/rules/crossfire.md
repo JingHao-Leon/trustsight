@@ -207,7 +207,7 @@ the shell runs.
 MEDIUM, not FATAL: the line fails closed, the command is simply not found,
 and the realistic benign cause is a copy-paste from a web page.
 
-Zero hits on the benign corpus. One diff in 3,739 carries such a character at
+Zero hits on the benign corpus. One diff in the v1 corpus carries such a character at
 all, in a font licence, which is not a shell file.
 
 **Related:** [R013](deception.md#r013), which claims a disjoint set of
@@ -506,7 +506,7 @@ what runs is whatever the command printed.
 A trailing `|| true` ends the pipeline rather than voiding it, so
 `cmd | bash || true` is claimed.
 
-No package in the 3,739-diff benign corpus pipes anything into a shell.
+No package in the v1 benign corpus pipes anything into a shell.
 
 ### X024: Indirect Sensitive Assignment {#x024}
 
@@ -562,7 +562,7 @@ An unresolved construct is *also* an analysis boundary: [W008](unverifiable.md#w
 names what the analysis could not read (weight 0), while X026 scores the
 suspicion. Both may fire; they are different claims about the same line.
 
-Measured on the locked benign corpus: 130/3,739 (3.5%, 27 packages) - the
+Measured on the locked benign corpus: 130 on the v1 corpus (3.5%, 27 packages) - the
 honest-refusal floor (`CONFIGURE_FLAGS=$(...)`, `VERSION=$(date)`,
 Windows-ISO helper variables).
 
@@ -576,7 +576,7 @@ with X026, the refusals are also an analysis boundary: [W008](unverifiable.md#w0
 reports the unresolved constructs at weight 0 (X reports the suspicion, W
 reports the boundary; both may fire on the same diff).
 
-Measured on the locked benign corpus: 46/3,739 (1.2%, 9 packages - kernel
+Measured on the locked benign corpus: 46 on the v1 corpus (1.2%, 9 packages - kernel
 and ISO build machinery); the rate is published as the calibration floor.
 
 ### X028: Pattern Completed Across Commits {#x028}
@@ -599,7 +599,7 @@ Fires on a base64, base32 or hex literal above the length floor (default
 256 encoded characters, `[thresholds] x029.min_length`) when no decoder is
 present in the same diff. A decoder in the diff routes the shape to X001.
 The finding names the literal class, never the literal's content.
-Measured on the locked benign corpus: 1/3,739.
+Measured on the locked benign corpus: 1 on the v1 corpus.
 
 ### X030: ANSI-C Quoted Content In Commands {#x030}
 
@@ -609,7 +609,7 @@ Fires on a command-position `$'...'` literal with two or more hex/octal
 escapes (or a control escape) whose decoded value is not a benign
 single token (a path, a flag, a filename). Formatting-only escapes
 (`
-`, `	`) are ordinary. Measured on the locked benign corpus: 0/3,739.
+`, `	`) are ordinary. Measured on the locked benign corpus: 0 on the v1 corpus.
 
 ### X031: Build Reads Non-Code Text {#x031}
 
@@ -619,7 +619,7 @@ Fires when `build()`/`prepare()`/`package()` reads its own PKGBUILD (by
 name, or through `$srcdir`/`$startdir`) and pipes the content through a
 transformation into a shell or `eval`. Reading a different file, or
 reading the recipe for metadata without execution, stands down.
-Measured on the locked benign corpus: 0/3,739.
+Measured on the locked benign corpus: 0 on the v1 corpus.
 
 ### X032: Command Name Assembled By Splicing {#x032}
 
@@ -669,6 +669,6 @@ rule also stands down on a plain `curl`/`wget` fetch piped into a shell, which
 [R001](fetch-and-execution.md#r001) and R002 already own, so one operation is
 not scored twice.
 
-Measured on the locked benign corpus: 0/3,739.
+Measured on the locked benign corpus: 0 on the v1 corpus.
 
 **Related:** [X006](#x006), [X016](#x016)

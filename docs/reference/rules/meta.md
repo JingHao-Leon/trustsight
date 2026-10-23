@@ -74,7 +74,7 @@ An attacker who spreads weak signals across layers stays under
 any single threshold; the span is only visible from the whole profile. It
 adds no points but raises the reported band one step: a spread across layers
 is exactly the case a single-signal threshold cannot see. Measured on the
-locked benign corpus: 112/3,739 (3.0%).
+locked benign corpus: 112 on the v1 corpus (3.0%).
 
 ### M003: Composition Not Owned Elsewhere {#m003}
 
@@ -85,7 +85,7 @@ locked benign corpus: 112/3,739 (3.0%).
 - **Condition:** Two or more distinct capability families co-occur while none of the cluster owners (H027, H098, X007) recorded the composition - typically because the owner is disabled.
 
 The composition is never lost. It adds no points but raises the reported band
-one step. Measured on the locked benign corpus: 316/3,739 (8.5%).
+one step. Measured on the locked benign corpus: 316 on the v1 corpus (8.5%).
 
 Standing gate: the escalation passes the benign-corpus cap (`M escalation
 stays below the benign cap`, `MAX_BENIGN_FIRE_RATE`) before it ships, the

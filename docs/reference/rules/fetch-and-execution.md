@@ -299,7 +299,7 @@ stays quiet, and an interpolated version made only of version characters is
 ordinary packaging. What the rule describes is a value carrying delimiters
 (`;`, whitespace, `/`) being substituted into something the build fetches.
 
-Fire rate: 1 of 3739 (0.03 %).
+Fire rate: 1 on the v1 corpus (0.03 %).
 
 ### H034: Exotic Source Protocol {#h034}
 
@@ -312,7 +312,7 @@ Fire rate: 1 of 3739 (0.03 %).
 `data:` URIs carry no `://` and are not scheme tokens, which is an accepted
 gap rather than a silent pass.
 
-Fire rate: 7 of 3739 (0.19 %).
+Fire rate: 7 on the v1 corpus (0.19 %).
 
 ### H041: Upload To Paste Or File-Drop Host {#h041}
 
@@ -339,7 +339,7 @@ twice.
 The destination is an auditable list rather than a guess about what an endpoint
 is for, so an upload to a project's own CI host does not fire.
 
-Fire rate: 0 of 3739. The corpus contains one paste-host reference, a gist
+Fire rate: 0 on the v1 corpus. The corpus contains one paste-host reference, a gist
 download in `gamescope-nvidia`, which stays H016's.
 
 ### H071: Covert Egress {#h071}
@@ -353,7 +353,7 @@ download in `gamescope-nvidia`, which stays H016's.
 The command-position anchor is what separates use from mention: a client named
 in a string or listed in `makedepends` never fires.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 ### H077: Parse-time Network Fetch {#h077}
 
@@ -377,7 +377,7 @@ than fetching. An assignment that *runs* one through a command substitution
 straight into a shell belongs to R001/R002, whose claim is heavier, so H077
 yields rather than scoring the same line twice.
 
-Fire rate: 3 of 3739 (0.09 %), all one package resolving a redirect with
+Fire rate: 3 on the v1 corpus (0.09 %), all one package resolving a redirect with
 `curl` at the top level, which really does reach the network on a metadata
 refresh.
 
@@ -392,7 +392,7 @@ This is a type check on the decoder's output, which is why one rule covers
 every encoded-payload variant without naming the encoding. Encoded text assets,
 checksums and keys decode to none of those magics.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 ### H069: Build-time Generation Then Execution {#h069}
 
@@ -404,7 +404,7 @@ Fire rate: 0 of 3739.
 Writing a config file, a `.desktop` entry or a patch that a declared build step
 consumes is not generation-then-execution and does not fire.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 ### H072: Write Then Execute {#h072}
 
@@ -418,7 +418,7 @@ absolute path at a command position, with or without arguments. Files that
 arrived through a declared `source=` and the project's own configure/make
 artefacts are exempt.
 
-Fire rate: 0 of 3739.
+Fire rate: 0 on the v1 corpus.
 
 ### H075: Remote Script Via Process Substitution {#h075}
 
@@ -583,7 +583,7 @@ Reads `RecipeDoc.functions["package"]` only. A client name inside a quoted
 dependency list or a comment is not a fetch, and `python -m pip install .`
 (a local install) stands down because the interpreter arm requires a
 scheme-bearing address on the line. Measured on the locked benign corpus:
-7/3,739 (0.19%).
+7 on the v1 corpus (0.19%).
 
 ### C016: Interpreter Invocation In Install Hook {#c016}
 
@@ -604,4 +604,4 @@ scheme-bearing address on the line. Measured on the locked benign corpus:
   A body repeated across the hooks of one file is one finding.
 
 Only complete `.install` files are read (see the `partial_file_analysis`
-coverage gap). Measured on the locked benign corpus: 0/3,739.
+coverage gap). Measured on the locked benign corpus: 0 on the v1 corpus.
