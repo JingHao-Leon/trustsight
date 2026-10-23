@@ -18,6 +18,7 @@ import typer
 from .inspect import analyze_package
 from ..config import ensure_default_configs, load_rules
 from ..db import get_analysis, init_db
+from ..safe_text import clean
 
 #: Rules whose firing depends on an input outside the document.  The
 #: explanation names the input and the cached value instead of pretending
@@ -190,6 +191,70 @@ def _explanation_from_history(row: dict, rule_id: str, occurrence: int) -> dict:
     return explanation
 
 
+def render_explanation_plain(explanation: dict, rule_id: str,
+                             package: str, finding: dict,
+                             definition: dict | None) -> None:
+    """Render one explanation for a terminal (A10: every value cleaned)."""
+    typer.echo(f"{clean(rule_id)} on {clean(package)}: "
+               f"{clean(finding.get('description', ''))}")
+    where = finding.get("file") or "?"
+    typer.echo(f"  cited: {clean(where)} line {finding.get('line')}")
+    if definition:
+        target = definition.get("match_target") or "resolved"
+        typer.echo(
+            f"  rule: {clean(definition.get('severity', '?'))} "
+            f"match_target={clean(target)} "
+            f"pattern={clean(definition.get('pattern', ''))}"
+        )
+    for match in explanation["lines"]:
+        typer.echo(
+            f"  line: {clean(match['raw'])} "
+            f"(old {match['old_lineno']}, new {match['new_lineno']})"
+        )
+    if explanation["external_input"]:
+        typer.echo(
+            f"  external input: {clean(explanation['external_input'])} "
+            f"(cached: {clean(explanation['external_value'])})"
+        )
+
+
+def render_history_explanation_plain(explanation: dict, rule_id: str) -> None:
+    """Render a recorded-analysis explanation (A10: every value cleaned)."""
+    analysis = explanation["analysis"]
+    finding = explanation["finding"]
+    typer.echo(
+        f"Analysis #{analysis['id']} ({clean(analysis['timestamp'])}): "
+        f"{clean(analysis['package'])} "
+        f"{clean(analysis['old_version'])} -> {clean(analysis['new_version'])} "
+        f"[{clean(analysis['old_commit'][:8])}..{clean(analysis['new_commit'][:8])}]"
+    )
+    typer.echo(
+        f"{clean(rule_id.upper())} on {clean(analysis['package'])}: "
+        f"{clean(finding.get('description', ''))}"
+    )
+    if finding.get("note"):
+        typer.echo(f"  {clean(finding['note'])}")
+    else:
+        where = finding.get("file") or "?"
+        typer.echo(f"  cited: {clean(where)} line {finding.get('line')}")
+    if analysis.get("config_fingerprint"):
+        typer.echo(f"  config: {clean(analysis['config_fingerprint'])}")
+    for match in explanation["lines"]:
+        typer.echo(
+            f"  line: {clean(match['raw'])} "
+            f"(old {match['old_lineno']}, new {match['new_lineno']})"
+        )
+    for gap in analysis.get("coverage_gaps") or []:
+        from ..coverage import GAP_REASONS
+        typer.echo(f"  not fully vetted: {clean(GAP_REASONS.get(gap, gap))}")
+    for r in analysis.get("suppressed_rules") or []:
+        scope = r.get("override_package") or "ALL packages"
+        typer.echo(
+            f"  suppressed: {clean(r.get('rule_id', ''))} "
+            f"({clean(scope)}) {clean(r.get('override_reason', ''))}"
+        )
+
+
 def register_commands(app: typer.Typer):
     """Register the ``explain`` subcommand on *app*."""
     @app.command()
@@ -217,7 +282,7 @@ def register_commands(app: typer.Typer):
             if json_output:
                 typer.echo(json.dumps({"error": message}))
             else:
-                typer.echo(message, err=True)
+                typer.echo(clean(message), err=True)
             raise typer.Exit(code=2)
 
         if occurrence < 1:
@@ -245,41 +310,7 @@ def register_commands(app: typer.Typer):
             if json_output:
                 typer.echo(json.dumps(explanation, indent=2))
                 return
-            typer.echo(
-                f"Analysis #{analysis['id']} ({analysis['timestamp']}): "
-                f"{analysis['package']} "
-                f"{analysis['old_version']} -> {analysis['new_version']} "
-                f"[{analysis['old_commit'][:8]}..{analysis['new_commit'][:8]}]"
-            )
-            typer.echo(
-                f"{rule_id.upper()} on {analysis['package']}: "
-                f"{explanation['finding'].get('description', '')}"
-            )
-            if explanation["finding"].get("note"):
-                typer.echo(f"  {explanation['finding']['note']}")
-            else:
-                where = explanation["finding"].get("file") or "?"
-                typer.echo(
-                    f"  cited: {where} line {explanation['finding'].get('line')}"
-                )
-            if explanation["analysis"].get("config_fingerprint"):
-                typer.echo(
-                    f"  config: {explanation['analysis']['config_fingerprint']}"
-                )
-            for match in explanation["lines"]:
-                typer.echo(
-                    f"  line: {match['raw']} "
-                    f"(old {match['old_lineno']}, new {match['new_lineno']})"
-                )
-            for gap in analysis.get("coverage_gaps") or []:
-                from ..coverage import GAP_REASONS
-                typer.echo(f"  not fully vetted: {GAP_REASONS.get(gap, gap)}")
-            for r in analysis.get("suppressed_rules") or []:
-                scope = r.get("override_package") or "ALL packages"
-                typer.echo(
-                    f"  suppressed: {r.get('rule_id', '')} ({scope}) "
-                    f"{r.get('override_reason', '')}"
-                )
+            render_history_explanation_plain(explanation, rule_id)
             return
 
         if not package:
@@ -329,22 +360,4 @@ def register_commands(app: typer.Typer):
         if json_output:
             typer.echo(json.dumps(explanation, indent=2))
             return
-        typer.echo(f"{rule_id} on {package}: {finding.get('description', '')}")
-        where = finding.get("file") or "?"
-        typer.echo(f"  cited: {where} line {finding.get('line')}")
-        if definition:
-            target = definition.get("match_target") or "resolved"
-            typer.echo(
-                f"  rule: {definition.get('severity', '?')} "
-                f"match_target={target} pattern={definition.get('pattern', '')}"
-            )
-        for match in explanation["lines"]:
-            typer.echo(
-                f"  line: {match['raw']} "
-                f"(old {match['old_lineno']}, new {match['new_lineno']})"
-            )
-        if explanation["external_input"]:
-            typer.echo(
-                f"  external input: {explanation['external_input']} "
-                f"(cached: {explanation['external_value']})"
-            )
+        render_explanation_plain(explanation, rule_id, package, finding, definition)

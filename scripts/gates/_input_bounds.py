@@ -264,11 +264,30 @@ def gate_terminal_output_is_inert() -> Gate:
 
     import trustsight.cli.corpus as corpus_cli
     import trustsight.cli.display as display
+    import trustsight.cli.explain as explain_cli
+    import trustsight.cli.forget as forget_cli
     import trustsight.cli.inspect as inspect_cli
     import trustsight.cli.review as review
     from trustsight.cli.inspect import _render as inspect_render
 
     fact, result = _hostile_fact(), _hostile_result()
+
+    hostile_explanation = {
+        "analysis": {
+            "id": 1, "timestamp": HOSTILE, "package": HOSTILE,
+            "old_version": HOSTILE, "new_version": HOSTILE,
+            "old_commit": HOSTILE, "new_commit": HOSTILE,
+            "config_fingerprint": HOSTILE, "coverage_gaps": [HOSTILE],
+            "suppressed_rules": [{
+                "rule_id": HOSTILE, "override_package": HOSTILE,
+                "override_reason": HOSTILE,
+            }],
+        },
+        "finding": {"description": HOSTILE, "file": HOSTILE, "line": 1,
+                    "note": HOSTILE},
+        "lines": [{"raw": HOSTILE, "old_lineno": 1, "new_lineno": 2}],
+        "external_input": HOSTILE, "external_value": HOSTILE,
+    }
 
     # The first-contact panel is DB-backed, so on a cold database it renders
     # empty and the hostile value never reaches the renderer - the gate would
@@ -378,6 +397,15 @@ def gate_terminal_output_is_inert() -> Gate:
             "confidence": HOSTILE, "sources": ["corpus"],
             "matches": [{"package": HOSTILE, "surface": HOSTILE, "detail": HOSTILE}],
         })),
+        "explain plain": lambda: plain(lambda: explain_cli.render_explanation_plain(
+            hostile_explanation, "R001", HOSTILE, hostile_explanation["finding"], {
+                "severity": HOSTILE, "match_target": HOSTILE, "pattern": HOSTILE,
+            })),
+        "explain history plain": lambda: plain(
+            lambda: explain_cli.render_history_explanation_plain(
+                hostile_explanation, "R001")),
+        "forget removal list": lambda: plain(
+            lambda: forget_cli.render_removal_list([HOSTILE])),
         "corpus sweep log": corpus_log,
         "stderr log handler": stderr_log,
     }

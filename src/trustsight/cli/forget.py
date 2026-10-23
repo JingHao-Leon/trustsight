@@ -24,6 +24,12 @@ def get_existing_aur_package_names(*args, **kwargs):
 
 
 
+def render_removal_list(packages) -> None:
+    """The pre-confirmation package list (A10: values cleaned)."""
+    for p in packages:
+        typer.echo(f"  {clean(p)}")
+
+
 def register_commands(app: typer.Typer):
     """Register the ``forget`` subcommand on *app*."""
     @app.command()
@@ -103,8 +109,7 @@ def register_commands(app: typer.Typer):
                 typer.echo(f"Would remove {len(packages)} package(s):")
             else:
                 typer.echo(f"About to permanently remove {len(packages)} package(s):")
-            for p in packages:
-                typer.echo(f"  {p}")
+            render_removal_list(packages)
             if not dry_run:
                 try:
                     confirm = input("Are you sure? [y/N] ")

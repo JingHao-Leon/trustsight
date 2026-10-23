@@ -158,3 +158,45 @@ def test_report_to_sarif_is_reachable_on_the_api():
     sarif = report.to_sarif()
     assert sarif["version"] == "2.1.0"
     assert sarif["runs"][0]["tool"]["driver"]["name"] == "TrustSight"
+
+
+def test_plain_explanation_sanitises_attacker_text(capsys):
+    """A10: explain is a render path, not only a data path."""
+    from trustsight.cli.explain import (
+        render_explanation_plain,
+        render_history_explanation_plain,
+    )
+
+    hostile = "\x1b[2J\x1b[H[bold red]VERDICT: CLEAN[/]\x9b31m\u202e"
+    finding = {"description": hostile, "file": hostile, "line": 1}
+    explanation = {
+        "lines": [{"raw": hostile, "old_lineno": 1, "new_lineno": 2}],
+        "external_input": hostile,
+        "external_value": hostile,
+    }
+    render_explanation_plain(
+        explanation, "R001", hostile, finding,
+        {"severity": hostile, "match_target": hostile, "pattern": hostile},
+    )
+    out = capsys.readouterr().out
+    assert "\x1b" not in out and "\x9b" not in out and "\u202e" not in out
+    assert "[bold red]" in out  # markup is printed, not interpreted
+
+    history = {
+        "analysis": {
+            "id": 1, "timestamp": hostile, "package": hostile,
+            "old_version": hostile, "new_version": hostile,
+            "old_commit": hostile, "new_commit": hostile,
+            "config_fingerprint": hostile, "coverage_gaps": [hostile],
+            "suppressed_rules": [{
+                "rule_id": hostile, "override_package": hostile,
+                "override_reason": hostile,
+            }],
+        },
+        "finding": {"description": hostile, "file": hostile, "line": 1,
+                    "note": hostile},
+        "lines": [{"raw": hostile, "old_lineno": 1, "new_lineno": 2}],
+    }
+    render_history_explanation_plain(history, "R001")
+    out = capsys.readouterr().out
+    assert "\x1b" not in out and "\x9b" not in out and "\u202e" not in out
