@@ -10,6 +10,7 @@ pkgbase = trustsight
 	makedepends = python-wheel
 	makedepends = python-hatchling
 	makedepends = python-pytest
+	makedepends = python-pytest-xdist
 	makedepends = python-hypothesis
 	depends = python
 	depends = python-pygit2>=1.20.0

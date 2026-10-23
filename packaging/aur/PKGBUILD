@@ -25,6 +25,7 @@ makedepends=(
   'python-wheel'
   'python-hatchling'
   'python-pytest'
+  'python-pytest-xdist'
   # The property-based parser tests import hypothesis; the
   # package's own check() runs the suite.
   'python-hypothesis'

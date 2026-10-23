@@ -34,6 +34,7 @@ makedepends=(
   'python-wheel'
   'python-hatchling'
   'python-pytest'
+  'python-pytest-xdist'
 )
 optdepends=(
   'pyalpm: native version comparison (faster discovery)'
